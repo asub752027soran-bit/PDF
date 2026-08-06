@@ -19,7 +19,14 @@ export const DeploymentModal: React.FC<DeploymentModalProps> = ({ isOpen, onClos
 
   const steps = [
     {
-      title: '1. SSH into VPS (200.141.13.181) & Install Node.js',
+      title: '1. Add your SSH Public Key to your VPS (200.141.13.181)',
+      code: `# On Hostinger VPS control panel or via terminal, add your key to ~/.ssh/authorized_keys:
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCwKo1LSydxGzc8p5YYZeGNTk8nFJGkYJCewWJa3SGaEGJNvPDI79kgmnOc3U6EtVtFZRYhrTVkHHaBLnHQfTKyUyv7gHKQdoY52hNvbQPiN/lqJso9L4obGDWF3eap6MlD/p+G7FwfCFTitTjFmgLlSalOAx6pJwWhTp7yXPWS//3OdhUDOLinfjQyZZ3hUdraDcxfM3DLCeZ1qTNj69Zt+fAwAb/x38xYZ3VNNKKxOrKl8/nutyF77vgIRm1SsTcqLdsCK3VRelxGNB0Tip2x2pVUcgSwj2v800dJCQ2fgpQ7eqlKFW0YoArUcrdToyxcnJyDw3i1ghqSBrGoHOxlqHG+ubHNdybnjoAN50ITZuYWoCkXAeQ8+aOuQ/mOAHkhYXiWvaNIiEIh0HrLyeG1hinyyKdxFz95lZl1EIEVLu/iW+XYEU0ud9YJHNkKHn4B6Utrzcdi98oVFfm+B5rKCjBKcOoM/pQNp2rPb5XlweUG51qQwyPV1DHSDtbvkISpo+d7PqXUa3qGFpFRPiROIhE5yURFOLjXpm27z6AdM1JkJUCNNgNgU4v4wpIyKOCbVjgmjOuu4hz2rMHVz2fQrlPe1zBarTm6T6wv9S/Ye2RyaIlmb80LaqEwg7OPiW3GpjYGUPv18PhYYYo7cqTLSZEqK5RsXofTEpPcuaJcJw== #hostinger-managed-key" >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys`,
+    },
+    {
+      title: '2. Connect to VPS & Install Dependencies',
       code: `ssh root@200.141.13.181
 apt update && apt upgrade -y
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
@@ -27,20 +34,20 @@ apt install -y nodejs nginx git certbot python3-certbot-nginx
 npm install -g pm2`,
     },
     {
-      title: '2. Upload or Clone PDFEditfy Project',
+      title: '3. Upload or Clone PDFEditfy Project',
       code: `git clone https://github.com/your-username/pdfeditfy.git /var/www/pdfeditfy
 cd /var/www/pdfeditfy
 npm install
 npm run build`,
     },
     {
-      title: '3. Start Server with PM2 Process Manager',
+      title: '4. Start Server with PM2 Process Manager',
       code: `pm2 start dist/server.cjs --name "pdfeditfy"
 pm2 save
 pm2 startup`,
     },
     {
-      title: '4. Configure Nginx Reverse Proxy (Port 3000)',
+      title: '5. Configure Nginx Reverse Proxy (Port 3000)',
       code: `cat << 'EOF' > /etc/nginx/sites-available/pdfeditfy
 server {
     server_name 200.141.13.181 pdfeditfy.com www.pdfeditfy.com;
@@ -62,7 +69,7 @@ ln -s /etc/nginx/sites-available/pdfeditfy /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx`,
     },
     {
-      title: '5. Enable Free SSL Certificate via Let\'s Encrypt (If using custom domain)',
+      title: '6. Enable Free SSL Certificate via Let\'s Encrypt (If using custom domain)',
       code: `certbot --nginx -d pdfeditfy.com -d www.pdfeditfy.com`,
     },
   ];
