@@ -26,7 +26,7 @@ var import_express = __toESM(require("express"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_fs = __toESM(require("fs"), 1);
 var app = (0, import_express.default)();
-var PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3e3;
+var PORT = 3e3;
 app.use(import_express.default.json({ limit: "100mb" }));
 app.use(import_express.default.urlencoded({ extended: true, limit: "100mb" }));
 var TEMP_DIR = import_path.default.join(process.cwd(), "tmp_uploads");
