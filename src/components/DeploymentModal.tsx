@@ -19,35 +19,35 @@ export const DeploymentModal: React.FC<DeploymentModalProps> = ({ isOpen, onClos
 
   const steps = [
     {
-      title: '1. Update Server & Install Node.js 20, Nginx & PM2',
+      title: '1. Update Server & Install Dependencies (Node 20, PM2, Nginx)',
       code: `apt update && apt upgrade -y
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt install -y nodejs nginx git certbot python3-certbot-nginx
 npm install -g pm2`,
     },
     {
-      title: '2. Prepare Project Directory & Build Executable',
+      title: '2. Prepare Project Directory & Run Automated Deploy Script',
       code: `mkdir -p /var/www/pdfeditfy
 cd /var/www/pdfeditfy
 
-# Clone your repository into /var/www/pdfeditfy (Note the trailing dot!)
+# Download/Clone your repo into /var/www/pdfeditfy
 # git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git .
 
-# Install packages & generate dist/server.cjs executable
-npm install
-npm run build`,
+# Execute 1-click deploy script (creates swap memory, builds & starts PM2)
+chmod +x deploy.sh && bash deploy.sh`,
     },
     {
-      title: '3. Launch App with PM2 (Ensuring correct working directory)',
+      title: '3. Manual Build & Launch (Alternative to deploy.sh)',
       code: `cd /var/www/pdfeditfy
-# Delete old process if exists, then force launch new version
+npm install
+NODE_OPTIONS="--max-old-space-size=4096" npm run build
 pm2 delete pdfeditfy 2>/dev/null || true
 pm2 start dist/server.cjs --name "pdfeditfy" --cwd /var/www/pdfeditfy -f
 pm2 save
 pm2 startup`,
     },
     {
-      title: '4. Configure Nginx Reverse Proxy for pdfeditfy.com (Port 3000)',
+      title: '4. Configure Nginx Reverse Proxy for pdfeditfy.com',
       code: `# Remove default Nginx site to prevent port conflicts
 rm -f /etc/nginx/sites-enabled/default
 
@@ -119,9 +119,10 @@ nginx -t && systemctl reload nginx`,
                 Fixing Terminal Errors for pdfeditfy.com:
               </h4>
               <ul className="list-disc list-inside text-amber-800/90 dark:text-amber-300/90 space-y-1 text-[11px] leading-relaxed">
+                <li><strong>Out of Memory / Killed / Heap Error during build:</strong> Run <code className="bg-amber-100 dark:bg-amber-900/60 px-1 rounded font-mono">bash deploy.sh</code> — it automatically creates a 2GB swap file and sets <code className="bg-amber-100 dark:bg-amber-900/60 px-1 rounded font-mono">NODE_OPTIONS=--max-old-space-size=4096</code>!</li>
                 <li><strong>PM2 Script already launched:</strong> Run <code className="bg-amber-100 dark:bg-amber-900/60 px-1 rounded font-mono">pm2 restart pdfeditfy</code> to restart, or <code className="bg-amber-100 dark:bg-amber-900/60 px-1 rounded font-mono">pm2 delete pdfeditfy</code> before starting again!</li>
                 <li><strong>Git Auth Error:</strong> GitHub requires a Personal Access Token instead of a password, or a public repository.</li>
-                <li><strong>No package.json / Script not found:</strong> Make sure you run <code className="bg-amber-100 dark:bg-amber-900/60 px-1 rounded font-mono">cd /var/www/pdfeditfy</code> and <code className="bg-amber-100 dark:bg-amber-900/60 px-1 rounded font-mono">npm run build</code> inside the project folder before starting PM2!</li>
+                <li><strong>No package.json / Script not found:</strong> Make sure you run <code className="bg-amber-100 dark:bg-amber-900/60 px-1 rounded font-mono">cd /var/www/pdfeditfy</code> before running build or deploy commands!</li>
               </ul>
             </div>
           </div>
