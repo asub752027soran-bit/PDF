@@ -1,10 +1,9 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import { createServer as createViteServer } from 'vite';
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Body parsing middleware
 app.use(express.json({ limit: '100mb' }));
@@ -53,14 +52,14 @@ app.get('/robots.txt', (_req, res) => {
 Allow: /
 Disallow: /api/
 
-Sitemap: ${process.env.APP_URL || 'http://localhost:3000'}/sitemap.xml`
+Sitemap: ${process.env.APP_URL || `http://localhost:${PORT}`}/sitemap.xml`
   );
 });
 
 // Dynamic SEO Sitemap.xml
 app.get('/sitemap.xml', (_req, res) => {
   res.type('application/xml');
-  const baseUrl = process.env.APP_URL || 'http://localhost:3000';
+  const baseUrl = process.env.APP_URL || `http://localhost:${PORT}`;
   const tools = [
     'edit-pdf', 'merge-pdf', 'split-pdf', 'compress-pdf', 'rotate-pdf', 'watermark-pdf', 'lock-pdf', 'unlock-pdf',
     'pdf-to-word', 'word-to-pdf', 'pdf-to-excel', 'excel-to-pdf', 'pdf-to-image', 'image-to-pdf',
@@ -86,6 +85,7 @@ app.get('/sitemap.xml', (_req, res) => {
 // Serve Vite dev server or production static dist
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
