@@ -19,39 +19,43 @@ export const DeploymentModal: React.FC<DeploymentModalProps> = ({ isOpen, onClos
 
   const steps = [
     {
-      title: '1. Update Server & Install Node.js & Nginx (You are already inside root@srv1883498!)',
+      title: '1. Update Server & Install Node.js 20, Nginx & PM2',
       code: `apt update && apt upgrade -y
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt install -y nodejs nginx git certbot python3-certbot-nginx
 npm install -g pm2`,
     },
     {
-      title: '2. Clone or Upload PDFEditfy Code',
-      code: `# Ensure destination folder exists
-mkdir -p /var/www/pdfeditfy
+      title: '2. Prepare Project Directory & Build Executable',
+      code: `mkdir -p /var/www/pdfeditfy
 cd /var/www/pdfeditfy
 
-# OPTION A: If your GitHub repository is public:
+# Clone your repository into /var/www/pdfeditfy (Note the trailing dot!)
 # git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git .
 
-# OPTION B: If using GitHub with Personal Access Token (PAT):
-# git clone https://YOUR_TOKEN@github.com/YOUR_USERNAME/YOUR_REPO.git .
-
-# Install dependencies and build production server
+# Install packages & generate dist/server.cjs executable
 npm install
 npm run build`,
     },
     {
-      title: '3. Start Server with PM2 Process Manager',
-      code: `pm2 start dist/server.cjs --name "pdfeditfy"
+      title: '3. Launch App with PM2 (Ensuring correct working directory)',
+      code: `cd /var/www/pdfeditfy
+# Delete old process if exists, then force launch new version
+pm2 delete pdfeditfy 2>/dev/null || true
+pm2 start dist/server.cjs --name "pdfeditfy" --cwd /var/www/pdfeditfy -f
 pm2 save
 pm2 startup`,
     },
     {
-      title: '4. Configure Nginx Reverse Proxy (Port 3000)',
-      code: `cat << 'EOF' > /etc/nginx/sites-available/pdfeditfy
+      title: '4. Configure Nginx Reverse Proxy for pdfeditfy.com (Port 3000)',
+      code: `# Remove default Nginx site to prevent port conflicts
+rm -f /etc/nginx/sites-enabled/default
+
+# Create site configuration
+cat << 'EOF' > /etc/nginx/sites-available/pdfeditfy
 server {
-    server_name 200.141.13.181 pdfeditfy.com www.pdfeditfy.com;
+    listen 80;
+    server_name pdfeditfy.com www.pdfeditfy.com 200.141.13.181;
 
     client_max_body_size 100M;
 
@@ -62,15 +66,18 @@ server {
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 EOF
 
-ln -s /etc/nginx/sites-available/pdfeditfy /etc/nginx/sites-enabled/
+ln -sf /etc/nginx/sites-available/pdfeditfy /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx`,
     },
     {
-      title: '5. Enable Free SSL Certificate via Let\'s Encrypt (If using custom domain)',
+      title: '5. SSL Certificate via Let\'s Encrypt for pdfeditfy.com',
       code: `certbot --nginx -d pdfeditfy.com -d www.pdfeditfy.com`,
     },
   ];
@@ -112,6 +119,7 @@ nginx -t && systemctl reload nginx`,
                 Fixing Terminal Errors for pdfeditfy.com:
               </h4>
               <ul className="list-disc list-inside text-amber-800/90 dark:text-amber-300/90 space-y-1 text-[11px] leading-relaxed">
+                <li><strong>PM2 Script already launched:</strong> Run <code className="bg-amber-100 dark:bg-amber-900/60 px-1 rounded font-mono">pm2 restart pdfeditfy</code> to restart, or <code className="bg-amber-100 dark:bg-amber-900/60 px-1 rounded font-mono">pm2 delete pdfeditfy</code> before starting again!</li>
                 <li><strong>Git Auth Error:</strong> GitHub requires a Personal Access Token instead of a password, or a public repository.</li>
                 <li><strong>No package.json / Script not found:</strong> Make sure you run <code className="bg-amber-100 dark:bg-amber-900/60 px-1 rounded font-mono">cd /var/www/pdfeditfy</code> and <code className="bg-amber-100 dark:bg-amber-900/60 px-1 rounded font-mono">npm run build</code> inside the project folder before starting PM2!</li>
               </ul>

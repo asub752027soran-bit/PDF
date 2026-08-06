@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { Hero } from './components/Hero';
@@ -7,26 +7,33 @@ import { Footer } from './components/Footer';
 import { AdSenseBanner } from './components/AdSenseBanner';
 import { CookieBanner } from './components/CookieBanner';
 import { DeploymentModal } from './components/DeploymentModal';
-
-// Admin Components
-import { AdminDashboard } from './components/admin/AdminDashboard';
 import { AdminLoginModal } from './components/admin/AdminLoginModal';
 
-// Tools
-import { PDFEditorTool } from './components/tools/PDFEditorTool';
-import { PDFMergeSplitTool } from './components/tools/PDFMergeSplitTool';
-import { PDFCompressTool } from './components/tools/PDFCompressTool';
-import { WordTool } from './components/tools/WordTool';
-import { ExcelTool } from './components/tools/ExcelTool';
-import { ImageEditorTool } from './components/tools/ImageEditorTool';
-import { OCRTool } from './components/tools/OCRTool';
-import { UniversalConvertTool } from './components/tools/UniversalConvertTool';
+// Lazy Loaded Tool Components
+const PDFEditorTool = lazy(() => import('./components/tools/PDFEditorTool').then(m => ({ default: m.PDFEditorTool })));
+const PDFMergeSplitTool = lazy(() => import('./components/tools/PDFMergeSplitTool').then(m => ({ default: m.PDFMergeSplitTool })));
+const PDFCompressTool = lazy(() => import('./components/tools/PDFCompressTool').then(m => ({ default: m.PDFCompressTool })));
+const WordTool = lazy(() => import('./components/tools/WordTool').then(m => ({ default: m.WordTool })));
+const ExcelTool = lazy(() => import('./components/tools/ExcelTool').then(m => ({ default: m.ExcelTool })));
+const ImageEditorTool = lazy(() => import('./components/tools/ImageEditorTool').then(m => ({ default: m.ImageEditorTool })));
+const OCRTool = lazy(() => import('./components/tools/OCRTool').then(m => ({ default: m.OCRTool })));
+const UniversalConvertTool = lazy(() => import('./components/tools/UniversalConvertTool').then(m => ({ default: m.UniversalConvertTool })));
 
-// Pages
-import { BlogPage } from './components/pages/BlogPage';
-import { FAQPage } from './components/pages/FAQPage';
-import { ContactPage } from './components/pages/ContactPage';
-import { CompliancePages } from './components/pages/CompliancePages';
+// Lazy Loaded Pages & Admin Components
+const BlogPage = lazy(() => import('./components/pages/BlogPage').then(m => ({ default: m.BlogPage })));
+const FAQPage = lazy(() => import('./components/pages/FAQPage').then(m => ({ default: m.FAQPage })));
+const ContactPage = lazy(() => import('./components/pages/ContactPage').then(m => ({ default: m.ContactPage })));
+const CompliancePages = lazy(() => import('./components/pages/CompliancePages').then(m => ({ default: m.CompliancePages })));
+const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+
+// Loading Spinner Fallback for Lazy Loaded Components
+const ToolLoadingFallback = () => (
+  <div className="flex flex-col items-center justify-center min-h-[400px] p-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm animate-pulse">
+    <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
+    <p className="text-slate-600 dark:text-slate-300 font-bold text-sm">Loading Tool Workspace...</p>
+    <p className="text-slate-400 dark:text-slate-500 text-xs mt-1">Initializing fast browser processor</p>
+  </div>
+);
 
 // Data & Helpers
 import { TOOLS } from './data/toolsData';
@@ -359,45 +366,47 @@ export default function App() {
             </>
           )}
 
-          {/* ACTIVE TOOL WORKSPACES */}
-          {activeToolId === 'edit-pdf' && <PDFEditorTool onBack={handleGoHome} />}
-          {activeToolId === 'merge-pdf' && <PDFMergeSplitTool mode="merge" onBack={handleGoHome} />}
-          {activeToolId === 'split-pdf' && <PDFMergeSplitTool mode="split" onBack={handleGoHome} />}
-          {activeToolId === 'compress-pdf' && <PDFCompressTool onBack={handleGoHome} />}
+          {/* ACTIVE TOOL WORKSPACES & PAGES WITH SUSPENSE LAZY LOADING */}
+          <Suspense fallback={<ToolLoadingFallback />}>
+            {activeToolId === 'edit-pdf' && <PDFEditorTool onBack={handleGoHome} />}
+            {activeToolId === 'merge-pdf' && <PDFMergeSplitTool mode="merge" onBack={handleGoHome} />}
+            {activeToolId === 'split-pdf' && <PDFMergeSplitTool mode="split" onBack={handleGoHome} />}
+            {activeToolId === 'compress-pdf' && <PDFCompressTool onBack={handleGoHome} />}
 
-          {(activeToolId === 'pdf-to-word' || activeToolId === 'word-to-pdf' || activeToolId === 'edit-word' || activeToolId === 'word-to-txt') && (
-            <WordTool onBack={handleGoHome} />
-          )}
+            {(activeToolId === 'pdf-to-word' || activeToolId === 'word-to-pdf' || activeToolId === 'edit-word' || activeToolId === 'word-to-txt') && (
+              <WordTool onBack={handleGoHome} />
+            )}
 
-          {(activeToolId === 'pdf-to-excel' || activeToolId === 'excel-to-pdf' || activeToolId === 'edit-excel' || activeToolId === 'csv-excel-converter') && (
-            <ExcelTool onBack={handleGoHome} />
-          )}
+            {(activeToolId === 'pdf-to-excel' || activeToolId === 'excel-to-pdf' || activeToolId === 'edit-excel' || activeToolId === 'csv-excel-converter') && (
+              <ExcelTool onBack={handleGoHome} />
+            )}
 
-          {(activeToolId === 'image-converter' || activeToolId === 'image-compressor' || activeToolId === 'image-resizer' || activeToolId === 'image-to-pdf' || activeToolId === 'pdf-to-image') && (
-            <ImageEditorTool onBack={handleGoHome} />
-          )}
+            {(activeToolId === 'image-converter' || activeToolId === 'image-compressor' || activeToolId === 'image-resizer' || activeToolId === 'image-to-pdf' || activeToolId === 'pdf-to-image') && (
+              <ImageEditorTool onBack={handleGoHome} />
+            )}
 
-          {activeToolId === 'ocr-reader' && <OCRTool onBack={handleGoHome} />}
-          {activeToolId === 'universal-converter' && <UniversalConvertTool onBack={handleGoHome} />}
+            {activeToolId === 'ocr-reader' && <OCRTool onBack={handleGoHome} />}
+            {activeToolId === 'universal-converter' && <UniversalConvertTool onBack={handleGoHome} />}
 
-          {/* COMPLIANCE & CONTENT PAGES */}
-          {activePage === 'blog' && <BlogPage onBack={handleGoHome} onSelectTool={handleSelectTool} />}
-          {activePage === 'faq' && <FAQPage onBack={handleGoHome} />}
-          {activePage === 'contact' && <ContactPage onBack={handleGoHome} />}
-          {(activePage === 'privacy' || activePage === 'terms' || activePage === 'disclaimer' || activePage === 'about') && (
-            <CompliancePages page={activePage as any} onBack={handleGoHome} />
-          )}
+            {/* COMPLIANCE & CONTENT PAGES */}
+            {activePage === 'blog' && <BlogPage onBack={handleGoHome} onSelectTool={handleSelectTool} />}
+            {activePage === 'faq' && <FAQPage onBack={handleGoHome} />}
+            {activePage === 'contact' && <ContactPage onBack={handleGoHome} />}
+            {(activePage === 'privacy' || activePage === 'terms' || activePage === 'disclaimer' || activePage === 'about') && (
+              <CompliancePages page={activePage as any} onBack={handleGoHome} />
+            )}
 
-          {/* ADMIN DASHBOARD PAGE */}
-          {activePage === 'admin' && isAdminLoggedIn && (
-            <AdminDashboard
-              onBack={handleGoHome}
-              config={adminConfig}
-              onUpdateConfig={handleUpdateAdminConfig}
-              onLogout={handleAdminLogout}
-              initialTab={adminInitialTab}
-            />
-          )}
+            {/* ADMIN DASHBOARD PAGE */}
+            {activePage === 'admin' && isAdminLoggedIn && (
+              <AdminDashboard
+                onBack={handleGoHome}
+                config={adminConfig}
+                onUpdateConfig={handleUpdateAdminConfig}
+                onLogout={handleAdminLogout}
+                initialTab={adminInitialTab}
+              />
+            )}
+          </Suspense>
 
         </main>
       </div>

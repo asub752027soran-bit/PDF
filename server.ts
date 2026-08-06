@@ -137,24 +137,47 @@ app.get('/sitemap.xml', (req, res) => {
 });
 
 // Serve Vite dev server or production static dist
+function serveStatic() {
+  const cwdDist = path.join(process.cwd(), 'dist');
+  const distPath = fs.existsSync(path.join(cwdDist, 'index.html'))
+    ? cwdDist
+    : (fs.existsSync(path.join(__dirname, 'index.html')) ? __dirname : cwdDist);
+
+  app.use(express.static(distPath));
+  app.get('*', (_req, res) => {
+    const indexPath = path.join(distPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.status(404).send('Build index.html not found. Please run "npm run build" first.');
+    }
+  });
+}
+
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
+  const isProduction =
+    process.env.NODE_ENV === 'production' ||
+    fs.existsSync(path.join(process.cwd(), 'dist', 'index.html')) ||
+    fs.existsSync(path.join(__dirname, 'index.html'));
+
+  if (isProduction) {
+    serveStatic();
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    try {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true, allowedHosts: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } catch (err) {
+      console.warn('Vite dev server initialization failed, falling back to static files:', err);
+      serveStatic();
+    }
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`PDFEditfy server running on http://0.0.0.0:${PORT}`);
+    console.log(`PDFEditfy server running on http://0.0.0.0:${PORT} [${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}]`);
   });
 }
 
