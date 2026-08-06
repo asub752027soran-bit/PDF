@@ -19,22 +19,22 @@ export const DeploymentModal: React.FC<DeploymentModalProps> = ({ isOpen, onClos
 
   const steps = [
     {
-      title: '1. SSH into Hostinger VPS & Update Server',
-      code: `ssh root@YOUR_HOSTINGER_VPS_IP
+      title: '1. SSH into VPS (200.141.13.181) & Install Node.js',
+      code: `ssh root@200.141.13.181
 apt update && apt upgrade -y
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt install -y nodejs nginx git certbot python3-certbot-nginx
 npm install -g pm2`,
     },
     {
-      title: '2. Clone & Build pdfeditfy Application',
+      title: '2. Upload or Clone PDFEditfy Project',
       code: `git clone https://github.com/your-username/pdfeditfy.git /var/www/pdfeditfy
 cd /var/www/pdfeditfy
 npm install
 npm run build`,
     },
     {
-      title: '3. Start Application with PM2 Process Manager',
+      title: '3. Start Server with PM2 Process Manager',
       code: `pm2 start dist/server.cjs --name "pdfeditfy"
 pm2 save
 pm2 startup`,
@@ -43,7 +43,7 @@ pm2 startup`,
       title: '4. Configure Nginx Reverse Proxy (Port 3000)',
       code: `cat << 'EOF' > /etc/nginx/sites-available/pdfeditfy
 server {
-    server_name pdfeditfy.com www.pdfeditfy.com;
+    server_name 200.141.13.181 pdfeditfy.com www.pdfeditfy.com;
 
     client_max_body_size 100M;
 
@@ -62,8 +62,8 @@ ln -s /etc/nginx/sites-available/pdfeditfy /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx`,
     },
     {
-      title: '5. Enable Free SSL Certificate via Let\'s Encrypt',
-      code: `certbot --nginx -d yourdomain.com -d www.yourdomain.com`,
+      title: '5. Enable Free SSL Certificate via Let\'s Encrypt (If using custom domain)',
+      code: `certbot --nginx -d pdfeditfy.com -d www.pdfeditfy.com`,
     },
   ];
 
