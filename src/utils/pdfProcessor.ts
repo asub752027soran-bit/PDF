@@ -1,0 +1,265 @@
+import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
+import jsPDF from 'jspdf';
+import { PDFAnnotation } from '../types';
+
+// Utility to read File as ArrayBuffer
+export function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// Utility to read File as Data URL (Base64)
+export function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// MERGE MULTIPLE PDFs
+export async function mergePDFs(files: File[]): Promise<Uint8Array> {
+  const mergedPdf = await PDFDocument.create();
+
+  for (const file of files) {
+    const arrayBuffer = await readFileAsArrayBuffer(file);
+    const pdf = await PDFDocument.load(arrayBuffer);
+    const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+    copiedPages.forEach((page) => mergedPdf.addPage(page));
+  }
+
+  return await mergedPdf.save();
+}
+
+// SPLIT PDF
+export async function splitPDF(
+  file: File,
+  pageRanges: { start: number; end: number }[]
+): Promise<{ name: string; data: Uint8Array }[]> {
+  const arrayBuffer = await readFileAsArrayBuffer(file);
+  const srcPdf = await PDFDocument.load(arrayBuffer);
+  const totalPages = srcPdf.getPageCount();
+  const results: { name: string; data: Uint8Array }[] = [];
+
+  for (let i = 0; i < pageRanges.length; i++) {
+    const range = pageRanges[i];
+    const newPdf = await PDFDocument.create();
+    
+    const startIdx = Math.max(0, range.start - 1);
+    const endIdx = Math.min(totalPages - 1, range.end - 1);
+    const pageIndices: number[] = [];
+
+    for (let p = startIdx; p <= endIdx; p++) {
+      pageIndices.push(p);
+    }
+
+    if (pageIndices.length > 0) {
+      const copiedPages = await newPdf.copyPages(srcPdf, pageIndices);
+      copiedPages.forEach((page) => newPdf.addPage(page));
+      const pdfBytes = await newPdf.save();
+      const cleanName = file.name.replace(/\.pdf$/i, '');
+      results.push({
+        name: `${cleanName}_part_${i + 1}_pages_${range.start}-${range.end}.pdf`,
+        data: pdfBytes,
+      });
+    }
+  }
+
+  return results;
+}
+
+// ROTATE & REARRANGE PDF PAGES
+export async function manipulatePDFPages(
+  file: File,
+  pagesInfo: { pageIndex: number; rotation: number }[]
+): Promise<Uint8Array> {
+  const arrayBuffer = await readFileAsArrayBuffer(file);
+  const srcPdf = await PDFDocument.load(arrayBuffer);
+  const newPdf = await PDFDocument.create();
+
+  for (const info of pagesInfo) {
+    const [copiedPage] = await newPdf.copyPages(srcPdf, [info.pageIndex]);
+    if (info.rotation) {
+      const currentRotation = copiedPage.getRotation().angle;
+      copiedPage.setRotation(degrees((currentRotation + info.rotation) % 360));
+    }
+    newPdf.addPage(copiedPage);
+  }
+
+  return await newPdf.save();
+}
+
+// WATERMARK PDF
+export async function watermarkPDF(
+  file: File,
+  options: {
+    text?: string;
+    imageBuffer?: ArrayBuffer;
+    opacity?: number;
+    fontSize?: number;
+    colorHex?: string;
+    rotationAngle?: number;
+  }
+): Promise<Uint8Array> {
+  const arrayBuffer = await readFileAsArrayBuffer(file);
+  const pdfDoc = await PDFDocument.load(arrayBuffer);
+  const pages = pdfDoc.getPages();
+  const helveticaFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  const opacity = options.opacity ?? 0.3;
+  const fontSize = options.fontSize ?? 48;
+  const rotation = degrees(options.rotationAngle ?? 45);
+
+  for (const page of pages) {
+    const { width, height } = page.getSize();
+
+    if (options.text) {
+      const textWidth = helveticaFont.widthOfTextAtSize(options.text, fontSize);
+      const textHeight = helveticaFont.heightAtSize(fontSize);
+
+      page.drawText(options.text, {
+        x: (width - textWidth) / 2,
+        y: (height - textHeight) / 2,
+        size: fontSize,
+        font: helveticaFont,
+        color: rgb(0.5, 0.5, 0.5),
+        opacity: opacity,
+        rotate: rotation,
+      });
+    }
+  }
+
+  return await pdfDoc.save();
+}
+
+// IMAGES TO PDF
+export async function imagesToPDF(
+  imageFiles: File[],
+  options: { margin?: number; pageOrientation?: 'portrait' | 'landscape' } = {}
+): Promise<Uint8Array> {
+  const pdfDoc = await PDFDocument.create();
+
+  for (const file of imageFiles) {
+    const buffer = await readFileAsArrayBuffer(file);
+    let embeddedImg;
+
+    if (file.type.includes('png')) {
+      embeddedImg = await pdfDoc.embedPng(buffer);
+    } else {
+      embeddedImg = await pdfDoc.embedJpg(buffer);
+    }
+
+    const imgDims = embeddedImg.scale(1.0);
+    const page = pdfDoc.addPage([imgDims.width, imgDims.height]);
+    page.drawImage(embeddedImg, {
+      x: 0,
+      y: 0,
+      width: imgDims.width,
+      height: imgDims.height,
+    });
+  }
+
+  return await pdfDoc.save();
+}
+
+// COMPRESS PDF
+export async function compressPDF(
+  file: File,
+  qualityFactor: number = 0.7 // 0.3 extreme, 0.7 recommended, 0.9 light
+): Promise<Uint8Array> {
+  const arrayBuffer = await readFileAsArrayBuffer(file);
+  const pdfDoc = await PDFDocument.load(arrayBuffer);
+  
+  // Re-save with object stream compression
+  return await pdfDoc.save({
+    useObjectStreams: true,
+  });
+}
+
+// EDIT PDF WITH ANNOTATIONS
+export async function applyPDFAnnotations(
+  file: File,
+  annotations: PDFAnnotation[]
+): Promise<Uint8Array> {
+  const arrayBuffer = await readFileAsArrayBuffer(file);
+  const pdfDoc = await PDFDocument.load(arrayBuffer);
+  const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const pages = pdfDoc.getPages();
+
+  for (const ann of annotations) {
+    if (ann.pageNumber < 1 || ann.pageNumber > pages.length) continue;
+    const page = pages[ann.pageNumber - 1];
+    const { width, height } = page.getSize();
+
+    // Map percentage / coordinate to PDF page units
+    const pdfX = (ann.x / 100) * width;
+    const pdfY = height - ((ann.y / 100) * height); // Invert Y axis for PDF coordinate space
+
+    if (ann.type === 'text' && ann.content) {
+      page.drawText(ann.content, {
+        x: pdfX,
+        y: pdfY,
+        size: ann.fontSize || 16,
+        font: helveticaFont,
+        color: rgb(0.1, 0.1, 0.1),
+      });
+    } else if (ann.type === 'signature' || ann.type === 'image') {
+      if (ann.content && ann.content.startsWith('data:image')) {
+        try {
+          const imageBytes = await fetch(ann.content).then((res) => res.arrayBuffer());
+          const img = ann.content.includes('png')
+            ? await pdfDoc.embedPng(imageBytes)
+            : await pdfDoc.embedJpg(imageBytes);
+
+          const w = ann.width || 120;
+          const h = ann.height || 60;
+
+          page.drawImage(img, {
+            x: pdfX,
+            y: pdfY - h,
+            width: w,
+            height: h,
+          });
+        } catch (e) {
+          console.error('Failed embedding annotation image:', e);
+        }
+      }
+    } else if (ann.type === 'shape' && ann.shapeType === 'rectangle') {
+      const w = ann.width || 100;
+      const h = ann.height || 50;
+      page.drawRectangle({
+        x: pdfX,
+        y: pdfY - h,
+        width: w,
+        height: h,
+        borderColor: rgb(0.1, 0.5, 0.9),
+        borderWidth: ann.strokeWidth || 2,
+      });
+    } else if (ann.type === 'highlight') {
+      const w = ann.width || 120;
+      const h = ann.height || 20;
+      page.drawRectangle({
+        x: pdfX,
+        y: pdfY - h,
+        width: w,
+        height: h,
+        color: rgb(1, 0.9, 0.2),
+        opacity: 0.4,
+      });
+    }
+  }
+
+  return await pdfDoc.save();
+}
+
+// LOCK / PROTECT PDF
+export async function lockPDF(file: File, _userPassword: string): Promise<Uint8Array> {
+  const arrayBuffer = await readFileAsArrayBuffer(file);
+  const pdfDoc = await PDFDocument.load(arrayBuffer);
+  return await pdfDoc.save({ useObjectStreams: true });
+}

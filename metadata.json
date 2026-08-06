@@ -1,0 +1,6 @@
+{
+  "name": "DocuShift",
+  "description": "Fast, private, and secure online file converter, PDF editor, compressor, and image processing tools with zero signup required.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
