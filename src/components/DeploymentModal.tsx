@@ -58,7 +58,7 @@ server {
 }
 EOF
 
-ln -s /etc/nginx/sites-available/docushift /etc/nginx/sites-enabled/
+ln -s /etc/nginx/sites-available/pdfeditfy /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx`,
     },
     {

@@ -103,7 +103,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({ onBack, onSelectTool }) => {
           {/* Related Tool Banner Callout */}
           <div className="p-6 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white flex flex-col sm:flex-row items-center justify-between gap-4 mt-8 shadow-lg">
             <div>
-              <h4 className="font-extrabold text-sm mb-1">Try DocuShift Free Tools Now</h4>
+              <h4 className="font-extrabold text-sm mb-1">Try PDFEditfy Free Tools Now</h4>
               <p className="text-xs text-indigo-100">Zero signup needed. Edit, convert & compress files instantly.</p>
             </div>
             <button

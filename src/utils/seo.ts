@@ -5,7 +5,7 @@ export function updateSEOMeta(
   ogType: string = 'website'
 ) {
   // Update document title
-  document.title = `${title} | DocuShift Free Online File Tools`;
+  document.title = `${title} | PDFEditfy Free Online File Tools`;
 
   // Helper to update or create meta tag
   const setMetaTag = (nameAttr: string, attrVal: string, contentVal: string) => {
@@ -36,10 +36,10 @@ export function updateSEOMeta(
   canonicalLink.setAttribute('href', canonicalUrl || window.location.href);
 
   // JSON-LD Schema.org Structured Data
-  let schemaScript = document.getElementById('docushift-jsonld');
+  let schemaScript = document.getElementById('pdfeditfy-jsonld');
   if (!schemaScript) {
     schemaScript = document.createElement('script');
-    schemaScript.id = 'docushift-jsonld';
+    schemaScript.id = 'pdfeditfy-jsonld';
     schemaScript.setAttribute('type', 'application/ld+json');
     document.head.appendChild(schemaScript);
   }
@@ -47,7 +47,7 @@ export function updateSEOMeta(
   const structuredData = {
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
-    'name': 'DocuShift',
+    'name': 'PDFEditfy',
     'applicationCategory': 'BusinessApplication',
     'operatingSystem': 'All',
     'offers': {

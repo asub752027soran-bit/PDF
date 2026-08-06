@@ -5,14 +5,14 @@ export const CookieBanner: React.FC = () => {
   const [accepted, setAccepted] = useState(true); // Default true unless unchecked
 
   useEffect(() => {
-    const consent = localStorage.getItem('docushift_cookie_consent');
+    const consent = localStorage.getItem('pdfeditfy_cookie_consent') || localStorage.getItem('docushift_cookie_consent');
     if (!consent) {
       setAccepted(false);
     }
   }, []);
 
   const handleAccept = () => {
-    localStorage.setItem('docushift_cookie_consent', 'accepted');
+    localStorage.setItem('pdfeditfy_cookie_consent', 'accepted');
     setAccepted(true);
   };
 
@@ -37,7 +37,7 @@ export const CookieBanner: React.FC = () => {
         </div>
 
         <p className="text-[11px] text-slate-300 leading-relaxed">
-          DocuShift uses local browser storage for basic site preferences (such as dark mode and recent tools) and complies with Google AdSense and GDPR policies. We do not store your uploaded documents permanently.
+          PDFEditfy uses local browser storage for basic site preferences (such as dark mode and recent tools) and complies with Google AdSense and GDPR policies. We do not store your uploaded documents permanently.
         </p>
 
         <div className="flex items-center justify-end gap-2 pt-1">

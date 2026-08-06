@@ -9,7 +9,7 @@ export const BLOG_POSTS: BlogPost[] = [
     category: 'PDF Guide',
     readTime: '4 min read',
     publishedDate: 'August 2, 2026',
-    author: 'DocuShift Tech Team',
+    author: 'PDFEditfy Tech Team',
     tags: ['PDF', 'Compression', 'Productivity', 'File Optimization'],
     content: `
 # How to Compress a PDF File Size Without Losing Visual Quality
@@ -24,18 +24,18 @@ Large PDF documents with embedded high-resolution graphics, photos, or scanned p
 
 ## The Solution: Intelligent PDF Compression
 
-By using client-side downsampling and Flate stream compression, **DocuShift** re-encodes embedded bitmaps and cleans unnecessary objects.
+By using client-side downsampling and Flate stream compression, **PDFEditfy** re-encodes embedded bitmaps and cleans unnecessary objects.
 
 ### Step-by-Step Guide:
 
-1. Open the **Compress PDF** tool on DocuShift.
+1. Open the **Compress PDF** tool on PDFEditfy.
 2. Drag and drop your target PDF file into the secure drop zone.
 3. Choose your desired compression level (Extreme, Recommended, or Light).
 4. Click **Compress PDF** and download your optimized document in seconds!
 
 ## Privacy Assurance
 
-Unlike traditional online converters that store your sensitive documents on public servers, DocuShift processes files right inside your browser memory or purges temporary backend buffers automatically within minutes.
+Unlike traditional online converters that store your sensitive documents on public servers, PDFEditfy processes files right inside your browser memory or purges temporary backend buffers automatically within minutes.
     `
   },
   {
@@ -62,9 +62,9 @@ PDF files store elements using absolute coordinates on a fixed canvas, rather th
 - Embedded vectors and images
 - List numbers and bullet points
 
-## How DocuShift Handles PDF to Word
+## How PDFEditfy Handles PDF to Word
 
-DocuShift uses advanced structural layout extraction algorithms to rebuild native DOCX document trees. 
+PDFEditfy uses advanced structural layout extraction algorithms to rebuild native DOCX document trees. 
 
 ### Why Choice of Tool Matters:
 - **No Sign Up Required**: You never have to create an account or verify your email address to convert files.
@@ -94,9 +94,9 @@ Many popular document utilities require users to register accounts or leave uplo
 - Tracking of user email addresses and browsing habits.
 - Complex cancellation terms for hidden subscriptions.
 
-## The DocuShift Privacy Guarantee
+## The PDFEditfy Privacy Guarantee
 
-At **DocuShift**, we designed our infrastructure around a strict zero-retention philosophy:
+At **PDFEditfy**, we designed our infrastructure around a strict zero-retention philosophy:
 
 1. **No Accounts or Logins**: We never ask for your email, phone number, or personal credentials.
 2. **Local Browser Processing**: Key operations like PDF merging, page reordering, image editing, and canvas annotation run directly on your device using WebAssembly and JavaScript APIs.

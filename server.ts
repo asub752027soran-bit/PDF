@@ -37,7 +37,7 @@ setInterval(() => {
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
-    app: 'DocuShift',
+    app: 'PDFEditfy',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
     privacyNotice: 'Uploaded temporary processing files are purged automatically within 15 minutes.',
@@ -100,7 +100,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`DocuShift server running on http://0.0.0.0:${PORT}`);
+    console.log(`PDFEditfy server running on http://0.0.0.0:${PORT}`);
   });
 }
 

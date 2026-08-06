@@ -88,7 +88,7 @@ export default function App() {
   // Recently used tools tracking
   const [recentlyUsed, setRecentlyUsed] = useState<string[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem('docushift_recent') || '["edit-pdf", "compress-pdf"]');
+      return JSON.parse(localStorage.getItem('pdfeditfy_recent') || localStorage.getItem('docushift_recent') || '["edit-pdf", "compress-pdf"]');
     } catch {
       return ['edit-pdf', 'compress-pdf'];
     }
@@ -108,12 +108,10 @@ export default function App() {
       document.documentElement.classList.add('dark');
       document.documentElement.style.colorScheme = 'dark';
       localStorage.setItem('pdfeditfy_theme', 'dark');
-      localStorage.setItem('docushift_theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
       document.documentElement.style.colorScheme = 'light';
       localStorage.setItem('pdfeditfy_theme', 'light');
-      localStorage.setItem('docushift_theme', 'light');
     }
   }, [darkMode]);
 
@@ -188,7 +186,7 @@ export default function App() {
     // Update Recently Used
     const updatedRecent = [toolId, ...recentlyUsed.filter((id) => id !== toolId)].slice(0, 5);
     setRecentlyUsed(updatedRecent);
-    localStorage.setItem('docushift_recent', JSON.stringify(updatedRecent));
+    localStorage.setItem('pdfeditfy_recent', JSON.stringify(updatedRecent));
   };
 
   const handleOpenPage = (pageName: string) => {
