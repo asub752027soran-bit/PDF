@@ -78,7 +78,7 @@ export const Footer: React.FC<FooterProps> = ({
                 <FileStack className="w-4 h-4" />
               </div>
               <span className="font-extrabold text-xl tracking-tight text-white">
-                DocuShift
+                pdfeditfy.com
               </span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
@@ -238,7 +238,7 @@ export const Footer: React.FC<FooterProps> = ({
 
         {/* Bottom Copyright */}
         <div className="pt-4 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-500 gap-2">
-          <p>© {new Date().getFullYear()} DocuShift.io. All rights reserved. Client-Side Document Utilities.</p>
+          <p>© {new Date().getFullYear()} pdfeditfy.com. All rights reserved. Client-Side Document Utilities.</p>
           <div className="flex items-center gap-3">
             <a href="/sitemap.xml" target="_blank" rel="noreferrer" className="hover:underline text-slate-400">
               Sitemap.xml

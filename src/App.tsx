@@ -72,12 +72,12 @@ export default function App() {
       }
     } else if (activePage) {
       updateSEOMeta(
-        `DocuShift | ${activePage.toUpperCase()}`,
-        'DocuShift free online PDF editor, converter, and file tools.'
+        `pdfeditfy.com | ${activePage.toUpperCase()}`,
+        'pdfeditfy.com free online PDF editor, converter, and file tools.'
       );
     } else {
       updateSEOMeta(
-        'DocuShift.io - Free Online PDF Editor, Converter & Compressor',
+        'pdfeditfy.com - Free Online PDF Editor, Converter & Compressor',
         'Fast, private online tools to edit PDF, convert Word to PDF, compress images, and merge files without creating an account.'
       );
     }

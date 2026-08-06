@@ -27,7 +27,7 @@ export const CompliancePages: React.FC<CompliancePagesProps> = ({ page, onBack }
             {page === 'privacy' ? 'Privacy Policy' : page === 'terms' ? 'Terms & Conditions' : page === 'disclaimer' ? 'Disclaimer' : 'About Us'}
           </h1>
           <p className="text-xs text-slate-500">
-            Last Updated: August 2026 • DocuShift Online Platform
+            Last Updated: August 2026 • pdfeditfy.com Online Platform
           </p>
         </div>
       </div>
@@ -38,7 +38,7 @@ export const CompliancePages: React.FC<CompliancePagesProps> = ({ page, onBack }
           <div className="space-y-4">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">1. Zero Permanent Storage Commitment</h3>
             <p>
-              DocuShift respects your data privacy. We do not require account registration, login credentials, or personal email addresses. Most PDF, Word, Excel, and image editing tools run directly inside your web browser memory.
+              pdfeditfy.com respects your data privacy. We do not require account registration, login credentials, or personal email addresses. Most PDF, Word, Excel, and image editing tools run directly inside your web browser memory.
             </p>
 
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">2. Automatic Temporary File Deletion</h3>
@@ -57,7 +57,7 @@ export const CompliancePages: React.FC<CompliancePagesProps> = ({ page, onBack }
           <div className="space-y-4">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">1. Acceptable Use</h3>
             <p>
-              DocuShift provides document conversion, PDF editing, compression, and image processing tools for personal and professional use. Users are prohibited from using the service to process unlawful or malicious material.
+              pdfeditfy.com provides document conversion, PDF editing, compression, and image processing tools for personal and professional use. Users are prohibited from using the service to process unlawful or malicious material.
             </p>
 
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">2. No Account & Free Service</h3>
@@ -71,7 +71,7 @@ export const CompliancePages: React.FC<CompliancePagesProps> = ({ page, onBack }
           <div className="space-y-4">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">1. Service Provided "As-Is"</h3>
             <p>
-              DocuShift algorithms aim to deliver accurate document formatting and image compression. However, the service is provided on an "as-is" basis without warranties of uninterrupted availability.
+              pdfeditfy.com algorithms aim to deliver accurate document formatting and image compression. However, the service is provided on an "as-is" basis without warranties of uninterrupted availability.
             </p>
           </div>
         )}
@@ -80,7 +80,7 @@ export const CompliancePages: React.FC<CompliancePagesProps> = ({ page, onBack }
           <div className="space-y-4">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">Our Mission</h3>
             <p>
-              DocuShift was created to eliminate paywalls, intrusive login requirements, and software installation hurdles for basic document tasks. Whether you need to sign a PDF contract, convert a spreadsheet, or compress an image, DocuShift provides fast, browser-first tools.
+              pdfeditfy.com was created to eliminate paywalls, intrusive login requirements, and software installation hurdles for basic document tasks. Whether you need to sign a PDF contract, convert a spreadsheet, or compress an image, pdfeditfy.com provides fast, browser-first tools.
             </p>
           </div>
         )}

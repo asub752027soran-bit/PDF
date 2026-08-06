@@ -45,7 +45,7 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onBack }) => {
           <div className="text-center py-8 space-y-4">
             <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              Thank You for Contacting DocuShift!
+              Thank You for Contacting pdfeditfy.com!
             </h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
               Your inquiry has been received. Our support team responds to user inquiries within 24 hours.

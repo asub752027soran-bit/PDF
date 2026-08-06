@@ -27,7 +27,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({ onBack, onSelectTool }) => {
         </button>
         <div className="text-right">
           <h1 className="text-xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2 justify-end">
-            <BookOpen className="w-5 h-5 text-indigo-600" /> DocuShift Knowledge Hub
+            <BookOpen className="w-5 h-5 text-indigo-600" /> pdfeditfy.com Knowledge Hub
           </h1>
           <p className="text-xs text-slate-500">
             Expert guides on PDF compression, format conversions, privacy, and office productivity.

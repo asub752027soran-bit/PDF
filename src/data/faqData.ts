@@ -4,8 +4,8 @@ export const FAQ_ITEMS: FAQItem[] = [
   {
     id: 'f1',
     category: 'General',
-    question: 'Do I need to register or create an account to use DocuShift?',
-    answer: 'No! DocuShift is completely free and requires zero account creation, sign-up, or email registration. You can start editing, converting, or compressing files immediately after opening the site.'
+    question: 'Do I need to register or create an account to use pdfeditfy.com?',
+    answer: 'No! pdfeditfy.com is completely free and requires zero account creation, sign-up, or email registration. You can start editing, converting, or compressing files immediately after opening the site.'
   },
   {
     id: 'f2',
@@ -17,13 +17,13 @@ export const FAQ_ITEMS: FAQItem[] = [
     id: 'f3',
     category: 'File Limits',
     question: 'What is the maximum file size limit for uploads?',
-    answer: 'DocuShift supports single and batch uploads up to 100MB per file, ensuring smooth performance for large presentations, high-resolution PDFs, and multidocument batches.'
+    answer: 'pdfeditfy.com supports single and batch uploads up to 100MB per file, ensuring smooth performance for large presentations, high-resolution PDFs, and multidocument batches.'
   },
   {
     id: 'f4',
     category: 'Compatibility',
-    question: 'Does DocuShift work on mobile phones and tablets?',
-    answer: 'Yes! DocuShift is fully responsive and optimized for touch screens across smartphones (iOS & Android), tablets, laptops, and desktop computers.'
+    question: 'Does pdfeditfy.com work on mobile phones and tablets?',
+    answer: 'Yes! pdfeditfy.com is fully responsive and optimized for touch screens across smartphones (iOS & Android), tablets, laptops, and desktop computers.'
   },
   {
     id: 'f5',

@@ -27,23 +27,23 @@ apt install -y nodejs nginx git certbot python3-certbot-nginx
 npm install -g pm2`,
     },
     {
-      title: '2. Clone & Build DocuShift Application',
-      code: `git clone https://github.com/your-username/docushift.git /var/www/docushift
-cd /var/www/docushift
+      title: '2. Clone & Build pdfeditfy Application',
+      code: `git clone https://github.com/your-username/pdfeditfy.git /var/www/pdfeditfy
+cd /var/www/pdfeditfy
 npm install
 npm run build`,
     },
     {
       title: '3. Start Application with PM2 Process Manager',
-      code: `pm2 start dist/server.cjs --name "docushift"
+      code: `pm2 start dist/server.cjs --name "pdfeditfy"
 pm2 save
 pm2 startup`,
     },
     {
       title: '4. Configure Nginx Reverse Proxy (Port 3000)',
-      code: `cat << 'EOF' > /etc/nginx/sites-available/docushift
+      code: `cat << 'EOF' > /etc/nginx/sites-available/pdfeditfy
 server {
-    server_name yourdomain.com www.yourdomain.com;
+    server_name pdfeditfy.com www.pdfeditfy.com;
 
     client_max_body_size 100M;
 

@@ -55,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
           </svg>
         </div>
         <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-          DocuShift<span className="text-blue-600 font-black italic underline">.io</span>
+          pdfeditfy<span className="text-blue-600 font-black italic underline">.com</span>
         </span>
       </div>
 
