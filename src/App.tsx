@@ -173,7 +173,57 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Launch tool handler
+  // URL Route Parser for deep-linking (sitemap crawling & direct links)
+  useEffect(() => {
+    const parseRoute = () => {
+      const path = window.location.pathname.replace(/^\//, '').toLowerCase();
+      const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+      const params = new URLSearchParams(window.location.search);
+
+      // Tool route matching
+      let toolMatch: string | null = null;
+      if (path.startsWith('tool/')) {
+        toolMatch = path.replace('tool/', '');
+      } else if (hash.startsWith('tool/')) {
+        toolMatch = hash.replace('tool/', '');
+      } else if (params.get('tool')) {
+        toolMatch = params.get('tool');
+      }
+
+      if (toolMatch && TOOLS.some(t => t.id === toolMatch)) {
+        setActiveToolId(toolMatch);
+        setActivePage(null);
+        return;
+      }
+
+      // Page route matching
+      const validPages = ['about', 'privacy', 'terms', 'disclaimer', 'contact', 'faq', 'blog', 'admin'];
+      let pageMatch: string | null = null;
+
+      if (validPages.includes(path)) {
+        pageMatch = path;
+      } else if (validPages.includes(hash)) {
+        pageMatch = hash;
+      } else if (params.get('page') && validPages.includes(params.get('page')!)) {
+        pageMatch = params.get('page');
+      }
+
+      if (pageMatch) {
+        if (pageMatch === 'admin' && !sessionStorage.getItem('pdfeditfy_admin_authed')) {
+          setShowAdminLogin(true);
+        } else {
+          setActivePage(pageMatch);
+          setActiveToolId(null);
+        }
+      }
+    };
+
+    parseRoute();
+    window.addEventListener('popstate', parseRoute);
+    return () => window.removeEventListener('popstate', parseRoute);
+  }, []);
+
+  // Launch tool handler with URL pushState
   const handleSelectTool = (toolId: string) => {
     if (adminConfig.disabledTools.includes(toolId)) {
       alert('This tool is currently under maintenance by the administrator. Please try another tool.');
@@ -182,6 +232,10 @@ export default function App() {
     setActiveToolId(toolId);
     setActivePage(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    if (window.location.pathname !== `/tool/${toolId}`) {
+      window.history.pushState({}, '', `/tool/${toolId}`);
+    }
 
     // Update Recently Used
     const updatedRecent = [toolId, ...recentlyUsed.filter((id) => id !== toolId)].slice(0, 5);
@@ -197,14 +251,21 @@ export default function App() {
     setActivePage(pageName);
     setActiveToolId(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
 
+    if (window.location.pathname !== `/${pageName}`) {
+      window.history.pushState({}, '', `/${pageName}`);
+    }
+  };
 
   const handleGoHome = () => {
     setActiveToolId(null);
     setActivePage(null);
     setSearchQuery('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    if (window.location.pathname !== '/') {
+      window.history.pushState({}, '', '/');
+    }
   };
 
   return (
