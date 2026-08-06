@@ -228,6 +228,9 @@ export const Footer: React.FC<FooterProps> = ({
             <button onClick={() => onOpenPage('contact')} className="hover:text-slate-200 transition-colors">
               Contact Support
             </button>
+            <button onClick={() => onOpenPage('admin')} className="hover:text-blue-400 text-blue-400 font-bold transition-colors flex items-center gap-1">
+              Admin Console
+            </button>
           </div>
 
           <div className="flex items-center gap-2 text-[11px]">

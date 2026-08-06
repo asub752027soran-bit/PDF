@@ -82,3 +82,31 @@ export interface FAQItem {
   question: string;
   answer: string;
 }
+
+export interface AdminConfig {
+  siteName: string;
+  announcementBar: {
+    enabled: boolean;
+    text: string;
+    linkText?: string;
+    type: 'info' | 'warning' | 'success';
+  };
+  maintenanceMode: boolean;
+  adsensePublisherId: string;
+  adsEnabled: boolean;
+  disabledTools: string[];
+  customBadges: Record<string, 'Popular' | 'New' | 'Batch' | 'Free' | 'Pro' | 'Beta'>;
+  adminPasscode: string;
+  analyticsEnabled: boolean;
+  gaTrackingId: string;
+  maxUploadSizeMB: number;
+}
+
+export interface ContactInquiry {
+  id: string;
+  email: string;
+  subject: string;
+  message: string;
+  date: string;
+  status: 'unread' | 'read' | 'replied';
+}

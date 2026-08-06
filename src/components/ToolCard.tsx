@@ -4,12 +4,14 @@ import { ToolItem } from '../types';
 
 interface ToolCardProps {
   tool: ToolItem;
+  customBadge?: string;
   onSelect: (toolId: string) => void;
 }
 
-export const ToolCard: React.FC<ToolCardProps> = ({ tool, onSelect }) => {
+export const ToolCard: React.FC<ToolCardProps> = ({ tool, customBadge, onSelect }) => {
   // Dynamically resolve Lucide icon
   const IconComponent = (LucideIcons as any)[tool.iconName] || LucideIcons.File;
+  const activeBadge = customBadge !== undefined ? customBadge : tool.badge;
 
   // Determine top border color by category
   const getTopBorderClass = () => {
@@ -43,17 +45,19 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, onSelect }) => {
             <IconComponent className="w-4 h-4" />
           </div>
 
-          {tool.badge && (
+          {activeBadge && (
             <span
               className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
-                tool.badge === 'Popular'
+                activeBadge === 'Popular'
                   ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300'
-                  : tool.badge === 'New'
+                  : activeBadge === 'New'
                   ? 'bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-300'
+                  : activeBadge === 'Pro'
+                  ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300'
                   : 'bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300'
               }`}
             >
-              {tool.badge}
+              {activeBadge}
             </span>
           )}
         </div>

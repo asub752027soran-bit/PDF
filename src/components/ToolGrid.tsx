@@ -11,6 +11,8 @@ interface ToolGridProps {
   onSelectCategory: (cat: CategoryType) => void;
   onSelectTool: (toolId: string) => void;
   searchQuery: string;
+  disabledTools?: string[];
+  customBadges?: Record<string, string>;
 }
 
 export const ToolGrid: React.FC<ToolGridProps> = ({
@@ -19,9 +21,13 @@ export const ToolGrid: React.FC<ToolGridProps> = ({
   onSelectCategory,
   onSelectTool,
   searchQuery,
+  disabledTools = [],
+  customBadges = {},
 }) => {
-  // Filter tools by category & search query
+  // Filter tools by category & search query & disabled tools
   const filteredTools = tools.filter((t) => {
+    if (disabledTools.includes(t.id)) return false;
+
     const matchesCategory =
       selectedCategory === 'All' || t.category === selectedCategory;
 
@@ -36,6 +42,7 @@ export const ToolGrid: React.FC<ToolGridProps> = ({
 
     return matchesCategory && matchesSearch;
   });
+
 
   return (
     <div className="space-y-4">
@@ -98,7 +105,11 @@ export const ToolGrid: React.FC<ToolGridProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {filteredTools.map((tool, idx) => (
               <React.Fragment key={tool.id}>
-                <ToolCard tool={tool} onSelect={onSelectTool} />
+                <ToolCard
+                  tool={tool}
+                  customBadge={customBadges[tool.id]}
+                  onSelect={onSelectTool}
+                />
                 
                 {/* High Density Ad Slot Banner after every 8th item */}
                 {(idx + 1) % 8 === 0 && (

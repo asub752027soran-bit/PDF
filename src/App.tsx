@@ -8,6 +8,10 @@ import { AdSenseBanner } from './components/AdSenseBanner';
 import { CookieBanner } from './components/CookieBanner';
 import { DeploymentModal } from './components/DeploymentModal';
 
+// Admin Components
+import { AdminDashboard } from './components/admin/AdminDashboard';
+import { AdminLoginModal } from './components/admin/AdminLoginModal';
+
 // Tools
 import { PDFEditorTool } from './components/tools/PDFEditorTool';
 import { PDFMergeSplitTool } from './components/tools/PDFMergeSplitTool';
@@ -26,18 +30,59 @@ import { CompliancePages } from './components/pages/CompliancePages';
 
 // Data & Helpers
 import { TOOLS } from './data/toolsData';
-import { CategoryType } from './types';
+import { CategoryType, AdminConfig } from './types';
+import { LanguageCode } from './data/translations';
 import { updateSEOMeta } from './utils/seo';
+import { Megaphone, AlertTriangle } from 'lucide-react';
+
+const DEFAULT_ADMIN_CONFIG: AdminConfig = {
+  siteName: 'pdfeditfy.com',
+  announcementBar: {
+    enabled: true,
+    text: '🎉 Welcome to pdfeditfy.com - Fast & private PDF tools, Word converters, and image compressor!',
+    type: 'info',
+  },
+  maintenanceMode: false,
+  adsensePublisherId: 'ca-pub-1234567890123456',
+  adsEnabled: true,
+  disabledTools: [],
+  customBadges: {},
+  adminPasscode: 'Sobha@752027',
+  analyticsEnabled: true,
+  gaTrackingId: 'G-PDFEDITFY01',
+  maxUploadSizeMB: 100,
+};
 
 export default function App() {
   const [currentCategory, setCurrentCategory] = useState<CategoryType>('All');
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const [activePage, setActivePage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Single Admin State & Config
+  const [adminConfig, setAdminConfig] = useState<AdminConfig>(() => {
+    try {
+      const saved = localStorage.getItem('pdfeditfy_admin_config');
+      return saved ? JSON.parse(saved) : DEFAULT_ADMIN_CONFIG;
+    } catch {
+      return DEFAULT_ADMIN_CONFIG;
+    }
+  });
+
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
+    return sessionStorage.getItem('pdfeditfy_admin_authed') === 'true';
+  });
+
+  const [showAdminLogin, setShowAdminLogin] = useState<boolean>(false);
+
   
   // Theme state
   const [darkMode, setDarkMode] = useState<boolean>(() => {
-    return localStorage.getItem('docushift_theme') === 'dark';
+    const saved = localStorage.getItem('pdfeditfy_theme') || localStorage.getItem('docushift_theme');
+    if (saved) {
+      return saved === 'dark';
+    }
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
   // Recently used tools tracking
@@ -49,6 +94,11 @@ export default function App() {
     }
   });
 
+  // Language state
+  const [currentLanguage, setCurrentLanguage] = useState<LanguageCode>(() => {
+    return (localStorage.getItem('pdfeditfy_lang') as LanguageCode) || 'en';
+  });
+
   // VPS Guide Modal
   const [showVPSModal, setShowVPSModal] = useState(false);
 
@@ -56,9 +106,13 @@ export default function App() {
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
+      document.documentElement.style.colorScheme = 'dark';
+      localStorage.setItem('pdfeditfy_theme', 'dark');
       localStorage.setItem('docushift_theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.documentElement.style.colorScheme = 'light';
+      localStorage.setItem('pdfeditfy_theme', 'light');
       localStorage.setItem('docushift_theme', 'light');
     }
   }, [darkMode]);
@@ -83,8 +137,50 @@ export default function App() {
     }
   }, [activeToolId, activePage]);
 
+  // Update admin config helper
+  const handleUpdateAdminConfig = (newConfig: AdminConfig) => {
+    setAdminConfig(newConfig);
+    localStorage.setItem('pdfeditfy_admin_config', JSON.stringify(newConfig));
+  };
+
+  const [adminInitialTab, setAdminInitialTab] = useState<'overview' | 'tools' | 'monetization' | 'inquiries' | 'seo' | 'security' | 'vps'>('overview');
+
+  // Admin login trigger
+  const handleOpenAdminConsole = (targetTab?: string) => {
+    if (targetTab) {
+      setAdminInitialTab(targetTab as any);
+    }
+    if (isAdminLoggedIn) {
+      setActivePage('admin');
+      setActiveToolId(null);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      setShowAdminLogin(true);
+    }
+  };
+
+  const handleAdminLoginSuccess = () => {
+    setIsAdminLoggedIn(true);
+    sessionStorage.setItem('pdfeditfy_admin_authed', 'true');
+    setShowAdminLogin(false);
+    setActivePage('admin');
+    setActiveToolId(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdminLoggedIn(false);
+    sessionStorage.removeItem('pdfeditfy_admin_authed');
+    setActivePage(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Launch tool handler
   const handleSelectTool = (toolId: string) => {
+    if (adminConfig.disabledTools.includes(toolId)) {
+      alert('This tool is currently under maintenance by the administrator. Please try another tool.');
+      return;
+    }
     setActiveToolId(toolId);
     setActivePage(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -96,10 +192,15 @@ export default function App() {
   };
 
   const handleOpenPage = (pageName: string) => {
+    if (pageName === 'admin') {
+      handleOpenAdminConsole();
+      return;
+    }
     setActivePage(pageName);
     setActiveToolId(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
 
   const handleGoHome = () => {
     setActiveToolId(null);
@@ -111,6 +212,20 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
       
+      {/* Announcement Bar (Configured via Admin Panel) */}
+      {adminConfig.announcementBar.enabled && adminConfig.announcementBar.text && (
+        <div className={`px-4 py-2 text-center text-xs font-extrabold flex items-center justify-center gap-2 shrink-0 ${
+          adminConfig.announcementBar.type === 'warning'
+            ? 'bg-amber-500 text-slate-950'
+            : adminConfig.announcementBar.type === 'success'
+            ? 'bg-emerald-600 text-white'
+            : 'bg-blue-600 text-white'
+        }`}>
+          <Megaphone className="w-3.5 h-3.5 shrink-0" />
+          <span>{adminConfig.announcementBar.text}</span>
+        </div>
+      )}
+
       {/* High Density Navigation Header */}
       <Header
         currentCategory={currentCategory}
@@ -120,13 +235,30 @@ export default function App() {
         }}
         onSelectTool={handleSelectTool}
         onOpenVPSGuide={() => setShowVPSModal(true)}
+        onOpenAdmin={handleOpenAdminConsole}
         recentlyUsed={recentlyUsed}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         onGoHome={handleGoHome}
+        currentLanguage={currentLanguage}
+        onSelectLanguage={setCurrentLanguage}
       />
+
+      {/* Maintenance Mode Overlay Notice */}
+      {adminConfig.maintenanceMode && activePage !== 'admin' && (
+        <div className="bg-amber-50 dark:bg-amber-950/80 border-b border-amber-200 dark:border-amber-800 p-4 text-center text-amber-800 dark:text-amber-200 text-xs font-semibold flex items-center justify-center gap-2 shrink-0">
+          <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+          <span>Notice: Scheduled maintenance is in progress. Some tools may operate in restricted mode.</span>
+          <button
+            onClick={handleOpenAdminConsole}
+            className="underline font-bold text-amber-900 dark:text-amber-100 hover:text-blue-600"
+          >
+            Admin Login
+          </button>
+        </div>
+      )}
 
       {/* Main Content & Sidebar Layout */}
       <div className="flex-1 flex overflow-hidden">
@@ -154,12 +286,16 @@ export default function App() {
                 onQuickSelect={handleSelectTool}
               />
 
+              {adminConfig.adsEnabled && <AdSenseBanner slotType="leaderboard" />}
+
               <ToolGrid
                 tools={TOOLS}
                 selectedCategory={currentCategory}
                 onSelectCategory={setCurrentCategory}
                 onSelectTool={handleSelectTool}
                 searchQuery={searchQuery}
+                disabledTools={adminConfig.disabledTools}
+                customBadges={adminConfig.customBadges}
               />
             </>
           )}
@@ -193,6 +329,17 @@ export default function App() {
             <CompliancePages page={activePage as any} onBack={handleGoHome} />
           )}
 
+          {/* ADMIN DASHBOARD PAGE */}
+          {activePage === 'admin' && isAdminLoggedIn && (
+            <AdminDashboard
+              onBack={handleGoHome}
+              config={adminConfig}
+              onUpdateConfig={handleUpdateAdminConfig}
+              onLogout={handleAdminLogout}
+              initialTab={adminInitialTab}
+            />
+          )}
+
         </main>
       </div>
 
@@ -211,6 +358,13 @@ export default function App() {
       <DeploymentModal
         isOpen={showVPSModal}
         onClose={() => setShowVPSModal(false)}
+      />
+
+      <AdminLoginModal
+        isOpen={showAdminLogin}
+        onClose={() => setShowAdminLogin(false)}
+        onLoginSuccess={handleAdminLoginSuccess}
+        currentPasscode={adminConfig.adminPasscode}
       />
 
     </div>

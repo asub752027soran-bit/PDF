@@ -8,6 +8,7 @@ interface ContactPageProps {
 export const ContactPage: React.FC<ContactPageProps> = ({ onBack }) => {
   const [submitted, setSubmitted] = useState(false);
   const [formData, setFormData] = useState({
+    email: '',
     subject: 'General Question',
     message: '',
   });
@@ -15,6 +16,23 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onBack }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.message.trim()) return;
+
+    // Save inquiry to localStorage for Admin Panel
+    try {
+      const existing = JSON.parse(localStorage.getItem('pdfeditfy_contacts') || '[]');
+      const newInquiry = {
+        id: 'inq_' + Date.now(),
+        email: formData.email || 'anonymous@user.com',
+        subject: formData.subject,
+        message: formData.message,
+        date: new Date().toLocaleString(),
+        status: 'unread',
+      };
+      localStorage.setItem('pdfeditfy_contacts', JSON.stringify([newInquiry, ...existing]));
+    } catch {
+      // ignore
+    }
+
     setSubmitted(true);
   };
 
@@ -51,7 +69,10 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onBack }) => {
               Your inquiry has been received. Our support team responds to user inquiries within 24 hours.
             </p>
             <button
-              onClick={() => setSubmitted(false)}
+              onClick={() => {
+                setFormData({ email: '', subject: 'General Question', message: '' });
+                setSubmitted(false);
+              }}
               className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-xs"
             >
               Send Another Message
@@ -59,6 +80,20 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onBack }) => {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                Your Email Address
+              </label>
+              <input
+                type="email"
+                required
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="name@example.com"
+                className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium outline-none focus:ring-2 focus:ring-indigo-500/50"
+              />
+            </div>
+
             <div>
               <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
                 Subject
