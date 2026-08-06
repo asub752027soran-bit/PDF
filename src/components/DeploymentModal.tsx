@@ -19,35 +19,36 @@ export const DeploymentModal: React.FC<DeploymentModalProps> = ({ isOpen, onClos
 
   const steps = [
     {
-      title: '1. Add your SSH Public Key to your VPS (200.141.13.181)',
-      code: `# On Hostinger VPS control panel or via terminal, add your key to ~/.ssh/authorized_keys:
-mkdir -p ~/.ssh && chmod 700 ~/.ssh
-echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCwKo1LSydxGzc8p5YYZeGNTk8nFJGkYJCewWJa3SGaEGJNvPDI79kgmnOc3U6EtVtFZRYhrTVkHHaBLnHQfTKyUyv7gHKQdoY52hNvbQPiN/lqJso9L4obGDWF3eap6MlD/p+G7FwfCFTitTjFmgLlSalOAx6pJwWhTp7yXPWS//3OdhUDOLinfjQyZZ3hUdraDcxfM3DLCeZ1qTNj69Zt+fAwAb/x38xYZ3VNNKKxOrKl8/nutyF77vgIRm1SsTcqLdsCK3VRelxGNB0Tip2x2pVUcgSwj2v800dJCQ2fgpQ7eqlKFW0YoArUcrdToyxcnJyDw3i1ghqSBrGoHOxlqHG+ubHNdybnjoAN50ITZuYWoCkXAeQ8+aOuQ/mOAHkhYXiWvaNIiEIh0HrLyeG1hinyyKdxFz95lZl1EIEVLu/iW+XYEU0ud9YJHNkKHn4B6Utrzcdi98oVFfm+B5rKCjBKcOoM/pQNp2rPb5XlweUG51qQwyPV1DHSDtbvkISpo+d7PqXUa3qGFpFRPiROIhE5yURFOLjXpm27z6AdM1JkJUCNNgNgU4v4wpIyKOCbVjgmjOuu4hz2rMHVz2fQrlPe1zBarTm6T6wv9S/Ye2RyaIlmb80LaqEwg7OPiW3GpjYGUPv18PhYYYo7cqTLSZEqK5RsXofTEpPcuaJcJw== #hostinger-managed-key" >> ~/.ssh/authorized_keys
-chmod 600 ~/.ssh/authorized_keys`,
-    },
-    {
-      title: '2. Connect to VPS & Install Dependencies',
-      code: `ssh root@200.141.13.181
-apt update && apt upgrade -y
+      title: '1. Update Server & Install Node.js & Nginx (You are already inside root@srv1883498!)',
+      code: `apt update && apt upgrade -y
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt install -y nodejs nginx git certbot python3-certbot-nginx
 npm install -g pm2`,
     },
     {
-      title: '3. Upload or Clone PDFEditfy Project',
-      code: `git clone https://github.com/your-username/pdfeditfy.git /var/www/pdfeditfy
+      title: '2. Clone or Upload PDFEditfy Code',
+      code: `# Ensure destination folder exists
+mkdir -p /var/www/pdfeditfy
 cd /var/www/pdfeditfy
+
+# OPTION A: If your GitHub repository is public:
+# git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git .
+
+# OPTION B: If using GitHub with Personal Access Token (PAT):
+# git clone https://YOUR_TOKEN@github.com/YOUR_USERNAME/YOUR_REPO.git .
+
+# Install dependencies and build production server
 npm install
 npm run build`,
     },
     {
-      title: '4. Start Server with PM2 Process Manager',
+      title: '3. Start Server with PM2 Process Manager',
       code: `pm2 start dist/server.cjs --name "pdfeditfy"
 pm2 save
 pm2 startup`,
     },
     {
-      title: '5. Configure Nginx Reverse Proxy (Port 3000)',
+      title: '4. Configure Nginx Reverse Proxy (Port 3000)',
       code: `cat << 'EOF' > /etc/nginx/sites-available/pdfeditfy
 server {
     server_name 200.141.13.181 pdfeditfy.com www.pdfeditfy.com;
@@ -69,7 +70,7 @@ ln -s /etc/nginx/sites-available/pdfeditfy /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx`,
     },
     {
-      title: '6. Enable Free SSL Certificate via Let\'s Encrypt (If using custom domain)',
+      title: '5. Enable Free SSL Certificate via Let\'s Encrypt (If using custom domain)',
       code: `certbot --nginx -d pdfeditfy.com -d www.pdfeditfy.com`,
     },
   ];
@@ -104,14 +105,28 @@ nginx -t && systemctl reload nginx`,
         {/* Modal Body */}
         <div className="py-6 space-y-6 max-h-[70vh] overflow-y-auto pr-2 text-xs">
           
+          <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/50 flex items-start gap-3">
+            <ShieldCheck className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h4 className="font-bold text-amber-900 dark:text-amber-200">
+                Fixing Terminal Errors for pdfeditfy.com:
+              </h4>
+              <ul className="list-disc list-inside text-amber-800/90 dark:text-amber-300/90 space-y-1 text-[11px] leading-relaxed">
+                <li><strong>Git Auth Error:</strong> GitHub requires a Personal Access Token instead of a password, or a public repository.</li>
+                <li><strong>No package.json / Script not found:</strong> Make sure you run <code className="bg-amber-100 dark:bg-amber-900/60 px-1 rounded font-mono">cd /var/www/pdfeditfy</code> and <code className="bg-amber-100 dark:bg-amber-900/60 px-1 rounded font-mono">npm run build</code> inside the project folder before starting PM2!</li>
+              </ul>
+            </div>
+          </div>
+
           <div className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/60 dark:border-indigo-800/50 flex items-start gap-3">
             <Globe className="w-5 h-5 text-indigo-600 dark:text-indigo-400 flex-shrink-0 mt-0.5" />
             <div>
               <h4 className="font-bold text-indigo-900 dark:text-indigo-200 mb-1">
-                Optimized for Hostinger VPS & Ubuntu 22.04 / 24.04
+                Hostinger VPS Details (srv1883498.hstgr.cloud)
               </h4>
               <p className="text-indigo-800/80 dark:text-indigo-300/80 leading-relaxed">
-                This guide builds the self-contained CommonJS server executable (<code className="font-mono bg-indigo-100 dark:bg-indigo-900/60 px-1 rounded">dist/server.cjs</code>) bundled by esbuild and configures Nginx reverse proxy on port 3000.
+                <strong>IP:</strong> 200.141.13.181 &bull; <strong>OS:</strong> Ubuntu 24.04 LTS &bull; <strong>User:</strong> root<br />
+                Follow the 6 steps below or run the commands in your Hostinger Web Terminal or SSH client.
               </p>
             </div>
           </div>
