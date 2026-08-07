@@ -178,15 +178,6 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
 
-        {/* VPS Hostinger Deploy Guide Button */}
-        <button
-          onClick={onOpenVPSGuide}
-          className="px-3 py-2 bg-slate-900 dark:bg-blue-600 text-white rounded-lg hover:bg-slate-800 dark:hover:bg-blue-500 transition-colors font-bold text-xs flex items-center gap-1.5"
-        >
-          <Server className="w-3.5 h-3.5" />
-          <span className="hidden xs:inline">{t('freeForever')}</span>
-        </button>
-
         {/* Language Switcher Dropdown Component */}
         <div className="relative">
           <button

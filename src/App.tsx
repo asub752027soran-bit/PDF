@@ -41,6 +41,7 @@ import { CategoryType, AdminConfig } from './types';
 import { LanguageCode } from './data/translations';
 import { updateSEOMeta } from './utils/seo';
 import { Megaphone, AlertTriangle } from 'lucide-react';
+import { auth, onAuthStateChanged, signOut as firebaseSignOut } from './lib/firebase';
 
 const DEFAULT_ADMIN_CONFIG: AdminConfig = {
   siteName: 'pdfeditfy.com',
@@ -164,6 +165,31 @@ export default function App() {
     }
   };
 
+  // Firebase Auth Observer
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setIsAdminLoggedIn(true);
+        sessionStorage.setItem('pdfeditfy_admin_authed', 'true');
+        if (!localStorage.getItem('pdfeditfy_admin_google_user')) {
+          localStorage.setItem(
+            'pdfeditfy_admin_google_user',
+            JSON.stringify({
+              uid: user.uid,
+              email: user.email,
+              name: user.displayName || user.email?.split('@')[0],
+              photoURL: user.photoURL,
+              authenticatedAt: new Date().toISOString(),
+              provider: 'firebase',
+              role: 'SUPER_ADMIN'
+            })
+          );
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   const handleAdminLoginSuccess = () => {
     setIsAdminLoggedIn(true);
     sessionStorage.setItem('pdfeditfy_admin_authed', 'true');
@@ -173,9 +199,15 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleAdminLogout = () => {
+  const handleAdminLogout = async () => {
+    try {
+      await firebaseSignOut(auth);
+    } catch (err) {
+      console.warn('Firebase logout notice:', err);
+    }
     setIsAdminLoggedIn(false);
     sessionStorage.removeItem('pdfeditfy_admin_authed');
+    localStorage.removeItem('pdfeditfy_admin_google_user');
     setActivePage(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };

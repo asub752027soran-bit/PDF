@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import * as pdfjsLib from 'pdfjs-dist';
 import {
   Upload,
   Download,
@@ -18,11 +19,22 @@ import {
   ArrowLeft,
   Lock,
   Unlock,
-  Stamp
+  Stamp,
+  ZoomIn,
+  ZoomOut,
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  Move
 } from 'lucide-react';
 import { applyPDFAnnotations, watermarkPDF, lockPDF, unlockPDF, readFileAsArrayBuffer, readFileAsDataURL } from '../../utils/pdfProcessor';
 import { downloadBlob } from '../../utils/batchProcessor';
 import { PDFAnnotation } from '../../types';
+
+// Set up pdf.js worker URL safely
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '3.11.174'}/pdf.worker.min.mjs`;
+}
 
 interface PDFEditorToolProps {
   mode?: 'edit' | 'watermark' | 'lock' | 'unlock';
@@ -51,31 +63,96 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
   // Lock / Unlock password
   const [pdfPassword, setPdfPassword] = useState('');
 
+  // PDF Preview & Navigation state
+  const [numPages, setNumPages] = useState<number>(1);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [zoomScale, setZoomScale] = useState<number>(1.0);
+  const [pdfRendering, setPdfRendering] = useState<boolean>(false);
+  const [pdfRenderSuccess, setPdfRenderSuccess] = useState<boolean>(false);
+
+  // Dragging annotations state
+  const [draggingAnnId, setDraggingAnnId] = useState<string | null>(null);
+
+  // Refs
+  const pdfCanvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const sigCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawingSig, setIsDrawingSig] = useState(false);
+
   // Processing state
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Canvas ref for signature drawing
-  const sigCanvasRef = useRef<HTMLCanvasElement>(null);
-  const [isDrawingSig, setIsDrawingSig] = useState(false);
+  // Render PDF Page onto Canvas using pdfjs-dist
+  useEffect(() => {
+    if (!file) return;
+    let isCancelled = false;
+
+    const renderPdfPage = async () => {
+      setPdfRendering(true);
+      try {
+        const arrayBuffer = await readFileAsArrayBuffer(file);
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+
+        if (isCancelled) return;
+        setNumPages(pdf.numPages);
+
+        const pageNum = Math.min(Math.max(1, currentPage), pdf.numPages);
+        const page = await pdf.getPage(pageNum);
+
+        const canvas = pdfCanvasRef.current;
+        if (!canvas) return;
+
+        const viewport = page.getViewport({ scale: zoomScale * 1.2 });
+        const context = canvas.getContext('2d');
+
+        if (context) {
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+
+          const renderContext = {
+            canvasContext: context,
+            viewport: viewport,
+            canvas: canvas,
+          };
+          await page.render(renderContext).promise;
+          if (!isCancelled) setPdfRenderSuccess(true);
+        }
+      } catch (err) {
+        console.warn('PDFjs rendering fallback to object/iframe view:', err);
+        if (!isCancelled) setPdfRenderSuccess(false);
+      } finally {
+        if (!isCancelled) setPdfRendering(false);
+      }
+    };
+
+    renderPdfPage();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [file, currentPage, zoomScale]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
       setFile(selected);
+      setCurrentPage(1);
+      setZoomScale(1.0);
       const dataUrl = await readFileAsDataURL(selected);
       setFileDataUrl(dataUrl);
       setAnnotations([]);
     }
   };
 
-  const addTextAnnotation = () => {
+  const addTextAnnotationAt = (xPct: number, yPct: number) => {
     if (!textInput.trim()) return;
     const newAnn: PDFAnnotation = {
       id: Math.random().toString(36).substring(7),
-      pageNumber: 1,
+      pageNumber: currentPage,
       type: 'text',
-      x: 20 + annotations.length * 5,
-      y: 20 + annotations.length * 5,
+      x: xPct,
+      y: yPct,
       content: textInput,
       fontSize: fontSize,
       color: textColor,
@@ -84,10 +161,14 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
     setTextInput('');
   };
 
+  const addTextAnnotation = () => {
+    addTextAnnotationAt(20, 20);
+  };
+
   const addShapeAnnotation = () => {
     const newAnn: PDFAnnotation = {
       id: Math.random().toString(36).substring(7),
-      pageNumber: 1,
+      pageNumber: currentPage,
       type: 'shape',
       shapeType: 'rectangle',
       x: 30,
@@ -101,7 +182,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
   const addHighlightAnnotation = () => {
     const newAnn: PDFAnnotation = {
       id: Math.random().toString(36).substring(7),
-      pageNumber: 1,
+      pageNumber: currentPage,
       type: 'highlight',
       x: 25,
       y: 25,
@@ -115,7 +196,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
     if (!sigDataUrl) return;
     const newAnn: PDFAnnotation = {
       id: Math.random().toString(36).substring(7),
-      pageNumber: 1,
+      pageNumber: currentPage,
       type: 'signature',
       x: 35,
       y: 35,
@@ -125,6 +206,38 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
     };
     setAnnotations([...annotations, newAnn]);
     setShowSigModal(false);
+  };
+
+  // Canvas interaction handlers
+  const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (draggingAnnId || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const clickX = Math.round(((e.clientX - rect.left) / rect.width) * 100);
+    const clickY = Math.round(((e.clientY - rect.top) / rect.height) * 100);
+
+    if (activeTab === 'text' && textInput.trim()) {
+      addTextAnnotationAt(clickX, clickY);
+    }
+  };
+
+  const handleMouseDownAnn = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setDraggingAnnId(id);
+  };
+
+  const handleMouseMoveContainer = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!draggingAnnId || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const newX = Math.min(90, Math.max(2, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
+    const newY = Math.min(90, Math.max(2, Math.round(((e.clientY - rect.top) / rect.height) * 100)));
+
+    setAnnotations((prev) =>
+      prev.map((ann) => (ann.id === draggingAnnId ? { ...ann, x: newX, y: newY } : ann))
+    );
+  };
+
+  const handleMouseUpContainer = () => {
+    setDraggingAnnId(null);
   };
 
   // Signature canvas handlers
@@ -628,67 +741,186 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
 
           </div>
 
-          {/* Right Live Canvas Preview */}
-          <div className="lg:col-span-2 bg-slate-100 dark:bg-slate-900/60 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center relative min-h-[500px]">
-            <div className="w-full bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden border border-slate-200 dark:border-slate-700 text-center min-h-[450px] flex flex-col items-center justify-center">
-              
-              <div className="space-y-2 mb-6">
-                <span className="px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold text-xs">
-                  Document Preview Canvas
+          {/* Right Live Document Preview Canvas */}
+          <div className="lg:col-span-2 bg-slate-100 dark:bg-slate-900/60 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 flex flex-col items-center relative min-h-[550px]">
+            
+            {/* Toolbar for Page Navigation & Zoom */}
+            <div className="w-full bg-white dark:bg-slate-800 rounded-2xl p-3 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-wrap items-center justify-between gap-3 mb-4 text-xs font-bold text-slate-700 dark:text-slate-200">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-950 text-slate-700 dark:text-slate-200 hover:text-indigo-600 disabled:opacity-30 transition-all"
+                  title="Previous Page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="px-2">
+                  Page {currentPage} of {numPages}
                 </span>
-                <p className="text-xs text-slate-500">
-                  Annotations layer previewed below. Click download to bake modifications into final PDF.
-                </p>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
+                  disabled={currentPage >= numPages}
+                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-950 text-slate-700 dark:text-slate-200 hover:text-indigo-600 disabled:opacity-30 transition-all"
+                  title="Next Page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
 
-              {/* Render Simulated Annotations Layer */}
-              <div className="relative w-full max-w-md h-80 bg-slate-50 dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-4 flex flex-col justify-between overflow-hidden">
-                <div className="text-[10px] text-slate-400 font-mono text-left">
-                  PDF Page 1 - {file.name}
-                </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setZoomScale((z) => Math.max(0.6, z - 0.2))}
+                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-indigo-50 text-slate-700 dark:text-slate-200 hover:text-indigo-600 transition-all"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                <span className="w-12 text-center">{Math.round(zoomScale * 100)}%</span>
+                <button
+                  onClick={() => setZoomScale((z) => Math.min(2.0, z + 0.2))}
+                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-indigo-50 text-slate-700 dark:text-slate-200 hover:text-indigo-600 transition-all"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setZoomScale(1.0)}
+                  className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-indigo-50 text-[10px] text-slate-500 hover:text-indigo-600 transition-all"
+                >
+                  Reset
+                </button>
+              </div>
 
-                {/* Overlaid Annotations */}
-                {annotations.map((ann) => (
-                  <div
-                    key={ann.id}
-                    className="absolute p-1 rounded transition-all pointer-events-none"
-                    style={{
-                      left: `${ann.x}%`,
-                      top: `${ann.y}%`,
-                    }}
+              <div className="text-[11px] text-slate-400 font-normal hidden sm:block">
+                💡 Drag annotations or click canvas to position text
+              </div>
+            </div>
+
+            {/* Document Preview Canvas Container */}
+            <div className="w-full bg-slate-200/60 dark:bg-slate-950/80 rounded-2xl p-4 shadow-inner relative min-h-[480px] flex items-center justify-center overflow-auto border border-slate-200 dark:border-slate-800">
+              
+              {pdfRendering && (
+                <div className="absolute inset-0 z-20 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xs flex flex-col items-center justify-center space-y-2 rounded-2xl">
+                  <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Rendering PDF Canvas Page {currentPage}...
+                  </span>
+                </div>
+              )}
+
+              <div
+                ref={containerRef}
+                onClick={handleContainerClick}
+                onMouseMove={handleMouseMoveContainer}
+                onMouseUp={handleMouseUpContainer}
+                onMouseLeave={handleMouseUpContainer}
+                className="relative inline-block bg-white shadow-2xl rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 select-none cursor-crosshair max-w-full"
+              >
+                {/* PDF Page Canvas */}
+                <canvas
+                  ref={pdfCanvasRef}
+                  className="block mx-auto max-w-full h-auto bg-white"
+                />
+
+                {/* Fallback View if Canvas context unavailable */}
+                {!pdfRenderSuccess && fileDataUrl && (
+                  <object
+                    data={fileDataUrl}
+                    type="application/pdf"
+                    className="w-[500px] h-[650px] max-w-full rounded-lg"
                   >
-                    {ann.type === 'text' && (
-                      <span
-                        style={{
-                          color: ann.color || '#000',
-                          fontSize: `${ann.fontSize || 16}px`,
-                        }}
-                        className="font-bold drop-shadow-sm"
-                      >
-                        {ann.content}
-                      </span>
-                    )}
+                    <p className="p-4 text-xs text-slate-500">PDF Preview Loaded</p>
+                  </object>
+                )}
 
-                    {ann.type === 'signature' && ann.content && (
-                      <img src={ann.content} alt="Signature" className="h-12 object-contain" />
-                    )}
-
-                    {ann.type === 'shape' && (
-                      <div className="w-32 h-16 border-2 border-indigo-600 rounded bg-indigo-500/10" />
-                    )}
-
-                    {ann.type === 'highlight' && (
-                      <div className="w-40 h-6 bg-amber-300/60 rounded" />
-                    )}
+                {/* Watermark Live Preview Overlay */}
+                {mode === 'watermark' && watermarkText && (
+                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden">
+                    <span
+                      style={{
+                        opacity: watermarkOpacity,
+                        fontSize: `${watermarkFontSize}px`,
+                        transform: `rotate(${watermarkAngle}deg)`,
+                      }}
+                      className="font-extrabold text-slate-900 dark:text-white uppercase tracking-widest whitespace-nowrap select-none drop-shadow-md"
+                    >
+                      {watermarkText}
+                    </span>
                   </div>
-                ))}
+                )}
 
-                <div className="text-[10px] text-slate-400 font-mono text-right">
-                  {annotations.length} Annotations Active
-                </div>
+                {/* Overlaid Interactive Draggable Annotations */}
+                {annotations
+                  .filter((ann) => ann.pageNumber === currentPage)
+                  .map((ann) => (
+                    <div
+                      key={ann.id}
+                      onMouseDown={(e) => handleMouseDownAnn(e, ann.id)}
+                      className={`absolute p-1 rounded-lg border-2 border-dashed transition-shadow group cursor-grab active:cursor-grabbing z-10 hover:border-indigo-500 hover:bg-indigo-500/10 ${
+                        draggingAnnId === ann.id
+                          ? 'border-indigo-600 shadow-xl bg-indigo-500/20'
+                          : 'border-transparent'
+                      }`}
+                      style={{
+                        left: `${ann.x}%`,
+                        top: `${ann.y}%`,
+                        transform: 'translate(-10%, -10%)',
+                      }}
+                    >
+                      {/* Delete Handle */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAnnotations(annotations.filter((a) => a.id !== ann.id));
+                        }}
+                        className="absolute -top-2.5 -right-2.5 w-5 h-5 bg-rose-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-rose-700"
+                        title="Delete annotation"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+
+                      {ann.type === 'text' && (
+                        <span
+                          style={{
+                            color: ann.color || '#1e293b',
+                            fontSize: `${ann.fontSize || 16}px`,
+                          }}
+                          className="font-extrabold drop-shadow-sm whitespace-nowrap px-1"
+                        >
+                          {ann.content}
+                        </span>
+                      )}
+
+                      {ann.type === 'signature' && ann.content && (
+                        <img
+                          src={ann.content}
+                          alt="Signature"
+                          className="h-14 object-contain pointer-events-none"
+                        />
+                      )}
+
+                      {ann.type === 'shape' && (
+                        <div className="w-32 h-16 border-2 border-indigo-600 rounded bg-indigo-500/10 pointer-events-none" />
+                      )}
+
+                      {ann.type === 'highlight' && (
+                        <div className="w-40 h-6 bg-amber-300/60 rounded pointer-events-none" />
+                      )}
+                    </div>
+                  ))}
               </div>
 
             </div>
+
+            {/* Document Canvas Status Bar */}
+            <div className="w-full flex items-center justify-between mt-3 text-[11px] text-slate-500 dark:text-slate-400 font-mono px-2">
+              <span>📄 Document: {file.name}</span>
+              <span>
+                {annotations.filter((a) => a.pageNumber === currentPage).length} Elements on Page {currentPage}
+              </span>
+            </div>
+
           </div>
 
         </div>
