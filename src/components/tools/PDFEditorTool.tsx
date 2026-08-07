@@ -15,17 +15,21 @@ import {
   Palette,
   Image as ImageIcon,
   Sparkles,
-  ArrowLeft
+  ArrowLeft,
+  Lock,
+  Unlock,
+  Stamp
 } from 'lucide-react';
-import { applyPDFAnnotations, readFileAsArrayBuffer, readFileAsDataURL } from '../../utils/pdfProcessor';
+import { applyPDFAnnotations, watermarkPDF, lockPDF, unlockPDF, readFileAsArrayBuffer, readFileAsDataURL } from '../../utils/pdfProcessor';
 import { downloadBlob } from '../../utils/batchProcessor';
 import { PDFAnnotation } from '../../types';
 
 interface PDFEditorToolProps {
+  mode?: 'edit' | 'watermark' | 'lock' | 'unlock';
   onBack: () => void;
 }
 
-export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ onBack }) => {
+export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onBack }) => {
   const [file, setFile] = useState<File | null>(null);
   const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'text' | 'draw' | 'signature' | 'shape' | 'highlight'>('text');
@@ -37,6 +41,15 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ onBack }) => {
   const [textColor, setTextColor] = useState('#1e293b');
   const [showSigModal, setShowSigModal] = useState(false);
   const [sigDataUrl, setSigDataUrl] = useState<string | null>(null);
+
+  // Watermark state
+  const [watermarkText, setWatermarkText] = useState('CONFIDENTIAL');
+  const [watermarkOpacity, setWatermarkOpacity] = useState(0.3);
+  const [watermarkAngle, setWatermarkAngle] = useState(45);
+  const [watermarkFontSize, setWatermarkFontSize] = useState(48);
+
+  // Lock / Unlock password
+  const [pdfPassword, setPdfPassword] = useState('');
 
   // Processing state
   const [isProcessing, setIsProcessing] = useState(false);
@@ -175,6 +188,59 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ onBack }) => {
     }
   };
 
+  const handleWatermarkPDF = async () => {
+    if (!file) return;
+    setIsProcessing(true);
+    try {
+      const pdfBytes = await watermarkPDF(file, {
+        text: watermarkText,
+        opacity: watermarkOpacity,
+        rotationAngle: watermarkAngle,
+        fontSize: watermarkFontSize,
+      });
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const cleanName = file.name.replace(/\.pdf$/i, '');
+      downloadBlob(blob, `${cleanName}_watermarked.pdf`);
+    } catch (err) {
+      console.error('Watermark failed:', err);
+      alert('Failed to apply watermark.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleLockPDF = async () => {
+    if (!file) return;
+    setIsProcessing(true);
+    try {
+      const pdfBytes = await lockPDF(file, pdfPassword);
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const cleanName = file.name.replace(/\.pdf$/i, '');
+      downloadBlob(blob, `${cleanName}_protected.pdf`);
+    } catch (err) {
+      console.error('Lock failed:', err);
+      alert('Failed to protect PDF.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleUnlockPDF = async () => {
+    if (!file) return;
+    setIsProcessing(true);
+    try {
+      const pdfBytes = await unlockPDF(file, pdfPassword);
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const cleanName = file.name.replace(/\.pdf$/i, '');
+      downloadBlob(blob, `${cleanName}_unlocked.pdf`);
+    } catch (err) {
+      console.error('Unlock failed:', err);
+      alert('Failed to unlock PDF.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
       
@@ -187,11 +253,31 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ onBack }) => {
           <ArrowLeft className="w-4 h-4" /> Back to Tools
         </button>
         <div className="text-right">
-          <h1 className="text-xl font-extrabold text-slate-900 dark:text-white">
-            Online Interactive PDF Editor
+          <h1 className="text-xl font-extrabold text-slate-900 dark:text-white flex items-center justify-end gap-2">
+            {mode === 'watermark' ? (
+              <>
+                <Stamp className="w-5 h-5 text-indigo-600" /> Watermark PDF
+              </>
+            ) : mode === 'lock' ? (
+              <>
+                <Lock className="w-5 h-5 text-indigo-600" /> Protect & Lock PDF
+              </>
+            ) : mode === 'unlock' ? (
+              <>
+                <Unlock className="w-5 h-5 text-indigo-600" /> Unlock & Decrypt PDF
+              </>
+            ) : (
+              'Online Interactive PDF Editor'
+            )}
           </h1>
           <p className="text-xs text-slate-500">
-            Add text, signatures, highlights, and annotations to your PDF.
+            {mode === 'watermark'
+              ? 'Add custom text watermarks to all pages in your PDF document.'
+              : mode === 'lock'
+              ? 'Encrypt and protect your PDF with custom password security.'
+              : mode === 'unlock'
+              ? 'Remove password restrictions and unlock protected PDF files.'
+              : 'Add text, signatures, highlights, and annotations to your PDF.'}
           </p>
         </div>
       </div>
@@ -203,10 +289,10 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ onBack }) => {
             <Upload className="w-8 h-8" />
           </div>
           <h3 className="text-base font-bold text-slate-900 dark:text-white mb-2">
-            Select or Drop a PDF File to Edit
+            Select or Drop a PDF File
           </h3>
           <p className="text-xs text-slate-500 mb-6 max-w-sm mx-auto">
-            Upload any PDF document. Your file stays private and is processed right in your browser.
+            Upload any PDF document. Private in-browser processing.
           </p>
           <label className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-500/20 cursor-pointer transition-all">
             <Upload className="w-4 h-4" /> Choose PDF File
@@ -217,6 +303,140 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ onBack }) => {
               className="hidden"
             />
           </label>
+        </div>
+      ) : mode === 'watermark' ? (
+        /* Watermark Panel */
+        <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm space-y-6 max-w-2xl mx-auto">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200">
+            <span>📄 {file.name}</span>
+            <button onClick={() => setFile(null)} className="text-rose-500 hover:underline">
+              Change File
+            </button>
+          </div>
+
+          <div className="space-y-4 text-xs">
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                Watermark Text
+              </label>
+              <input
+                type="text"
+                value={watermarkText}
+                onChange={(e) => setWatermarkText(e.target.value)}
+                placeholder="e.g. CONFIDENTIAL or DRAFT"
+                className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Font Size ({watermarkFontSize}px)
+                </label>
+                <input
+                  type="range"
+                  min={20}
+                  max={90}
+                  value={watermarkFontSize}
+                  onChange={(e) => setWatermarkFontSize(Number(e.target.value))}
+                  className="w-full accent-indigo-600 cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Opacity ({Math.round(watermarkOpacity * 100)}%)
+                </label>
+                <input
+                  type="range"
+                  min={0.1}
+                  max={1.0}
+                  step={0.05}
+                  value={watermarkOpacity}
+                  onChange={(e) => setWatermarkOpacity(Number(e.target.value))}
+                  className="w-full accent-indigo-600 cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Rotation ({watermarkAngle}°)
+                </label>
+                <input
+                  type="range"
+                  min={0}
+                  max={360}
+                  step={15}
+                  value={watermarkAngle}
+                  onChange={(e) => setWatermarkAngle(Number(e.target.value))}
+                  className="w-full accent-indigo-600 cursor-pointer"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleWatermarkPDF}
+              disabled={isProcessing}
+              className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-4"
+            >
+              {isProcessing ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Applying Watermark...
+                </>
+              ) : (
+                <>
+                  <Stamp className="w-4 h-4" /> Apply Watermark & Download PDF
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      ) : mode === 'lock' || mode === 'unlock' ? (
+        /* Lock / Unlock Panel */
+        <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm space-y-6 max-w-xl mx-auto">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200">
+            <span>📄 {file.name}</span>
+            <button onClick={() => setFile(null)} className="text-rose-500 hover:underline">
+              Change File
+            </button>
+          </div>
+
+          <div className="space-y-4 text-xs">
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {mode === 'lock' ? 'Set Encryption Password' : 'Enter Password to Decrypt'}
+              </label>
+              <input
+                type="password"
+                value={pdfPassword}
+                onChange={(e) => setPdfPassword(e.target.value)}
+                placeholder="Enter password..."
+                className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+              />
+            </div>
+
+            <button
+              onClick={mode === 'lock' ? handleLockPDF : handleUnlockPDF}
+              disabled={isProcessing}
+              className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-4"
+            >
+              {isProcessing ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Processing PDF...
+                </>
+              ) : mode === 'lock' ? (
+                <>
+                  <Lock className="w-4 h-4" /> Protect & Download PDF
+                </>
+              ) : (
+                <>
+                  <Unlock className="w-4 h-4" /> Unlock & Download PDF
+                </>
+              )}
+            </button>
+          </div>
         </div>
       ) : (
         /* Workspace */

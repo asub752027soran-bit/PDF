@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const PORT = 3000;
 
 // Body parsing middleware
 app.use(express.json({ limit: '100mb' }));
@@ -155,10 +155,7 @@ function serveStatic() {
 }
 
 async function startServer() {
-  const isProduction =
-    process.env.NODE_ENV === 'production' ||
-    fs.existsSync(path.join(process.cwd(), 'dist', 'index.html')) ||
-    fs.existsSync(path.join(__dirname, 'index.html'));
+  const isProduction = process.env.NODE_ENV === 'production';
 
   if (isProduction) {
     serveStatic();

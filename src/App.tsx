@@ -368,12 +368,18 @@ export default function App() {
 
           {/* ACTIVE TOOL WORKSPACES & PAGES WITH SUSPENSE LAZY LOADING */}
           <Suspense fallback={<ToolLoadingFallback />}>
-            {activeToolId === 'edit-pdf' && <PDFEditorTool onBack={handleGoHome} />}
+            {activeToolId === 'edit-pdf' && <PDFEditorTool mode="edit" onBack={handleGoHome} />}
+            {activeToolId === 'watermark-pdf' && <PDFEditorTool mode="watermark" onBack={handleGoHome} />}
+            {activeToolId === 'lock-pdf' && <PDFEditorTool mode="lock" onBack={handleGoHome} />}
+            {activeToolId === 'unlock-pdf' && <PDFEditorTool mode="unlock" onBack={handleGoHome} />}
+
             {activeToolId === 'merge-pdf' && <PDFMergeSplitTool mode="merge" onBack={handleGoHome} />}
             {activeToolId === 'split-pdf' && <PDFMergeSplitTool mode="split" onBack={handleGoHome} />}
+            {activeToolId === 'organize-pdf' && <PDFMergeSplitTool mode="organize" onBack={handleGoHome} />}
+
             {activeToolId === 'compress-pdf' && <PDFCompressTool onBack={handleGoHome} />}
 
-            {(activeToolId === 'pdf-to-word' || activeToolId === 'word-to-pdf' || activeToolId === 'edit-word' || activeToolId === 'word-to-txt') && (
+            {(activeToolId === 'pdf-to-word' || activeToolId === 'word-to-pdf' || activeToolId === 'edit-word' || activeToolId === 'word-to-txt' || activeToolId === 'ppt-to-pdf') && (
               <WordTool onBack={handleGoHome} />
             )}
 

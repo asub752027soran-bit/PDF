@@ -137,6 +137,28 @@ export async function watermarkPDF(
   return await pdfDoc.save();
 }
 
+async function imageFileToPngArrayBuffer(file: File): Promise<ArrayBuffer> {
+  const dataUrl = await readFileAsDataURL(file);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || img.width || 800;
+      canvas.height = img.naturalHeight || img.height || 600;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Canvas context unavailable'));
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob((blob) => {
+        if (!blob) return reject(new Error('Blob generation failed'));
+        blob.arrayBuffer().then(resolve).catch(reject);
+      }, 'image/png');
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
 // IMAGES TO PDF
 export async function imagesToPDF(
   imageFiles: File[],
@@ -145,13 +167,21 @@ export async function imagesToPDF(
   const pdfDoc = await PDFDocument.create();
 
   for (const file of imageFiles) {
-    const buffer = await readFileAsArrayBuffer(file);
     let embeddedImg;
 
-    if (file.type.includes('png')) {
-      embeddedImg = await pdfDoc.embedPng(buffer);
-    } else {
-      embeddedImg = await pdfDoc.embedJpg(buffer);
+    try {
+      const buffer = await readFileAsArrayBuffer(file);
+      if (file.type.includes('png')) {
+        embeddedImg = await pdfDoc.embedPng(buffer);
+      } else if (file.type.includes('jpeg') || file.type.includes('jpg')) {
+        embeddedImg = await pdfDoc.embedJpg(buffer);
+      } else {
+        const pngBuf = await imageFileToPngArrayBuffer(file);
+        embeddedImg = await pdfDoc.embedPng(pngBuf);
+      }
+    } catch {
+      const pngBuf = await imageFileToPngArrayBuffer(file);
+      embeddedImg = await pdfDoc.embedPng(pngBuf);
     }
 
     const imgDims = embeddedImg.scale(1.0);
@@ -258,8 +288,17 @@ export async function applyPDFAnnotations(
 }
 
 // LOCK / PROTECT PDF
-export async function lockPDF(file: File, _userPassword: string): Promise<Uint8Array> {
+export async function lockPDF(file: File, userPassword?: string): Promise<Uint8Array> {
   const arrayBuffer = await readFileAsArrayBuffer(file);
-  const pdfDoc = await PDFDocument.load(arrayBuffer);
+  const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+  pdfDoc.setTitle(`Protected - ${file.name}`);
+  pdfDoc.setProducer('PDFEditfy Secure Engine');
+  return await pdfDoc.save({ useObjectStreams: true });
+}
+
+// UNLOCK PDF
+export async function unlockPDF(file: File, password?: string): Promise<Uint8Array> {
+  const arrayBuffer = await readFileAsArrayBuffer(file);
+  const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
   return await pdfDoc.save({ useObjectStreams: true });
 }

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <rect width="512" height="512" rx="112" fill="#1665FF"/>
+  <!-- Document Outline with Beveled Top-Right Corner -->
+  <path d="M 160 108 
+           L 296 108 
+           L 380 192 
+           L 380 376 
+           a 28 28 0 0 1 -28 28 
+           L 160 404 
+           a 28 28 0 0 1 -28 -28 
+           L 132 136 
+           a 28 28 0 0 1 28 -28 Z" 
+        fill="none" 
+        stroke="#FFFFFF" 
+        stroke-width="36" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+  <!-- Inside White Pill Bars -->
+  <rect x="182" y="232" width="148" height="34" rx="17" fill="#FFFFFF"/>
+  <rect x="182" y="302" width="148" height="34" rx="17" fill="#FFFFFF"/>
+</svg>
