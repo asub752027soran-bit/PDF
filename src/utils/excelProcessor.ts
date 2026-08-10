@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import jsPDF from 'jspdf';
 import { readFileAsArrayBuffer } from './pdfProcessor';
 
@@ -9,36 +9,63 @@ export interface SheetData {
 
 export async function readExcelFile(file: File): Promise<SheetData[]> {
   const arrayBuffer = await readFileAsArrayBuffer(file);
-  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(arrayBuffer);
   const result: SheetData[] = [];
 
-  for (const sheetName of workbook.SheetNames) {
-    const worksheet = workbook.Sheets[sheetName];
-    const jsonData = XLSX.utils.sheet_to_json<(string | number)[]>(worksheet, { header: 1 });
-    result.push({
-      sheetName,
-      data: jsonData,
+  workbook.eachSheet((worksheet) => {
+    const sheetData: (string | number)[][] = [];
+    worksheet.eachRow({ includeEmpty: true }, (row) => {
+      const rowValues = Array.isArray(row.values)
+        ? row.values.slice(1).map((val) => {
+            if (val === null || val === undefined) return '';
+            if (typeof val === 'object') {
+              if ('result' in val) return String((val as any).result ?? '');
+              if ('text' in val) return String((val as any).text ?? '');
+              if ('richText' in val) return (val as any).richText.map((rt: any) => rt.text).join('');
+            }
+            return val as string | number;
+          })
+        : [];
+      sheetData.push(rowValues);
     });
-  }
+    result.push({
+      sheetName: worksheet.name,
+      data: sheetData,
+    });
+  });
 
   return result;
 }
 
-export function exportSheetToXLSX(sheetData: SheetData[]): Uint8Array {
-  const workbook = XLSX.utils.book_new();
+export async function exportSheetToXLSX(sheetData: SheetData[]): Promise<Uint8Array> {
+  const workbook = new ExcelJS.Workbook();
 
   for (const sheet of sheetData) {
-    const worksheet = XLSX.utils.aoa_to_sheet(sheet.data);
-    XLSX.utils.book_append_sheet(workbook, worksheet, sheet.sheetName || 'Sheet1');
+    const worksheet = workbook.addWorksheet(sheet.sheetName || 'Sheet1');
+    for (const row of sheet.data) {
+      worksheet.addRow(row);
+    }
   }
 
-  const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-  return new Uint8Array(wbout);
+  const buffer = await workbook.xlsx.writeBuffer();
+  return new Uint8Array(buffer);
 }
 
 export function exportSheetToCSV(sheetData: SheetData): string {
-  const worksheet = XLSX.utils.aoa_to_sheet(sheetData.data);
-  return XLSX.utils.sheet_to_csv(worksheet);
+  return sheetData.data
+    .map((row) =>
+      row
+        .map((cell) => {
+          const str = String(cell ?? '');
+          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return `"${str.replace(/"/g, '""')}"`;
+          }
+          return str;
+        })
+        .join(',')
+    )
+    .join('\n');
 }
 
 export async function convertExcelToPDF(file: File): Promise<Uint8Array> {

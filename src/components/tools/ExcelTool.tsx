@@ -79,12 +79,20 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
     setSheets(updatedSheets);
   };
 
-  const handleExportXLSX = () => {
+  const handleExportXLSX = async () => {
     if (sheets.length === 0) return;
-    const bytes = exportSheetToXLSX(sheets);
-    const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const cleanName = file?.name ? file.name.replace(/\.[^/.]+$/, '') : 'spreadsheet';
-    downloadBlob(blob, `${cleanName}_exported.xlsx`);
+    setIsProcessing(true);
+    try {
+      const bytes = await exportSheetToXLSX(sheets);
+      const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const cleanName = file?.name ? file.name.replace(/\.[^/.]+$/, '') : 'spreadsheet';
+      downloadBlob(blob, `${cleanName}_exported.xlsx`);
+    } catch (err) {
+      console.error('XLSX export failed:', err);
+      alert('Failed to export Excel file.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleExportCSV = () => {
