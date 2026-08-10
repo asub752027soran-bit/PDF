@@ -5,7 +5,7 @@ import os from 'os';
 import { generateSitemapXml } from './src/utils/sitemapGenerator';
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const PORT_ENV = process.env.PORT || 3000;
 
 // Body parsing middleware
 app.use(express.json({ limit: '100mb' }));
@@ -108,7 +108,7 @@ async function startServer() {
     try {
       const { createServer: createViteServer } = await import('vite');
       const vite = await createViteServer({
-        server: { middlewareMode: true, allowedHosts: true },
+        server: { middlewareMode: true },
         appType: 'spa',
       });
       app.use(vite.middlewares);
@@ -118,9 +118,16 @@ async function startServer() {
     }
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`PDFEditfy server running on http://0.0.0.0:${PORT} [${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}]`);
-  });
+  if (typeof PORT_ENV === 'string' && (PORT_ENV.startsWith('/') || PORT_ENV.startsWith('\\\\'))) {
+    app.listen(PORT_ENV, () => {
+      console.log(`PDFEditfy server listening on IPC socket ${PORT_ENV}`);
+    });
+  } else {
+    const portNumber = typeof PORT_ENV === 'number' ? PORT_ENV : parseInt(String(PORT_ENV), 10) || 3000;
+    app.listen(portNumber, '0.0.0.0', () => {
+      console.log(`PDFEditfy server running on http://0.0.0.0:${portNumber} [${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}]`);
+    });
+  }
 }
 
 startServer();
