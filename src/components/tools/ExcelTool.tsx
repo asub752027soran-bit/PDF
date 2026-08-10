@@ -1,30 +1,68 @@
 import React, { useState } from 'react';
-import { Upload, Download, Table, ArrowLeft, Grid, FileCheck, RefreshCw } from 'lucide-react';
+import { Upload, Download, Table, ArrowLeft, Grid, RefreshCw, FileText } from 'lucide-react';
 import { readExcelFile, exportSheetToXLSX, exportSheetToCSV, convertExcelToPDF, SheetData } from '../../utils/excelProcessor';
+import { extractTablesFromPDF } from '../../utils/pdfExtractor';
 import { downloadBlob } from '../../utils/batchProcessor';
 
 interface ExcelToolProps {
+  toolId?: string;
   onBack: () => void;
 }
 
-export const ExcelTool: React.FC<ExcelToolProps> = ({ onBack }) => {
+export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onBack }) => {
   const [file, setFile] = useState<File | null>(null);
   const [sheets, setSheets] = useState<SheetData[]>([]);
   const [activeSheetIndex, setActiveSheetIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
+
+  const isPdfToExcel = toolId === 'pdf-to-excel';
+  const isExcelToPdf = toolId === 'excel-to-pdf';
+  const isEditExcel = toolId === 'edit-excel';
+  const isCsvConverter = toolId === 'csv-excel-converter';
+
+  const fileAccept = isPdfToExcel ? '.pdf,application/pdf' : '.xlsx,.xls,.csv,.ods';
+
+  const getTitle = () => {
+    if (isPdfToExcel) return 'Convert PDF Tables to Excel (.XLSX & CSV)';
+    if (isExcelToPdf) return 'Convert Excel & CSV Spreadsheets to PDF';
+    if (isEditExcel) return 'Free Online Excel & CSV Spreadsheet Grid Editor';
+    if (isCsvConverter) return 'Convert CSV to Excel & Excel to CSV';
+    return 'Excel & Spreadsheet Workspace';
+  };
+
+  const getSubtitle = () => {
+    if (isPdfToExcel) return 'Extract table data from PDF files into fully editable Microsoft Excel spreadsheets.';
+    if (isExcelToPdf) return 'Convert XLSX, XLS, and CSV spreadsheets into crisp printable PDF documents.';
+    if (isEditExcel) return 'Open, inspect, edit cell values online, and export updated XLSX or CSV spreadsheets.';
+    if (isCsvConverter) return 'Seamlessly convert between CSV and Excel formats with UTF-8 encoding support.';
+    return 'Fast, private in-browser spreadsheet tools.';
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
       setFile(selected);
       setIsProcessing(true);
+      setStatusMsg('Parsing spreadsheet data...');
+
       try {
-        const loadedSheets = await readExcelFile(selected);
-        setSheets(loadedSheets);
+        if (selected.name.toLowerCase().endsWith('.pdf')) {
+          const pdfPagesData = await extractTablesFromPDF(selected);
+          const loadedSheets: SheetData[] = pdfPagesData.map((pageRows, idx) => ({
+            sheetName: `PDF Page ${idx + 1}`,
+            data: pageRows.length > 0 ? pageRows : [['No structured text found']],
+          }));
+          setSheets(loadedSheets);
+        } else {
+          const loadedSheets = await readExcelFile(selected);
+          setSheets(loadedSheets);
+        }
         setActiveSheetIndex(0);
+        setStatusMsg('Data parsed successfully');
       } catch (err) {
-        console.error('Failed reading spreadsheet:', err);
-        alert('Failed to parse spreadsheet file.');
+        console.error('Failed reading file:', err);
+        alert('Failed to parse file. Please ensure file format is valid.');
       } finally {
         setIsProcessing(false);
       }
@@ -42,16 +80,19 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ onBack }) => {
   };
 
   const handleExportXLSX = () => {
+    if (sheets.length === 0) return;
     const bytes = exportSheetToXLSX(sheets);
     const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    downloadBlob(blob, `${file?.name.replace(/\.(xlsx|xls|csv)$/i, '') || 'spreadsheet'}_edited.xlsx`);
+    const cleanName = file?.name ? file.name.replace(/\.[^/.]+$/, '') : 'spreadsheet';
+    downloadBlob(blob, `${cleanName}_exported.xlsx`);
   };
 
   const handleExportCSV = () => {
     if (!sheets[activeSheetIndex]) return;
     const csvString = exportSheetToCSV(sheets[activeSheetIndex]);
     const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8' });
-    downloadBlob(blob, `${sheets[activeSheetIndex].sheetName || 'sheet'}.csv`);
+    const sheetName = sheets[activeSheetIndex].sheetName || 'sheet';
+    downloadBlob(blob, `${sheetName}.csv`);
   };
 
   const handleExportPDF = async () => {
@@ -60,9 +101,11 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ onBack }) => {
     try {
       const pdfBytes = await convertExcelToPDF(file);
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      downloadBlob(blob, `${file.name.replace(/\.(xlsx|xls|csv)$/i, '')}.pdf`);
+      const cleanName = file.name.replace(/\.[^/.]+$/, '');
+      downloadBlob(blob, `${cleanName}_converted.pdf`);
     } catch (err) {
       console.error('Excel to PDF failed:', err);
+      alert('Failed to generate PDF from spreadsheet.');
     } finally {
       setIsProcessing(false);
     }
@@ -83,30 +126,30 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ onBack }) => {
         </button>
         <div className="text-right">
           <h1 className="text-xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2 justify-end">
-            <Table className="w-5 h-5 text-indigo-600" /> Excel & CSV Spreadsheet Grid Editor
+            <Table className="w-5 h-5 text-indigo-600" /> {getTitle()}
           </h1>
-          <p className="text-xs text-slate-500">
-            Open, inspect, edit cells online, and convert between XLSX, CSV, and PDF.
+          <p className="text-xs text-slate-500 max-w-lg ml-auto">
+            {getSubtitle()}
           </p>
         </div>
       </div>
 
       {!file ? (
-        <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-3xl p-10 text-center bg-white dark:bg-slate-800/80 hover:border-indigo-500 transition-all shadow-sm">
-          <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto mb-3">
-            <Upload className="w-7 h-7" />
+        <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-3xl p-12 text-center bg-white dark:bg-slate-800/80 hover:border-indigo-500 transition-all shadow-sm">
+          <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto mb-4">
+            <Upload className="w-8 h-8" />
           </div>
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
-            Upload Excel or CSV File (.XLSX, .XLS, .CSV)
+          <h3 className="text-base font-bold text-slate-900 dark:text-white mb-2">
+            Upload Spreadsheet or File
           </h3>
-          <p className="text-xs text-slate-500 mb-5 max-w-sm mx-auto">
-            Zero sign-up required. View and edit tables directly in your browser.
+          <p className="text-xs text-slate-500 mb-6 max-w-sm mx-auto">
+            {isPdfToExcel ? 'Select a PDF document containing table data.' : 'Select an XLSX, XLS, or CSV file.'}
           </p>
-          <label className="inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-500/20 cursor-pointer transition-all">
-            <Upload className="w-4 h-4" /> Choose Spreadsheet
+          <label className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-500/20 cursor-pointer transition-all">
+            <Upload className="w-4 h-4" /> Select File
             <input
               type="file"
-              accept=".xlsx,.xls,.csv,.ods"
+              accept={fileAccept}
               onChange={handleFileUpload}
               className="hidden"
             />
@@ -114,102 +157,59 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ onBack }) => {
         </div>
       ) : (
         <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-700 gap-3">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-700">
             <div>
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-xs">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-md">
                 📊 {file.name}
               </h4>
               <p className="text-xs text-slate-500">
-                {sheets.length} Sheet(s) loaded
+                {(file.size / 1024).toFixed(1)} KB {statusMsg && `• ${statusMsg}`}
               </p>
             </div>
-
-            {/* Export Actions */}
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={handleExportXLSX}
-                className="px-3 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow hover:bg-indigo-500 transition-all flex items-center gap-1"
-              >
-                <Download className="w-3.5 h-3.5" /> Save XLSX
-              </button>
-              <button
-                onClick={handleExportCSV}
-                className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs hover:bg-slate-200 transition-all flex items-center gap-1"
-              >
-                <Download className="w-3.5 h-3.5" /> Export CSV
-              </button>
-              <button
-                onClick={handleExportPDF}
-                className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs hover:bg-slate-200 transition-all flex items-center gap-1"
-              >
-                <Download className="w-3.5 h-3.5" /> Export PDF
-              </button>
-              <button
-                onClick={() => setFile(null)}
-                className="text-xs font-bold text-rose-500 hover:underline px-2"
-              >
-                Change File
-              </button>
-            </div>
+            <button
+              onClick={() => { setFile(null); setSheets([]); }}
+              className="text-xs font-bold text-rose-500 hover:underline"
+            >
+              Change File
+            </button>
           </div>
 
           {/* Sheet Selector Tabs */}
           {sheets.length > 1 && (
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-100 dark:border-slate-700">
-              {sheets.map((s, idx) => (
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-200 dark:border-slate-700">
+              {sheets.map((sheet, idx) => (
                 <button
                   key={idx}
                   onClick={() => setActiveSheetIndex(idx)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
                     activeSheetIndex === idx
-                      ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-300/50'
-                      : 'text-slate-500 hover:text-slate-800'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                   }`}
                 >
-                  {s.sheetName || `Sheet ${idx + 1}`}
+                  {sheet.sheetName || `Sheet ${idx + 1}`}
                 </button>
               ))}
             </div>
           )}
 
-          {/* Interactive Spreadsheet Grid Table */}
+          {/* Data Table Preview Grid */}
           {currentSheet && (
-            <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-2xl max-h-[450px]">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
-                    <th className="p-2.5 w-12 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-200/50 dark:bg-slate-800/80">
-                      #
-                    </th>
-                    {currentSheet.data[0]?.map((_, colIdx) => (
-                      <th
-                        key={colIdx}
-                        className="p-2.5 min-w-[120px] border-r border-slate-200 dark:border-slate-700 text-center font-mono text-[11px]"
-                      >
-                        {String.fromCharCode(65 + (colIdx % 26))}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {currentSheet.data.slice(0, 100).map((row, rowIdx) => (
-                    <tr
-                      key={rowIdx}
-                      className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/80 dark:hover:bg-slate-900/40"
-                    >
-                      <td className="p-2 text-center font-mono text-[10px] text-slate-400 bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700">
-                        {rowIdx + 1}
+            <div className="overflow-x-auto max-h-[400px] border border-slate-200 dark:border-slate-700 rounded-2xl">
+              <table className="w-full text-left text-xs border-collapse">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {currentSheet.data.slice(0, 50).map((row, rIdx) => (
+                    <tr key={rIdx} className={rIdx === 0 ? 'bg-slate-100 dark:bg-slate-900 font-bold' : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/50'}>
+                      <td className="p-2 border-r border-slate-200 dark:border-slate-700 bg-slate-200/50 dark:bg-slate-800 text-slate-400 font-mono text-[10px] w-8 text-center">
+                        {rIdx + 1}
                       </td>
-                      {row.map((cell, colIdx) => (
-                        <td
-                          key={colIdx}
-                          className="p-1 border-r border-slate-200 dark:border-slate-700"
-                        >
+                      {row.map((cell, cIdx) => (
+                        <td key={cIdx} className="p-2 border-r border-slate-100 dark:border-slate-800 min-w-[100px]">
                           <input
                             type="text"
                             value={String(cell ?? '')}
-                            onChange={(e) => handleCellEdit(rowIdx, colIdx, e.target.value)}
-                            className="w-full px-2 py-1 bg-transparent text-slate-800 dark:text-slate-200 text-xs focus:bg-white dark:focus:bg-slate-800 focus:ring-1 focus:ring-indigo-500 rounded outline-none"
+                            onChange={(e) => handleCellEdit(rIdx, cIdx, e.target.value)}
+                            className="w-full bg-transparent outline-none text-slate-800 dark:text-slate-200 focus:bg-indigo-50 dark:focus:bg-indigo-950/50 px-1 rounded"
                           />
                         </td>
                       ))}
@@ -219,6 +219,31 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ onBack }) => {
               </table>
             </div>
           )}
+
+          {/* Export Actions */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+            <button
+              onClick={handleExportXLSX}
+              disabled={isProcessing || sheets.length === 0}
+              className="py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" /> Download Excel (.XLSX)
+            </button>
+            <button
+              onClick={handleExportCSV}
+              disabled={isProcessing || !currentSheet}
+              className="py-3.5 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" /> Download CSV (.CSV)
+            </button>
+            <button
+              onClick={handleExportPDF}
+              disabled={isProcessing}
+              className="py-3.5 px-4 rounded-2xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-800 dark:text-slate-200 font-extrabold text-xs flex items-center justify-center gap-2 transition-all border border-slate-200 dark:border-slate-600"
+            >
+              <Download className="w-4 h-4" /> Download PDF (.PDF)
+            </button>
+          </div>
 
         </div>
       )}

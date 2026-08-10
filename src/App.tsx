@@ -412,15 +412,15 @@ export default function App() {
             {activeToolId === 'compress-pdf' && <PDFCompressTool onBack={handleGoHome} />}
 
             {(activeToolId === 'pdf-to-word' || activeToolId === 'word-to-pdf' || activeToolId === 'edit-word' || activeToolId === 'word-to-txt' || activeToolId === 'ppt-to-pdf') && (
-              <WordTool onBack={handleGoHome} />
+              <WordTool toolId={activeToolId} onBack={handleGoHome} />
             )}
 
             {(activeToolId === 'pdf-to-excel' || activeToolId === 'excel-to-pdf' || activeToolId === 'edit-excel' || activeToolId === 'csv-excel-converter') && (
-              <ExcelTool onBack={handleGoHome} />
+              <ExcelTool toolId={activeToolId} onBack={handleGoHome} />
             )}
 
             {(activeToolId === 'image-converter' || activeToolId === 'image-compressor' || activeToolId === 'image-resizer' || activeToolId === 'image-to-pdf' || activeToolId === 'pdf-to-image') && (
-              <ImageEditorTool onBack={handleGoHome} />
+              <ImageEditorTool toolId={activeToolId} onBack={handleGoHome} />
             )}
 
             {activeToolId === 'ocr-reader' && <OCRTool onBack={handleGoHome} />}

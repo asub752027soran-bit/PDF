@@ -1,5 +1,6 @@
 import mammoth from 'mammoth';
 import jsPDF from 'jspdf';
+import { Document, Packer, Paragraph, TextRun } from 'docx';
 import { readFileAsArrayBuffer } from './pdfProcessor';
 
 export async function extractDocxHtml(file: File): Promise<{ html: string; text: string }> {
@@ -14,10 +15,17 @@ export async function extractDocxHtml(file: File): Promise<{ html: string; text:
 }
 
 export async function convertWordToPDF(file: File): Promise<Uint8Array> {
-  const { text } = await extractDocxHtml(file);
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  let text = '';
+  if (file.name.toLowerCase().endsWith('.docx') || file.name.toLowerCase().endsWith('.doc')) {
+    const extracted = await extractDocxHtml(file);
+    text = extracted.text;
+  } else {
+    text = await file.text();
+  }
 
-  doc.setFontSize(12);
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  doc.setFontSize(11);
+
   const lines = doc.splitTextToSize(text || 'Empty Document', 500);
 
   let y = 50;
@@ -27,10 +35,26 @@ export async function convertWordToPDF(file: File): Promise<Uint8Array> {
       y = 50;
     }
     doc.text(line, 50, y);
-    y += 18;
+    y += 16;
   });
 
   return new Uint8Array(doc.output('arraybuffer'));
+}
+
+export async function exportTextToDocxBlob(text: string): Promise<Blob> {
+  const lines = text.split('\n');
+  const paragraphs = lines.map((line) => new Paragraph({
+    children: [new TextRun({ text: line, size: 24 })],
+  }));
+
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      children: paragraphs.length > 0 ? paragraphs : [new Paragraph({ children: [new TextRun('')] })],
+    }],
+  });
+
+  return await Packer.toBlob(doc);
 }
 
 export function exportTextToTxtBlob(text: string): Blob {
