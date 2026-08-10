@@ -1,19 +1,24 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { generateSitemapXml } from './src/utils/sitemapGenerator';
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Body parsing middleware
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
-// Temp upload directory setup
-const TEMP_DIR = path.join(process.cwd(), 'tmp_uploads');
+// Temp upload directory setup in system temp directory (safe for container environments)
+const TEMP_DIR = path.join(os.tmpdir(), 'pdfeditfy_uploads');
 if (!fs.existsSync(TEMP_DIR)) {
-  fs.mkdirSync(TEMP_DIR, { recursive: true });
+  try {
+    fs.mkdirSync(TEMP_DIR, { recursive: true });
+  } catch (err) {
+    console.error('Failed to create temp upload directory:', err);
+  }
 }
 
 // Auto cleanup temporary files older than 15 minutes
