@@ -5,7 +5,7 @@ import os from 'os';
 import { generateSitemapXml } from './src/utils/sitemapGenerator';
 
 const app = express();
-const PORT_ENV = process.env.PORT || 3000;
+const PORT = 3000;
 
 // Body parsing middleware
 app.use(express.json({ limit: '100mb' }));
@@ -78,32 +78,20 @@ app.get('/sitemap.xml', (req, res) => {
   res.send(xml);
 });
 
-// Serve Vite dev server or production static dist
-function serveStatic() {
-  const possibleDistPaths = [
-    path.join(process.cwd(), 'dist'),
-    __dirname,
-    path.join(__dirname, '..', 'dist'),
-    path.join(__dirname, 'dist')
-  ];
-  const distPath = possibleDistPaths.find(p => fs.existsSync(path.join(p, 'index.html'))) || path.join(process.cwd(), 'dist');
-
-  app.use(express.static(distPath));
-  app.get('*', (_req, res) => {
-    const indexPath = path.join(distPath, 'index.html');
-    if (fs.existsSync(indexPath)) {
-      res.sendFile(indexPath);
-    } else {
-      res.status(404).send('Build index.html not found. Please run "npm run build" first.');
-    }
-  });
-}
-
 async function startServer() {
   const isProduction = process.env.NODE_ENV === 'production';
 
   if (isProduction) {
-    serveStatic();
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (_req, res) => {
+      const indexPath = path.join(distPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send('Build index.html not found. Please run "npm run build" first.');
+      }
+    });
   } else {
     try {
       const { createServer: createViteServer } = await import('vite');
@@ -112,22 +100,35 @@ async function startServer() {
         appType: 'spa',
       });
       app.use(vite.middlewares);
+      app.use('*', async (req, res, next) => {
+        const url = req.originalUrl;
+        try {
+          let template = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
+          template = await vite.transformIndexHtml(url, template);
+          res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
+        } catch (e) {
+          vite.ssrFixStacktrace(e as Error);
+          next(e);
+        }
+      });
     } catch (err) {
       console.warn('Vite dev server initialization failed, falling back to static files:', err);
-      serveStatic();
+      const distPath = path.join(process.cwd(), 'dist');
+      app.use(express.static(distPath));
+      app.get('*', (_req, res) => {
+        const indexPath = path.join(distPath, 'index.html');
+        if (fs.existsSync(indexPath)) {
+          res.sendFile(indexPath);
+        } else {
+          res.status(404).send('Build index.html not found');
+        }
+      });
     }
   }
 
-  if (typeof PORT_ENV === 'string' && (PORT_ENV.startsWith('/') || PORT_ENV.startsWith('\\\\'))) {
-    app.listen(PORT_ENV, () => {
-      console.log(`PDFEditfy server listening on IPC socket ${PORT_ENV}`);
-    });
-  } else {
-    const portNumber = typeof PORT_ENV === 'number' ? PORT_ENV : parseInt(String(PORT_ENV), 10) || 3000;
-    app.listen(portNumber, '0.0.0.0', () => {
-      console.log(`PDFEditfy server running on http://0.0.0.0:${portNumber} [${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}]`);
-    });
-  }
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`PDFEditfy server running on http://0.0.0.0:${PORT} [${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}]`);
+  });
 }
 
 startServer();
