@@ -4,4 +4,4 @@ compatibility_date = "2024-09-23"
 pages_build_output_dir = "dist"
 
 [vars]
-NODE_VERSION = "22.11.0"
+NODE_VERSION = "22"
