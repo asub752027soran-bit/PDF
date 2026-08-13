@@ -8,17 +8,5 @@ pages_build_output_dir = "./dist"
 NODE_VERSION = "22.12.0"
 
 
-enabled = false
-head_sampling_rate = 1
 
-
-enabled = true
-head_sampling_rate = 1
-persist = true
-invocation_logs = true
-
-
-enabled = false
-persist = true
-head_sampling_rate = 1
 
