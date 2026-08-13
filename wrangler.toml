@@ -2,9 +2,8 @@
 name = "pdfeditfy"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
-
-pages_build_output_dir = "./dist"
+pages_build_output_dir = "dist"
 
 [vars]
-NODE_VERSION = "22"
+NODE_VERSION = "22.12.0"
 
