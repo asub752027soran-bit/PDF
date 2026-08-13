@@ -38,8 +38,6 @@ export const TRANSLATIONS: Record<LanguageCode, Record<string, string>> = {
     seoMetaSub: "Site title, tags & Google Analytics",
     securityPasscode: "6. Security & Passcode",
     securitySub: "Passcode update & backup export",
-    vpsGuide: "7. Hostinger VPS Guide",
-    vpsGuideSub: "Complete SSH & Nginx setup",
     openFullAdmin: "Open Full Admin Panel →",
     toggleTheme: "Toggle Theme"
   },
@@ -66,8 +64,6 @@ export const TRANSLATIONS: Record<LanguageCode, Record<string, string>> = {
     seoMetaSub: "Título del sitio, etiquetas y Google Analytics",
     securityPasscode: "6. Seguridad y Código de Acceso",
     securitySub: "Actualización de código y copia de seguridad",
-    vpsGuide: "7. Guía Hostinger VPS",
-    vpsGuideSub: "Configuración completa de SSH y Nginx",
     openFullAdmin: "Abrir Panel de Administración Completo →",
     toggleTheme: "Cambiar Tema"
   },
@@ -94,8 +90,6 @@ export const TRANSLATIONS: Record<LanguageCode, Record<string, string>> = {
     seoMetaSub: "Titre du site, balises & Google Analytics",
     securityPasscode: "6. Sécurité & Code d'Accès",
     securitySub: "Mise à jour du code & sauvegarde",
-    vpsGuide: "7. Guide Hostinger VPS",
-    vpsGuideSub: "Configuration complète SSH & Nginx",
     openFullAdmin: "Ouvrir le Panneau d'Administration Complet →",
     toggleTheme: "Changer de Thème"
   },
@@ -122,8 +116,6 @@ export const TRANSLATIONS: Record<LanguageCode, Record<string, string>> = {
     seoMetaSub: "Seitentitel, Tags & Google Analytics",
     securityPasscode: "6. Sicherheit & Zugangscode",
     securitySub: "Zugangscode-Update & Datensicherung",
-    vpsGuide: "7. Hostinger VPS Anleitung",
-    vpsGuideSub: "Vollständiges SSH- & Nginx-Setup",
     openFullAdmin: "Vollständiges Admin-Panel Öffnen →",
     toggleTheme: "Design Wechseln"
   }

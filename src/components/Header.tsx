@@ -3,7 +3,6 @@ import {
   Search,
   Moon,
   Sun,
-  Server,
   Clock,
   ChevronDown,
   X,
@@ -28,7 +27,6 @@ interface HeaderProps {
   currentCategory: CategoryType;
   onSelectCategory: (category: CategoryType) => void;
   onSelectTool: (toolId: string) => void;
-  onOpenVPSGuide: () => void;
   onOpenAdmin: (tabId?: string) => void;
   recentlyUsed: string[];
   searchQuery: string;
@@ -44,7 +42,6 @@ export const Header: React.FC<HeaderProps> = ({
   currentCategory,
   onSelectCategory,
   onSelectTool,
-  onOpenVPSGuide,
   onOpenAdmin,
   recentlyUsed,
   searchQuery,

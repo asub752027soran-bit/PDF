@@ -6,7 +6,6 @@ import { ToolGrid } from './components/ToolGrid';
 import { Footer } from './components/Footer';
 import { AdSenseBanner } from './components/AdSenseBanner';
 import { CookieBanner } from './components/CookieBanner';
-import { DeploymentModal } from './components/DeploymentModal';
 import { AdminLoginModal } from './components/admin/AdminLoginModal';
 
 // Lazy Loaded Tool Components
@@ -107,9 +106,6 @@ export default function App() {
     return (localStorage.getItem('pdfeditfy_lang') as LanguageCode) || 'en';
   });
 
-  // VPS Guide Modal
-  const [showVPSModal, setShowVPSModal] = useState(false);
-
   // Sync Dark Mode class on document HTML root
   useEffect(() => {
     if (darkMode) {
@@ -149,7 +145,7 @@ export default function App() {
     localStorage.setItem('pdfeditfy_admin_config', JSON.stringify(newConfig));
   };
 
-  const [adminInitialTab, setAdminInitialTab] = useState<'overview' | 'tools' | 'monetization' | 'inquiries' | 'seo' | 'security' | 'vps'>('overview');
+  const [adminInitialTab, setAdminInitialTab] = useState<'overview' | 'tools' | 'monetization' | 'inquiries' | 'seo' | 'security'>('overview');
 
   // Admin login trigger
   const handleOpenAdminConsole = (targetTab?: string) => {
@@ -332,7 +328,6 @@ export default function App() {
           handleGoHome();
         }}
         onSelectTool={handleSelectTool}
-        onOpenVPSGuide={() => setShowVPSModal(true)}
         onOpenAdmin={handleOpenAdminConsole}
         recentlyUsed={recentlyUsed}
         searchQuery={searchQuery}
@@ -460,11 +455,6 @@ export default function App() {
       />
 
       <CookieBanner />
-
-      <DeploymentModal
-        isOpen={showVPSModal}
-        onClose={() => setShowVPSModal(false)}
-      />
 
       <AdminLoginModal
         isOpen={showAdminLogin}
