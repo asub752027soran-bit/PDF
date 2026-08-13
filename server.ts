@@ -100,17 +100,6 @@ async function startServer() {
         appType: 'spa',
       });
       app.use(vite.middlewares);
-      app.use('*', async (req, res, next) => {
-        const url = req.originalUrl;
-        try {
-          let template = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
-          template = await vite.transformIndexHtml(url, template);
-          res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
-        } catch (e) {
-          vite.ssrFixStacktrace(e as Error);
-          next(e);
-        }
-      });
     } catch (err) {
       console.warn('Vite dev server initialization failed, falling back to static files:', err);
       const distPath = path.join(process.cwd(), 'dist');
