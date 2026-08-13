@@ -70,8 +70,8 @@ Sitemap: ${baseUrl}/sitemap.xml`
 app.get('/sitemap.xml', (req, res) => {
   res.type('application/xml');
   const host = req.headers.host || 'pdfeditfy.com';
-  const proto = req.headers['x-forwarded-proto'] || (host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https');
-  const defaultDomain = (host.includes('localhost') || host.includes('127.0.0.1')) ? `${proto}://${host}` : 'https://pdfeditfy.com';
+  const proto = (req.headers['x-forwarded-proto'] as string) || (host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https');
+  const defaultDomain = `${proto}://${host}`;
   const baseUrl = process.env.APP_URL ? process.env.APP_URL.replace(/\/$/, '') : defaultDomain;
 
   const xml = generateSitemapXml(baseUrl);
