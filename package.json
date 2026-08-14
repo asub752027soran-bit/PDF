@@ -12,7 +12,8 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "deploy": "echo 'Deployment handled automatically by Cloudflare Pages'"
+    "deploy": "echo 'Deployment handled automatically by Cloudflare Pages'",
+    "pages:deploy": "wrangler pages deploy dist --project-name=pdfeditfy"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

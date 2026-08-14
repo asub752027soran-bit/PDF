@@ -1,5 +1,6 @@
 # Cloudflare Pages Configuration
 name = "pdfeditfy"
+account_id = "c67b8e4aaf0419d09e1373e8260cb725"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "dist"
