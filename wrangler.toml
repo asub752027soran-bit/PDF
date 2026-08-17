@@ -1,6 +1,6 @@
 # Cloudflare Pages Configuration
 name = "pdfeditfy"
-compatpatibility_date = "2026-08-17"
+compatibility_date = "2026-08-17"
 
 [assets]
 directory = "./dist"
