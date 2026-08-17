@@ -345,8 +345,8 @@ export default function App() {
           <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
           <span>Notice: Scheduled maintenance is in progress. Some tools may operate in restricted mode.</span>
           <button
-            onClick={handleOpenAdminConsole}
-            className="underline font-bold text-amber-900 dark:text-amber-100 hover:text-blue-600"
+            onClick={() => handleOpenAdminConsole()}
+            className="underline font-bold text-amber-900 dark:text-amber-100 hover:text-blue-600 cursor-pointer"
           >
             Admin Login
           </button>

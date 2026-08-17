@@ -836,7 +836,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                 )}
 
                 {/* Watermark Live Preview Overlay */}
-                {mode === 'watermark' && watermarkText && (
+                {Boolean(watermarkText) && (
                   <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden">
                     <span
                       style={{
