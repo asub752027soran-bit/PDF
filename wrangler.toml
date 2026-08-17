@@ -1,10 +1,9 @@
 # Cloudflare Pages Configuration
 name = "pdfeditfy"
-compatibility_date = "2024-09-23"
-compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = "dist"
+compatpatibility_date = "2026-08-17"
 
-[vars]
-NODE_VERSION = "22.12.0"
+[assets]
+directory = "./dist"
+
 
 
