@@ -52,11 +52,36 @@ export interface PDFAnnotation {
   color?: string;
   fillColor?: string;
   fontSize?: number;
+  fontFamily?: string;
   strokeWidth?: number;
   opacity?: number;
   isBold?: boolean;
+  isItalic?: boolean;
+  textAlign?: 'left' | 'center' | 'right';
+  hasWhiteoutBg?: boolean;
+  stampType?: string;
   shapeType?: 'rectangle' | 'circle' | 'arrow' | 'line';
   points?: { x: number; y: number }[]; // For freehand draw
+}
+
+export interface EditablePdfText {
+  id: string;
+  pageNumber: number;
+  originalText: string;
+  currentText: string;
+  x: number; // percentage (0-100) from left
+  y: number; // percentage (0-100) from top
+  width: number; // percentage (0-100) width
+  height: number; // percentage (0-100) height
+  fontSize: number; // pt size
+  fontFamily: string;
+  fontName?: string;
+  pdfFontType?: 'serif' | 'sans-serif' | 'monospace' | string;
+  isBold?: boolean;
+  isItalic?: boolean;
+  color?: string;
+  isModified: boolean;
+  isDeleted?: boolean;
 }
 
 export interface PDFPageInfo {

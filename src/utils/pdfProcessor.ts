@@ -1,6 +1,6 @@
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 import jsPDF from 'jspdf';
-import { PDFAnnotation } from '../types';
+import { PDFAnnotation, EditablePdfText } from '../types';
 
 // Utility to read File as ArrayBuffer
 export function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
@@ -223,16 +223,117 @@ function hexToRgb01(hex: string = '#000000'): { r: number; g: number; b: number 
   return { r: 0.1, g: 0.1, b: 0.1 };
 }
 
-// EDIT PDF WITH ANNOTATIONS
+// EDIT PDF WITH ANNOTATIONS & DIRECT TEXT EDITS
 export async function applyPDFAnnotations(
   file: File,
-  annotations: PDFAnnotation[]
+  annotations: PDFAnnotation[],
+  editedTexts: EditablePdfText[] = []
 ): Promise<Uint8Array> {
   const arrayBuffer = await readFileAsArrayBuffer(file);
   const pdfDoc = await PDFDocument.load(arrayBuffer);
-  const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  // Embed standard PDF font families (Regular, Bold, Italic/Oblique, BoldItalic/BoldOblique)
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const helveticaOblique = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+  const helveticaBoldOblique = await pdfDoc.embedFont(StandardFonts.HelveticaBoldOblique);
+
+  const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+  const timesBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
+  const timesItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
+  const timesBoldItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic);
+
+  const courier = await pdfDoc.embedFont(StandardFonts.Courier);
+  const courierBold = await pdfDoc.embedFont(StandardFonts.CourierBold);
+  const courierOblique = await pdfDoc.embedFont(StandardFonts.CourierOblique);
+  const courierBoldOblique = await pdfDoc.embedFont(StandardFonts.CourierBoldOblique);
+
+  const getExactFont = (fontFamilyStr?: string, pdfFontTypeStr?: string, isBold?: boolean, isItalic?: boolean) => {
+    const combined = `${fontFamilyStr || ''} ${pdfFontTypeStr || ''}`.toLowerCase();
+    const isSerif =
+      combined.includes('times') ||
+      combined.includes('serif') ||
+      combined.includes('roman') ||
+      combined.includes('georgia') ||
+      combined.includes('garamond') ||
+      combined.includes('cambria') ||
+      combined.includes('palatino') ||
+      combined.includes('baskerville') ||
+      combined.includes('minion') ||
+      combined.includes('charter');
+
+    const isMono =
+      combined.includes('courier') ||
+      combined.includes('mono') ||
+      combined.includes('code') ||
+      combined.includes('consolas') ||
+      combined.includes('menlo') ||
+      combined.includes('typewriter');
+
+    if (isSerif) {
+      if (isBold && isItalic) return timesBoldItalic;
+      if (isBold) return timesBold;
+      if (isItalic) return timesItalic;
+      return timesRoman;
+    }
+
+    if (isMono) {
+      if (isBold && isItalic) return courierBoldOblique;
+      if (isBold) return courierBold;
+      if (isItalic) return courierOblique;
+      return courier;
+    }
+
+    // Default Sans-Serif (Helvetica / Arial / Calibri / etc.)
+    if (isBold && isItalic) return helveticaBoldOblique;
+    if (isBold) return helveticaBold;
+    if (isItalic) return helveticaOblique;
+    return helvetica;
+  };
+
   const pages = pdfDoc.getPages();
+
+  // 1. First process all in-place edited words and text lines
+  for (const item of editedTexts) {
+    if (!item.isModified && !item.isDeleted) continue;
+    if (item.pageNumber < 1 || item.pageNumber > pages.length) continue;
+
+    const page = pages[item.pageNumber - 1];
+    const { width, height } = page.getSize();
+
+    const pdfX = (item.x / 100) * width;
+    const pdfY = height - ((item.y / 100) * height);
+    const boxW = Math.max((item.width / 100) * width, 8);
+    const boxH = Math.max((item.height / 100) * height, (item.fontSize || 12) * 1.2);
+
+    // Erase original underlying text with a clean solid white rectangle
+    page.drawRectangle({
+      x: pdfX - 1.5,
+      y: pdfY - boxH + 2,
+      width: boxW + 4,
+      height: boxH + 3,
+      color: rgb(1, 1, 1),
+      opacity: 1,
+    });
+
+    // If text was not deleted and has content, write the new updated text using the exact matched original font
+    if (!item.isDeleted && item.currentText && item.currentText.trim().length > 0) {
+      const selectedFont = getExactFont(item.fontFamily, item.pdfFontType, item.isBold, item.isItalic);
+      const fSize = Math.max(item.fontSize || 12, 6);
+      const colorRgb = hexToRgb01(item.color || '#111827');
+
+      page.drawText(item.currentText, {
+        x: pdfX,
+        y: pdfY - fSize * 0.9,
+        size: fSize,
+        font: selectedFont,
+        color: rgb(colorRgb.r, colorRgb.g, colorRgb.b),
+        opacity: 1,
+      });
+    }
+  }
+
+  // 2. Process all overlays & annotations
 
   for (const ann of annotations) {
     if (ann.pageNumber < 1 || ann.pageNumber > pages.length) continue;
@@ -244,20 +345,55 @@ export async function applyPDFAnnotations(
     const pdfY = height - ((ann.y / 100) * height); // Invert Y axis for PDF coordinate space
 
     if (ann.type === 'text' && ann.content) {
+      // Pick font based on family and weight
+      let selectedFont = helvetica;
+      const fam = (ann.fontFamily || 'Helvetica').toLowerCase();
+
+      if (fam.includes('times') || fam.includes('serif')) {
+        selectedFont = ann.isBold ? timesBold : timesRoman;
+      } else if (fam.includes('courier') || fam.includes('mono')) {
+        selectedFont = ann.isBold ? courierBold : courier;
+      } else {
+        if (ann.isBold && ann.isItalic) {
+          selectedFont = helveticaBoldOblique;
+        } else if (ann.isBold) {
+          selectedFont = helveticaBold;
+        } else if (ann.isItalic) {
+          selectedFont = helveticaOblique;
+        } else {
+          selectedFont = helvetica;
+        }
+      }
+
+      const fSize = ann.fontSize || 16;
+      const textWidth = selectedFont.widthOfTextAtSize(ann.content, fSize);
+      const textHeight = selectedFont.heightAtSize(fSize);
+
+      // If user enabled whiteout under text, draw a solid white block first to erase existing PDF content
+      if (ann.hasWhiteoutBg) {
+        page.drawRectangle({
+          x: pdfX - 4,
+          y: pdfY - 3,
+          width: textWidth + 8,
+          height: textHeight + 6,
+          color: rgb(1, 1, 1),
+          opacity: 1,
+        });
+      }
+
       const colorRgb = hexToRgb01(ann.color || '#1e293b');
-      const font = ann.isBold ? helveticaBoldFont : helveticaFont;
       page.drawText(ann.content, {
         x: pdfX,
         y: pdfY,
-        size: ann.fontSize || 16,
-        font: font,
+        size: fSize,
+        font: selectedFont,
         color: rgb(colorRgb.r, colorRgb.g, colorRgb.b),
         opacity: ann.opacity ?? 1,
       });
     } else if (ann.type === 'whiteout') {
       // Solid white rectangle to erase/cover unwanted text, watermark, or confidential marks
-      const w = ann.width || 120;
-      const h = ann.height || 40;
+      const w = ann.width ? (ann.width / 100) * width : 120;
+      const h = ann.height ? (ann.height / 100) * height : 36;
       page.drawRectangle({
         x: pdfX,
         y: pdfY - h,
@@ -270,8 +406,8 @@ export async function applyPDFAnnotations(
       });
     } else if (ann.type === 'redact') {
       // Solid black redaction box to conceal sensitive information
-      const w = ann.width || 120;
-      const h = ann.height || 40;
+      const w = ann.width ? (ann.width / 100) * width : 120;
+      const h = ann.height ? (ann.height / 100) * height : 28;
       page.drawRectangle({
         x: pdfX,
         y: pdfY - h,
@@ -288,8 +424,8 @@ export async function applyPDFAnnotations(
             ? await pdfDoc.embedPng(imageBytes)
             : await pdfDoc.embedJpg(imageBytes);
 
-          const w = ann.width || 120;
-          const h = ann.height || 60;
+          const w = ann.width ? (ann.width / 100) * width : 140;
+          const h = ann.height ? (ann.height / 100) * height : 70;
 
           page.drawImage(img, {
             x: pdfX,
@@ -303,11 +439,33 @@ export async function applyPDFAnnotations(
         }
       }
     } else if (ann.type === 'shape') {
-      const w = ann.width || 100;
-      const h = ann.height || 50;
+      const w = ann.width ? (ann.width / 100) * width : 100;
+      const h = ann.height ? (ann.height / 100) * height : 50;
       const strokeRgb = hexToRgb01(ann.color || '#3b82f6');
+      const fillRgb = ann.fillColor ? hexToRgb01(ann.fillColor) : undefined;
 
-      if (ann.shapeType === 'rectangle') {
+      if (ann.shapeType === 'circle') {
+        const radius = Math.min(w, h) / 2;
+        page.drawEllipse({
+          x: pdfX + radius,
+          y: pdfY - radius,
+          xScale: radius,
+          yScale: radius,
+          borderColor: rgb(strokeRgb.r, strokeRgb.g, strokeRgb.b),
+          borderWidth: ann.strokeWidth || 2,
+          color: fillRgb ? rgb(fillRgb.r, fillRgb.g, fillRgb.b) : undefined,
+          opacity: ann.opacity ?? 1,
+        });
+      } else if (ann.shapeType === 'line' || ann.shapeType === 'arrow') {
+        page.drawLine({
+          start: { x: pdfX, y: pdfY },
+          end: { x: pdfX + w, y: pdfY - h },
+          thickness: ann.strokeWidth || 2,
+          color: rgb(strokeRgb.r, strokeRgb.g, strokeRgb.b),
+          opacity: ann.opacity ?? 1,
+        });
+      } else {
+        // Rectangle
         page.drawRectangle({
           x: pdfX,
           y: pdfY - h,
@@ -315,21 +473,37 @@ export async function applyPDFAnnotations(
           height: h,
           borderColor: rgb(strokeRgb.r, strokeRgb.g, strokeRgb.b),
           borderWidth: ann.strokeWidth || 2,
-          color: ann.fillColor ? rgb(0.9, 0.95, 1) : undefined,
+          color: fillRgb ? rgb(fillRgb.r, fillRgb.g, fillRgb.b) : undefined,
           opacity: ann.opacity ?? 1,
         });
       }
     } else if (ann.type === 'highlight') {
-      const w = ann.width || 140;
-      const h = ann.height || 22;
+      const w = ann.width ? (ann.width / 100) * width : 140;
+      const h = ann.height ? (ann.height / 100) * height : 22;
+      const hlRgb = hexToRgb01(ann.color || '#FFE500');
       page.drawRectangle({
         x: pdfX,
         y: pdfY - h,
         width: w,
         height: h,
-        color: rgb(1, 0.88, 0.2),
-        opacity: 0.45,
+        color: rgb(hlRgb.r, hlRgb.g, hlRgb.b),
+        opacity: ann.opacity ?? 0.45,
       });
+    } else if (ann.type === 'draw' && ann.points && ann.points.length > 1) {
+      // Draw freehand stroke path
+      const strokeRgb = hexToRgb01(ann.color || '#1e293b');
+      const thickness = ann.strokeWidth || 2;
+      for (let i = 0; i < ann.points.length - 1; i++) {
+        const p1 = ann.points[i];
+        const p2 = ann.points[i + 1];
+        page.drawLine({
+          start: { x: (p1.x / 100) * width, y: height - (p1.y / 100) * height },
+          end: { x: (p2.x / 100) * width, y: height - (p2.y / 100) * height },
+          thickness,
+          color: rgb(strokeRgb.r, strokeRgb.g, strokeRgb.b),
+          opacity: ann.opacity ?? 1,
+        });
+      }
     }
   }
 

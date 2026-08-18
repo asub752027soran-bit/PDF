@@ -392,10 +392,6 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
               </div>
             )}
 
-            <div className="pt-1 flex items-center justify-between text-[11px] text-slate-400">
-              <span>Default Passcode: <code className="text-blue-600 dark:text-blue-400 font-bold">Sobha@752027</code></span>
-            </div>
-
             <button
               type="submit"
               className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 transition-all"
