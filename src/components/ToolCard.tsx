@@ -1,6 +1,7 @@
 import React from 'react';
 import * as LucideIcons from 'lucide-react';
 import { ToolItem } from '../types';
+import { useLanguage } from '../lib/LanguageContext';
 
 interface ToolCardProps {
   tool: ToolItem;
@@ -9,6 +10,8 @@ interface ToolCardProps {
 }
 
 export const ToolCard: React.FC<ToolCardProps> = ({ tool, customBadge, onSelect }) => {
+  const { t, getToolName, getToolDescription } = useLanguage();
+
   // Dynamically resolve Lucide icon
   const IconComponent = (LucideIcons as any)[tool.iconName] || LucideIcons.File;
   const activeBadge = customBadge !== undefined ? customBadge : tool.badge;
@@ -32,6 +35,19 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, customBadge, onSelect 
         return 'border-t-cyan-500';
     }
   };
+
+  const getTranslatedBadge = (badgeName?: string) => {
+    if (!badgeName) return null;
+    if (badgeName === 'Popular') return t('popularBadge', 'Popular');
+    if (badgeName === 'New') return t('newBadge', 'New');
+    if (badgeName === 'Pro') return t('proBadge', 'Pro');
+    if (badgeName === 'Free') return t('freeBadge', 'Free');
+    if (badgeName === 'Batch') return t('batchBadge', 'Batch');
+    return badgeName;
+  };
+
+  const localizedName = getToolName(tool.id, tool.name);
+  const localizedDescription = getToolDescription(tool.id, tool.description);
 
   return (
     <div
@@ -57,19 +73,19 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, customBadge, onSelect 
                   : 'bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300'
               }`}
             >
-              {activeBadge}
+              {getTranslatedBadge(activeBadge)}
             </span>
           )}
         </div>
 
         {/* Title */}
         <h3 className="font-bold text-sm mb-1 text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-          {tool.name}
+          {localizedName}
         </h3>
 
         {/* Description */}
         <p className="text-xs text-slate-500 dark:text-slate-400 leading-tight line-clamp-2 mb-3">
-          {tool.description}
+          {localizedDescription}
         </p>
       </div>
 
@@ -86,11 +102,10 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, customBadge, onSelect 
           ))}
         </div>
         <span className="font-bold text-blue-600 dark:text-blue-400 group-hover:translate-x-0.5 transition-transform">
-          Open →
+          {t('openTool', 'Open →')}
         </span>
       </div>
 
     </div>
   );
 };
-

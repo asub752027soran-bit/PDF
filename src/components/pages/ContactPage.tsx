@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Send, CheckCircle2, ArrowLeft, MessageSquare, ShieldCheck } from 'lucide-react';
+import { AdSenseBanner } from '../AdSenseBanner';
 
 interface ContactPageProps {
   onBack: () => void;
@@ -39,6 +40,9 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onBack }) => {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
       
+      {/* Top Banner Ad */}
+      <AdSenseBanner slotType="banner" className="my-2" />
+
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
         <button
@@ -134,6 +138,9 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onBack }) => {
         )}
 
       </div>
+
+      {/* Bottom Ad */}
+      <AdSenseBanner slotType="leaderboard" className="mt-8" />
 
     </div>
   );

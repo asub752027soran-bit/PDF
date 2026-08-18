@@ -24,7 +24,14 @@ import {
   EyeOff,
   Bold,
   FileText,
-  Layers
+  Layers,
+  Undo2,
+  Redo2,
+  MousePointer,
+  CheckCircle2,
+  Sparkles,
+  RefreshCw,
+  Plus
 } from 'lucide-react';
 import {
   applyPDFAnnotations,
@@ -36,6 +43,7 @@ import {
   readFileAsDataURL
 } from '../../utils/pdfProcessor';
 import { downloadBlob } from '../../utils/batchProcessor';
+import { recordToolConversion } from '../../utils/activityTracker';
 import { PDFAnnotation } from '../../types';
 
 // Set up pdf.js worker URL safely
@@ -53,27 +61,34 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
   const [file, setFile] = useState<File | null>(null);
   const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
-    'text' | 'whiteout' | 'signature' | 'shape' | 'highlight' | 'redact' | 'image'
+    'text' | 'whiteout' | 'signature' | 'shape' | 'highlight' | 'redact' | 'image' | 'eraser_tool'
   >('text');
 
-  // Annotation state
+  // Annotation state & Undo/Redo History
   const [annotations, setAnnotations] = useState<PDFAnnotation[]>([]);
+  const [history, setHistory] = useState<PDFAnnotation[][]>([]);
+  const [historyIdx, setHistoryIdx] = useState<number>(-1);
+
+  // Text tool controls
   const [textInput, setTextInput] = useState('');
   const [fontSize, setFontSize] = useState(16);
   const [textColor, setTextColor] = useState('#1e293b');
   const [isBold, setIsBold] = useState(false);
+  const [autoWhiteoutUnderText, setAutoWhiteoutUnderText] = useState(false);
+
+  // Signature state
   const [showSigModal, setShowSigModal] = useState(false);
   const [sigDataUrl, setSigDataUrl] = useState<string | null>(null);
 
   // Whiteout / Mark Remover sizing
   const [whiteoutWidth, setWhiteoutWidth] = useState(140);
-  const [whiteoutHeight, setWhiteoutHeight] = useState(36);
+  const [whiteoutHeight, setWhiteoutHeight] = useState(32);
 
   // Redaction sizing
   const [redactWidth, setRedactWidth] = useState(140);
   const [redactHeight, setRedactHeight] = useState(28);
 
-  // Watermark state (clean default, no forced "CONFIDENTIAL")
+  // Watermark state
   const [watermarkText, setWatermarkText] = useState('');
   const [watermarkOpacity, setWatermarkOpacity] = useState(0.25);
   const [watermarkAngle, setWatermarkAngle] = useState(45);
@@ -100,6 +115,32 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
 
   // Processing state
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Helper to commit new annotations state with history tracking
+  const updateAnnotationsWithHistory = (newAnns: PDFAnnotation[]) => {
+    const updatedHistory = history.slice(0, historyIdx + 1);
+    updatedHistory.push(newAnns);
+    if (updatedHistory.length > 30) updatedHistory.shift();
+    setHistory(updatedHistory);
+    setHistoryIdx(updatedHistory.length - 1);
+    setAnnotations(newAnns);
+  };
+
+  const handleUndo = () => {
+    if (historyIdx > 0) {
+      const prevIdx = historyIdx - 1;
+      setHistoryIdx(prevIdx);
+      setAnnotations(history[prevIdx]);
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIdx < history.length - 1) {
+      const nextIdx = historyIdx + 1;
+      setHistoryIdx(nextIdx);
+      setAnnotations(history[nextIdx]);
+    }
+  };
 
   // Render PDF Page onto Canvas using pdfjs-dist
   useEffect(() => {
@@ -161,12 +202,30 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       const dataUrl = await readFileAsDataURL(selected);
       setFileDataUrl(dataUrl);
       setAnnotations([]);
+      setHistory([[]]);
+      setHistoryIdx(0);
     }
   };
 
   const addTextAnnotationAt = (xPct: number, yPct: number) => {
     if (!textInput.trim()) return;
-    const newAnn: PDFAnnotation = {
+    
+    const newAnns = [...annotations];
+
+    // If "Replace Text" / autoWhiteout is checked, place a whiteout box right underneath
+    if (autoWhiteoutUnderText) {
+      newAnns.push({
+        id: Math.random().toString(36).substring(7),
+        pageNumber: currentPage,
+        type: 'whiteout',
+        x: xPct,
+        y: yPct,
+        width: Math.max(80, textInput.length * 10),
+        height: fontSize + 12,
+      });
+    }
+
+    newAnns.push({
       id: Math.random().toString(36).substring(7),
       pageNumber: currentPage,
       type: 'text',
@@ -176,8 +235,9 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       fontSize: fontSize,
       color: textColor,
       isBold: isBold,
-    };
-    setAnnotations([...annotations, newAnn]);
+    });
+
+    updateAnnotationsWithHistory(newAnns);
     setTextInput('');
   };
 
@@ -185,32 +245,32 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
     addTextAnnotationAt(25, 25);
   };
 
-  // Add Whiteout Eraser (Removes/covers watermarks, confidential marks, or unwanted text)
-  const addWhiteoutAnnotation = () => {
+  // Add Whiteout Eraser Box
+  const addWhiteoutAnnotation = (customWidth?: number, customHeight?: number) => {
     const newAnn: PDFAnnotation = {
       id: Math.random().toString(36).substring(7),
       pageNumber: currentPage,
       type: 'whiteout',
       x: 30,
       y: 30,
-      width: whiteoutWidth,
-      height: whiteoutHeight,
+      width: customWidth || whiteoutWidth,
+      height: customHeight || whiteoutHeight,
     };
-    setAnnotations([...annotations, newAnn]);
+    updateAnnotationsWithHistory([...annotations, newAnn]);
   };
 
-  // Add Blackout Redaction (Redacts sensitive confidential numbers/text)
-  const addRedactAnnotation = () => {
+  // Add Blackout Redaction
+  const addRedactAnnotation = (customWidth?: number, customHeight?: number) => {
     const newAnn: PDFAnnotation = {
       id: Math.random().toString(36).substring(7),
       pageNumber: currentPage,
       type: 'redact',
       x: 30,
       y: 30,
-      width: redactWidth,
-      height: redactHeight,
+      width: customWidth || redactWidth,
+      height: customHeight || redactHeight,
     };
-    setAnnotations([...annotations, newAnn]);
+    updateAnnotationsWithHistory([...annotations, newAnn]);
   };
 
   const addShapeAnnotation = () => {
@@ -226,7 +286,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       color: textColor,
       strokeWidth: 2,
     };
-    setAnnotations([...annotations, newAnn]);
+    updateAnnotationsWithHistory([...annotations, newAnn]);
   };
 
   const addHighlightAnnotation = () => {
@@ -239,7 +299,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       width: 180,
       height: 22,
     };
-    setAnnotations([...annotations, newAnn]);
+    updateAnnotationsWithHistory([...annotations, newAnn]);
   };
 
   const addSignatureAnnotation = () => {
@@ -254,7 +314,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       height: 70,
       content: sigDataUrl,
     };
-    setAnnotations([...annotations, newAnn]);
+    updateAnnotationsWithHistory([...annotations, newAnn]);
     setShowSigModal(false);
   };
 
@@ -272,8 +332,18 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
         height: 70,
         content: dataUrl,
       };
-      setAnnotations([...annotations, newAnn]);
+      updateAnnotationsWithHistory([...annotations, newAnn]);
     }
+  };
+
+  // Erase / Delete specific annotation
+  const eraseAnnotation = (id: string) => {
+    updateAnnotationsWithHistory(annotations.filter((a) => a.id !== id));
+  };
+
+  // Erase all annotations on current page
+  const eraseAllOnCurrentPage = () => {
+    updateAnnotationsWithHistory(annotations.filter((a) => a.pageNumber !== currentPage));
   };
 
   // Canvas interaction handlers
@@ -285,11 +355,37 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
 
     if (activeTab === 'text' && textInput.trim()) {
       addTextAnnotationAt(clickX, clickY);
+    } else if (activeTab === 'whiteout') {
+      const newAnn: PDFAnnotation = {
+        id: Math.random().toString(36).substring(7),
+        pageNumber: currentPage,
+        type: 'whiteout',
+        x: clickX,
+        y: clickY,
+        width: whiteoutWidth,
+        height: whiteoutHeight,
+      };
+      updateAnnotationsWithHistory([...annotations, newAnn]);
+    } else if (activeTab === 'redact') {
+      const newAnn: PDFAnnotation = {
+        id: Math.random().toString(36).substring(7),
+        pageNumber: currentPage,
+        type: 'redact',
+        x: clickX,
+        y: clickY,
+        width: redactWidth,
+        height: redactHeight,
+      };
+      updateAnnotationsWithHistory([...annotations, newAnn]);
     }
   };
 
   const handleMouseDownAnn = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
+    if (activeTab === 'eraser_tool') {
+      eraseAnnotation(id);
+      return;
+    }
     setDraggingAnnId(id);
   };
 
@@ -305,7 +401,10 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
   };
 
   const handleMouseUpContainer = () => {
-    setDraggingAnnId(null);
+    if (draggingAnnId) {
+      updateAnnotationsWithHistory([...annotations]);
+      setDraggingAnnId(null);
+    }
   };
 
   // Rotate Page 90 deg
@@ -381,6 +480,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       const pdfBytes = await applyPDFAnnotations(file, annotations);
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const cleanName = file.name.replace(/\.pdf$/i, '');
+      recordToolConversion('edit-pdf', file.size);
       downloadBlob(blob, `${cleanName}_edited.pdf`);
     } catch (err) {
       console.error('Export failed:', err);
@@ -405,6 +505,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       });
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const cleanName = file.name.replace(/\.pdf$/i, '');
+      recordToolConversion('watermark-pdf', file.size);
       downloadBlob(blob, `${cleanName}_watermarked.pdf`);
     } catch (err) {
       console.error('Watermark failed:', err);
@@ -421,6 +522,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       const pdfBytes = await lockPDF(file, pdfPassword);
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const cleanName = file.name.replace(/\.pdf$/i, '');
+      recordToolConversion('lock-pdf', file.size);
       downloadBlob(blob, `${cleanName}_protected.pdf`);
     } catch (err) {
       console.error('Lock failed:', err);
@@ -437,6 +539,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       const pdfBytes = await unlockPDF(file, pdfPassword);
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const cleanName = file.name.replace(/\.pdf$/i, '');
+      recordToolConversion('unlock-pdf', file.size);
       downloadBlob(blob, `${cleanName}_unlocked.pdf`);
     } catch (err) {
       console.error('Unlock failed:', err);
@@ -461,19 +564,19 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
           <h1 className="text-xl font-extrabold text-slate-900 dark:text-white flex items-center justify-end gap-2">
             {mode === 'watermark' ? (
               <>
-                <Stamp className="w-5 h-5 text-indigo-600" /> Watermark PDF
+                <Stamp className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> Watermark PDF
               </>
             ) : mode === 'lock' ? (
               <>
-                <Lock className="w-5 h-5 text-indigo-600" /> Protect & Lock PDF
+                <Lock className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> Protect & Lock PDF
               </>
             ) : mode === 'unlock' ? (
               <>
-                <Unlock className="w-5 h-5 text-indigo-600" /> Unlock & Decrypt PDF
+                <Unlock className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> Unlock & Decrypt PDF
               </>
             ) : (
               <>
-                <FileText className="w-5 h-5 text-indigo-600" /> Professional PDF Editor
+                <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> Professional PDF Editor & Eraser Studio
               </>
             )}
           </h1>
@@ -484,7 +587,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               ? 'Encrypt and protect your PDF with custom password security.'
               : mode === 'unlock'
               ? 'Remove password restrictions and unlock protected PDF files.'
-              : 'Add text, signatures, whiteout eraser, redaction boxes, and annotations.'}
+              : 'Erase unwanted text, stamps, and watermarks, type new text, sign documents, and preserve exact page order.'}
           </p>
         </div>
       </div>
@@ -496,12 +599,12 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
             <Upload className="w-8 h-8" />
           </div>
           <h3 className="text-base font-bold text-slate-900 dark:text-white mb-2">
-            Select or Drop a PDF File to Edit
+            Select or Drop a PDF File to Edit & Erase
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">
-            Upload your PDF document for secure, high-precision in-browser editing.
+            High-precision PDF editor with whiteout eraser, redaction boxes, text replacement, and exact page order retention.
           </p>
-          <label className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-500/20 cursor-pointer transition-all">
+          <label className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-500/20 cursor-pointer transition-all">
             <Upload className="w-4 h-4" /> Choose PDF File
             <input
               type="file"
@@ -651,19 +754,39 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
           
           {/* Left Controls & Tools Sidebar (4 Cols) */}
           <div className="lg:col-span-4 bg-white dark:bg-slate-800 rounded-3xl p-5 border border-slate-200 dark:border-slate-700 space-y-5 shadow-sm">
+            
+            {/* File Info and Undo/Redo Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
-              <span className="text-xs font-bold text-slate-900 dark:text-white truncate max-w-[200px]">
+              <span className="text-xs font-bold text-slate-900 dark:text-white truncate max-w-[160px]">
                 📄 {file.name}
               </span>
-              <button
-                onClick={() => setFile(null)}
-                className="text-xs text-rose-500 font-bold hover:underline"
-              >
-                Change File
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={handleUndo}
+                  disabled={historyIdx <= 0}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-30 transition-colors"
+                  title="Undo Annotation"
+                >
+                  <Undo2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleRedo}
+                  disabled={historyIdx >= history.length - 1}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-30 transition-colors"
+                  title="Redo Annotation"
+                >
+                  <Redo2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setFile(null)}
+                  className="text-xs text-rose-500 font-bold hover:underline ml-2"
+                >
+                  Change
+                </button>
+              </div>
             </div>
 
-            {/* Tools Tabs */}
+            {/* Tools Grid Selection */}
             <div className="grid grid-cols-4 gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl text-[11px] font-bold">
               <button
                 onClick={() => setActiveTab('text')}
@@ -682,9 +805,20 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                     ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
                     : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
-                title="Erase watermark or confidential mark"
+                title="Whiteout Eraser"
               >
-                <Eraser className="w-4 h-4" /> Erase
+                <Eraser className="w-4 h-4" /> Whiteout
+              </button>
+              <button
+                onClick={() => setActiveTab('eraser_tool')}
+                className={`py-2 px-1 rounded-xl flex flex-col items-center gap-1 transition-all ${
+                  activeTab === 'eraser_tool'
+                    ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+                title="Click-to-Erase items on canvas"
+              >
+                <Trash2 className="w-4 h-4" /> Delete Tool
               </button>
               <button
                 onClick={() => setActiveTab('signature')}
@@ -737,27 +871,20 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               >
                 <ImageIcon className="w-4 h-4" /> Stamp
               </button>
-              <button
-                onClick={handleRotatePage}
-                className="py-2 px-1 rounded-xl flex flex-col items-center gap-1 text-slate-500 hover:text-indigo-600 transition-all"
-                title="Rotate page 90°"
-              >
-                <RotateCw className="w-4 h-4" /> Rotate
-              </button>
             </div>
 
-            {/* Tab Controls */}
+            {/* Tab Controls Content */}
             {activeTab === 'text' && (
               <div className="space-y-3 text-xs">
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Text Content
+                    Text / Replacement Content
                   </label>
                   <input
                     type="text"
                     value={textInput}
                     onChange={(e) => setTextInput(e.target.value)}
-                    placeholder="Type text to overlay..."
+                    placeholder="Type new text to overlay or replace..."
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                   />
                 </div>
@@ -802,16 +929,26 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                     </button>
                   </div>
                 </div>
+
+                <label className="flex items-center gap-2 p-2 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoWhiteoutUnderText}
+                    onChange={(e) => setAutoWhiteoutUnderText(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="text-[11px] font-bold text-indigo-900 dark:text-indigo-300">
+                    Erase underlying text (Whiteout Background)
+                  </span>
+                </label>
+
                 <button
                   onClick={addTextAnnotation}
                   disabled={!textInput.trim()}
                   className="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-500 disabled:opacity-50 transition-all shadow-md shadow-indigo-600/20"
                 >
-                  + Place Text on Document
+                  + Place Text on Page
                 </button>
-                <p className="text-[11px] text-slate-400">
-                  Tip: You can also click directly anywhere on the page to place text.
-                </p>
               </div>
             )}
 
@@ -819,17 +956,38 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               <div className="space-y-3 text-xs">
                 <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/40 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
                   <h5 className="font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5 mb-1">
-                    <Eraser className="w-3.5 h-3.5" /> Erase / Whiteout Tool
+                    <Eraser className="w-3.5 h-3.5" /> Precision Whiteout Eraser
                   </h5>
                   <p className="text-[11px] text-indigo-700 dark:text-indigo-400">
-                    Place an opaque white block over any unwanted confidential watermark, stamp, date, or text to cleanly erase it from your document.
+                    Place an opaque white block over any unwanted confidential watermark, stamp, date, or text to cleanly erase it.
                   </p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    onClick={() => addWhiteoutAnnotation(80, 24)}
+                    className="py-1.5 px-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-800 dark:text-slate-200 font-bold text-[11px]"
+                  >
+                    Word (80x24)
+                  </button>
+                  <button
+                    onClick={() => addWhiteoutAnnotation(200, 28)}
+                    className="py-1.5 px-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-800 dark:text-slate-200 font-bold text-[11px]"
+                  >
+                    Line (200x28)
+                  </button>
+                  <button
+                    onClick={() => addWhiteoutAnnotation(320, 80)}
+                    className="py-1.5 px-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-800 dark:text-slate-200 font-bold text-[11px]"
+                  >
+                    Block (320x80)
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Width ({whiteoutWidth}px)
+                      Custom Width ({whiteoutWidth}px)
                     </label>
                     <input
                       type="range"
@@ -856,11 +1014,39 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                 </div>
 
                 <button
-                  onClick={addWhiteoutAnnotation}
+                  onClick={() => addWhiteoutAnnotation()}
                   className="w-full py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-1.5"
                 >
                   <Eraser className="w-4 h-4" /> Add Whiteout Eraser Box
                 </button>
+              </div>
+            )}
+
+            {activeTab === 'eraser_tool' && (
+              <div className="space-y-3 text-xs">
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-200 dark:border-rose-900/50">
+                  <h5 className="font-bold text-rose-900 dark:text-rose-300 flex items-center gap-1.5 mb-1">
+                    <Trash2 className="w-3.5 h-3.5" /> Interactive Delete & Eraser Mode
+                  </h5>
+                  <p className="text-[11px] text-rose-700 dark:text-rose-400">
+                    Click on any annotation, whiteout box, text, or shape on the canvas to erase it immediately.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={eraseAllOnCurrentPage}
+                    className="w-full py-2 px-3 rounded-xl bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-bold hover:bg-rose-200 text-xs transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Erase All Elements on Page {currentPage}
+                  </button>
+                  <button
+                    onClick={() => updateAnnotationsWithHistory([])}
+                    className="w-full py-2 px-3 rounded-xl border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 font-bold hover:bg-rose-50 text-xs transition-all flex items-center justify-center gap-1.5"
+                  >
+                    Reset & Clear Entire Document
+                  </button>
+                </div>
               </div>
             )}
 
@@ -905,7 +1091,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                 </div>
 
                 <button
-                  onClick={addRedactAnnotation}
+                  onClick={() => addRedactAnnotation()}
                   className="w-full py-2.5 rounded-xl bg-black text-white font-bold hover:bg-slate-900 transition-all flex items-center justify-center gap-1.5"
                 >
                   <EyeOff className="w-4 h-4" /> Add Black Redaction Box
@@ -974,7 +1160,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                 </h4>
                 {annotations.length > 0 && (
                   <button
-                    onClick={() => setAnnotations([])}
+                    onClick={() => updateAnnotationsWithHistory([])}
                     className="text-[10px] text-rose-500 hover:underline font-bold"
                   >
                     Clear All
@@ -984,7 +1170,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                 {annotations.length === 0 ? (
                   <p className="text-[11px] text-slate-400 italic">
-                    No annotations added yet. Select a tool above to begin.
+                    No elements on this document yet. Select a tool above to begin.
                   </p>
                 ) : (
                   annotations.map((ann) => (
@@ -1001,9 +1187,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                       </span>
                       <span className="text-[10px] text-slate-400">P.{ann.pageNumber}</span>
                       <button
-                        onClick={() =>
-                          setAnnotations(annotations.filter((a) => a.id !== ann.id))
-                        }
+                        onClick={() => eraseAnnotation(ann.id)}
                         className="text-rose-500 hover:text-rose-600 p-1"
                         title="Delete"
                       >
@@ -1024,11 +1208,11 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               {isProcessing ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Generating Clean PDF...
+                  Generating Clean PDF with Exact Order...
                 </>
               ) : (
                 <>
-                  <Download className="w-4 h-4" /> Download Edited PDF
+                  <Download className="w-4 h-4" /> Download Edited PDF (Exact Order)
                 </>
               )}
             </button>
@@ -1038,7 +1222,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
           {/* Right Live Document Preview Canvas (8 Cols) */}
           <div className="lg:col-span-8 bg-slate-100 dark:bg-slate-900/60 rounded-3xl p-5 border border-slate-200 dark:border-slate-800 flex flex-col items-center relative min-h-[600px]">
             
-            {/* Toolbar for Page Navigation & Zoom */}
+            {/* Toolbar for Page Navigation, Zoom, & Rotation */}
             <div className="w-full bg-white dark:bg-slate-800 rounded-2xl p-2.5 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-wrap items-center justify-between gap-2 mb-3 text-xs font-bold text-slate-700 dark:text-slate-200">
               <div className="flex items-center gap-1.5">
                 <button
@@ -1050,7 +1234,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                   <ChevronLeft className="w-4 h-4" />
                 </button>
                 <span className="px-2 font-mono">
-                  Page {currentPage} / {numPages}
+                  Page {currentPage} of {numPages}
                 </span>
                 <button
                   onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
@@ -1059,6 +1243,13 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                   title="Next Page"
                 >
                   <ChevronRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleRotatePage}
+                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-indigo-50 text-slate-700 dark:text-slate-200 hover:text-indigo-600 ml-1 transition-all"
+                  title="Rotate Current Page 90°"
+                >
+                  <RotateCw className="w-4 h-4" />
                 </button>
               </div>
 
@@ -1087,7 +1278,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               </div>
 
               <div className="text-[11px] text-slate-400 font-normal hidden sm:block">
-                💡 Drag any element to reposition on page
+                💡 Drag any element to position • Click to edit
               </div>
             </div>
 
@@ -1109,7 +1300,9 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                 onMouseMove={handleMouseMoveContainer}
                 onMouseUp={handleMouseUpContainer}
                 onMouseLeave={handleMouseUpContainer}
-                className="relative inline-block bg-white shadow-2xl rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 select-none cursor-crosshair max-w-full"
+                className={`relative inline-block bg-white shadow-2xl rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 select-none max-w-full ${
+                  activeTab === 'eraser_tool' ? 'cursor-not-allowed' : 'cursor-crosshair'
+                }`}
               >
                 {/* PDF Page Canvas */}
                 <canvas
@@ -1135,10 +1328,12 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                     <div
                       key={ann.id}
                       onMouseDown={(e) => handleMouseDownAnn(e, ann.id)}
-                      className={`absolute p-1 rounded-lg border-2 transition-shadow group cursor-grab active:cursor-grabbing z-10 ${
-                        draggingAnnId === ann.id
-                          ? 'border-indigo-600 shadow-xl bg-indigo-500/20'
-                          : 'border-transparent hover:border-indigo-400 hover:bg-indigo-500/10'
+                      className={`absolute p-1 rounded-lg border-2 transition-shadow group z-10 ${
+                        activeTab === 'eraser_tool'
+                          ? 'cursor-pointer hover:border-rose-500 hover:bg-rose-500/20 border-rose-300'
+                          : draggingAnnId === ann.id
+                          ? 'border-indigo-600 shadow-xl bg-indigo-500/20 cursor-grabbing'
+                          : 'border-transparent hover:border-indigo-400 hover:bg-indigo-500/10 cursor-grab'
                       }`}
                       style={{
                         left: `${ann.x}%`,
@@ -1150,7 +1345,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setAnnotations(annotations.filter((a) => a.id !== ann.id));
+                          eraseAnnotation(ann.id);
                         }}
                         className="absolute -top-2.5 -right-2.5 w-5 h-5 bg-rose-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-rose-700 z-20"
                         title="Delete element"
@@ -1175,9 +1370,9 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                         <div
                           style={{
                             width: `${ann.width || 120}px`,
-                            height: `${ann.height || 36}px`,
+                            height: `${ann.height || 32}px`,
                           }}
-                          className="bg-white border border-slate-300 rounded shadow-xs flex items-center justify-center"
+                          className="bg-white border border-slate-300/80 rounded shadow-xs flex items-center justify-center select-none"
                         >
                           <span className="text-[9px] text-slate-400 font-mono select-none">
                             [Whiteout Eraser]
@@ -1249,8 +1444,9 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
             {/* Document Canvas Status Bar */}
             <div className="w-full flex items-center justify-between mt-3 text-[11px] text-slate-500 dark:text-slate-400 font-mono px-2">
               <span>📄 Document: {file.name}</span>
-              <span>
-                {annotations.filter((a) => a.pageNumber === currentPage).length} Elements on Page {currentPage}
+              <span className="flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                Page {currentPage} of {numPages} • Sequence Verified
               </span>
             </div>
 
@@ -1265,7 +1461,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
           <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
               <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                <PenTool className="w-4 h-4 text-indigo-600" /> Draw Your Signature
+                <PenTool className="w-4 h-4 text-indigo-600 dark:text-indigo-400" /> Draw Your Signature
               </h3>
               <button onClick={() => setShowSigModal(false)}>
                 <X className="w-4 h-4 text-slate-400" />

@@ -21,7 +21,8 @@ import {
 } from 'lucide-react';
 import { CATEGORIES, TOOLS } from '../data/toolsData';
 import { CategoryType } from '../types';
-import { LANGUAGES, TRANSLATIONS, LanguageCode } from '../data/translations';
+import { LANGUAGES, LanguageCode } from '../data/translations';
+import { useLanguage } from '../lib/LanguageContext';
 
 interface HeaderProps {
   currentCategory: CategoryType;
@@ -49,32 +50,18 @@ export const Header: React.FC<HeaderProps> = ({
   darkMode,
   setDarkMode,
   onGoHome,
-  currentLanguage: externalLanguage,
-  onSelectLanguage: externalOnSelectLanguage,
 }) => {
   const [showRecentDropdown, setShowRecentDropdown] = useState(false);
   const [showCatMenu, setShowCatMenu] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
 
-  const [internalLanguage, setInternalLanguage] = useState<LanguageCode>(() => {
-    return (localStorage.getItem('pdfeditfy_lang') as LanguageCode) || 'en';
-  });
-
-  const activeLang = externalLanguage || internalLanguage;
+  const { currentLanguage, setLanguage, t } = useLanguage();
 
   const handleLanguageChange = (lang: LanguageCode) => {
-    localStorage.setItem('pdfeditfy_lang', lang);
-    setInternalLanguage(lang);
-    if (externalOnSelectLanguage) {
-      externalOnSelectLanguage(lang);
-    }
+    setLanguage(lang);
   };
 
-  const t = (key: string): string => {
-    return TRANSLATIONS[activeLang]?.[key] || TRANSLATIONS['en']?.[key] || key;
-  };
-
-  const selectedLangObj = LANGUAGES.find((l) => l.code === activeLang) || LANGUAGES[0];
+  const selectedLangObj = LANGUAGES.find((l) => l.code === currentLanguage) || LANGUAGES[0];
 
   const recentTools = TOOLS.filter((t) => recentlyUsed.includes(t.id));
 
@@ -204,7 +191,7 @@ export const Header: React.FC<HeaderProps> = ({
                     setShowLangMenu(false);
                   }}
                   className={`w-full px-3 py-2 rounded-xl text-left text-xs font-semibold flex items-center justify-between transition-colors ${
-                    activeLang === lang.code
+                    currentLanguage === lang.code
                       ? 'bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-900'
                       : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'
                   }`}
@@ -216,7 +203,7 @@ export const Header: React.FC<HeaderProps> = ({
                       <span className="text-[10px] text-slate-400 font-normal">{lang.name}</span>
                     </div>
                   </div>
-                  {activeLang === lang.code && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />}
+                  {currentLanguage === lang.code && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />}
                 </button>
               ))}
             </div>

@@ -50,7 +50,7 @@ const DEFAULT_ADMIN_CONFIG: AdminConfig = {
     type: 'info',
   },
   maintenanceMode: false,
-  adsensePublisherId: 'ca-pub-1234567890123456',
+  adsensePublisherId: 'ca-pub-9806760868514523',
   adsEnabled: true,
   disabledTools: [],
   customBadges: {},
@@ -390,11 +390,17 @@ export default function App() {
                 disabledTools={adminConfig.disabledTools}
                 customBadges={adminConfig.customBadges}
               />
+
+              {adminConfig.adsEnabled && <AdSenseBanner slotType="leaderboard" />}
             </>
           )}
 
           {/* ACTIVE TOOL WORKSPACES & PAGES WITH SUSPENSE LAZY LOADING */}
           <Suspense fallback={<ToolLoadingFallback />}>
+            {activeToolId && adminConfig.adsEnabled && (
+              <AdSenseBanner slotType="banner" className="mb-2" />
+            )}
+
             {activeToolId === 'edit-pdf' && <PDFEditorTool mode="edit" onBack={handleGoHome} />}
             {activeToolId === 'watermark-pdf' && <PDFEditorTool mode="watermark" onBack={handleGoHome} />}
             {activeToolId === 'lock-pdf' && <PDFEditorTool mode="lock" onBack={handleGoHome} />}
@@ -438,6 +444,11 @@ export default function App() {
                 onLogout={handleAdminLogout}
                 initialTab={adminInitialTab}
               />
+            )}
+
+            {/* Bottom Ad for Active Tool pages */}
+            {activeToolId && adminConfig.adsEnabled && (
+              <AdSenseBanner slotType="leaderboard" className="mt-6" />
             )}
           </Suspense>
 

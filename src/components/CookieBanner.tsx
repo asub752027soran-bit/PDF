@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Cookie, X, Check, ShieldCheck } from 'lucide-react';
+import { Cookie, X, Check } from 'lucide-react';
+import { useLanguage } from '../lib/LanguageContext';
 
 export const CookieBanner: React.FC = () => {
   const [accepted, setAccepted] = useState(true); // Default true unless unchecked
+  const { t } = useLanguage();
 
   useEffect(() => {
     const consent = localStorage.getItem('pdfeditfy_cookie_consent') || localStorage.getItem('docushift_cookie_consent');
@@ -26,7 +28,7 @@ export const CookieBanner: React.FC = () => {
             <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400">
               <Cookie className="w-5 h-5" />
             </div>
-            <h4 className="text-xs font-bold text-white">Cookie & Privacy Notice</h4>
+            <h4 className="text-xs font-bold text-white">{t('cookieNoticeTitle', 'Cookie & Privacy Notice')}</h4>
           </div>
           <button
             onClick={handleAccept}
@@ -37,7 +39,7 @@ export const CookieBanner: React.FC = () => {
         </div>
 
         <p className="text-[11px] text-slate-300 leading-relaxed">
-          PDFEditfy uses local browser storage for basic site preferences (such as dark mode and recent tools) and complies with Google AdSense and GDPR policies. We do not store your uploaded documents permanently.
+          {t('cookieNoticeDesc', 'PDFEditfy uses local browser storage for basic site preferences and complies with Google AdSense and GDPR policies. We do not store your uploaded documents permanently.')}
         </p>
 
         <div className="flex items-center justify-end gap-2 pt-1">
@@ -45,7 +47,7 @@ export const CookieBanner: React.FC = () => {
             onClick={handleAccept}
             className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1"
           >
-            <Check className="w-3.5 h-3.5" /> Accept & Continue
+            <Check className="w-3.5 h-3.5" /> {t('acceptAndContinue', 'Accept & Continue')}
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { FileStack, ShieldCheck, Zap, Lock, Heart, FileText, HelpCircle, BookOpen, Mail, ShieldAlert } from 'lucide-react';
 import { CategoryType } from '../types';
+import { useLanguage } from '../lib/LanguageContext';
 
 interface FooterProps {
   onSelectCategory: (cat: CategoryType) => void;
@@ -13,6 +14,8 @@ export const Footer: React.FC<FooterProps> = ({
   onSelectTool,
   onOpenPage,
 }) => {
+  const { t, getCategoryName, getToolName } = useLanguage();
+
   return (
     <footer className="w-full bg-slate-900 text-slate-300 border-t border-slate-800 pt-12 pb-8 mt-16 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -24,9 +27,9 @@ export const Footer: React.FC<FooterProps> = ({
               <Zap className="w-5 h-5" />
             </div>
             <div>
-              <h4 className="font-bold text-white mb-1 text-sm">No Account Needed</h4>
+              <h4 className="font-bold text-white mb-1 text-sm">{t('feat_noAccountTitle')}</h4>
               <p className="text-slate-400 leading-relaxed">
-                Zero signup or login requirements. Use all PDF, Word, Excel, and Image tools instantly.
+                {t('feat_noAccountDesc')}
               </p>
             </div>
           </div>
@@ -36,9 +39,9 @@ export const Footer: React.FC<FooterProps> = ({
               <Lock className="w-5 h-5" />
             </div>
             <div>
-              <h4 className="font-bold text-white mb-1 text-sm">100% Secure & Private</h4>
+              <h4 className="font-bold text-white mb-1 text-sm">{t('feat_secureTitle')}</h4>
               <p className="text-slate-400 leading-relaxed">
-                Files process directly in your browser memory or auto-delete from temporary buffers in 15 mins.
+                {t('feat_secureDesc')}
               </p>
             </div>
           </div>
@@ -48,9 +51,9 @@ export const Footer: React.FC<FooterProps> = ({
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h4 className="font-bold text-white mb-1 text-sm">AdSense Compliant</h4>
+              <h4 className="font-bold text-white mb-1 text-sm">{t('feat_adsenseTitle')}</h4>
               <p className="text-slate-400 leading-relaxed">
-                Designed according to Google webmaster and advertisement quality policies with transparent privacy terms.
+                {t('feat_adsenseDesc')}
               </p>
             </div>
           </div>
@@ -60,9 +63,9 @@ export const Footer: React.FC<FooterProps> = ({
               <FileText className="w-5 h-5" />
             </div>
             <div>
-              <h4 className="font-bold text-white mb-1 text-sm">Batch Processing</h4>
+              <h4 className="font-bold text-white mb-1 text-sm">{t('feat_batchTitle')}</h4>
               <p className="text-slate-400 leading-relaxed">
-                Convert, compress, and merge multiple documents simultaneously with instant ZIP archive export.
+                {t('feat_batchDesc')}
               </p>
             </div>
           </div>
@@ -82,47 +85,47 @@ export const Footer: React.FC<FooterProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
-              The premier online suite for fast, secure file conversions, PDF editing, compression, and image manipulation. Free forever for everyone with zero signup restrictions.
+              {t('footerBrandDesc')}
             </p>
             <div className="pt-2 text-[11px] text-slate-500">
-              All trademarks, product names, and company logos mentioned are property of their respective owners.
+              {t('footerTrademarks')}
             </div>
           </div>
 
           {/* Popular Tools */}
           <div>
             <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-200 mb-4">
-              Popular Tools
+              {t('popularToolsTitle')}
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
                 <button onClick={() => onSelectTool('edit-pdf')} className="hover:text-indigo-400 transition-colors">
-                  Edit PDF
+                  {getToolName('edit-pdf', 'Edit PDF')}
                 </button>
               </li>
               <li>
                 <button onClick={() => onSelectTool('merge-pdf')} className="hover:text-indigo-400 transition-colors">
-                  Merge PDF
+                  {getToolName('merge-pdf', 'Merge PDF')}
                 </button>
               </li>
               <li>
                 <button onClick={() => onSelectTool('compress-pdf')} className="hover:text-indigo-400 transition-colors">
-                  Compress PDF
+                  {getToolName('compress-pdf', 'Compress PDF')}
                 </button>
               </li>
               <li>
                 <button onClick={() => onSelectTool('pdf-to-word')} className="hover:text-indigo-400 transition-colors">
-                  PDF to Word
+                  {getToolName('pdf-to-word', 'PDF to Word')}
                 </button>
               </li>
               <li>
                 <button onClick={() => onSelectTool('image-converter')} className="hover:text-indigo-400 transition-colors">
-                  Image Converter
+                  {getToolName('image-converter', 'Image Converter')}
                 </button>
               </li>
               <li>
                 <button onClick={() => onSelectTool('ocr-reader')} className="hover:text-indigo-400 transition-colors">
-                  OCR Text Extractor
+                  {getToolName('ocr-reader', 'OCR Text Extractor')}
                 </button>
               </li>
             </ul>
@@ -131,37 +134,37 @@ export const Footer: React.FC<FooterProps> = ({
           {/* Tool Categories */}
           <div>
             <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-200 mb-4">
-              Categories
+              {t('categoriesTitle')}
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
                 <button onClick={() => onSelectCategory('PDF Tools')} className="hover:text-indigo-400 transition-colors">
-                  PDF Tools
+                  {getCategoryName('PDF Tools')}
                 </button>
               </li>
               <li>
                 <button onClick={() => onSelectCategory('Word Tools')} className="hover:text-indigo-400 transition-colors">
-                  Word Tools
+                  {getCategoryName('Word Tools')}
                 </button>
               </li>
               <li>
                 <button onClick={() => onSelectCategory('Excel Tools')} className="hover:text-indigo-400 transition-colors">
-                  Excel Tools
+                  {getCategoryName('Excel Tools')}
                 </button>
               </li>
               <li>
                 <button onClick={() => onSelectCategory('PowerPoint Tools')} className="hover:text-indigo-400 transition-colors">
-                  PowerPoint Tools
+                  {getCategoryName('PowerPoint Tools')}
                 </button>
               </li>
               <li>
                 <button onClick={() => onSelectCategory('Image Tools')} className="hover:text-indigo-400 transition-colors">
-                  Image Tools
+                  {getCategoryName('Image Tools')}
                 </button>
               </li>
               <li>
                 <button onClick={() => onSelectCategory('Compression Tools')} className="hover:text-indigo-400 transition-colors">
-                  Compression Tools
+                  {getCategoryName('Compression Tools')}
                 </button>
               </li>
             </ul>
@@ -170,42 +173,42 @@ export const Footer: React.FC<FooterProps> = ({
           {/* Legal & Compliance Pages */}
           <div>
             <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-200 mb-4">
-              Pages & Policy
+              {t('legalPolicyTitle')}
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
                 <button onClick={() => onOpenPage('about')} className="hover:text-indigo-400 transition-colors flex items-center gap-1.5">
-                  <FileText className="w-3 h-3 text-slate-500" /> About Us
+                  <FileText className="w-3 h-3 text-slate-500" /> {t('aboutUs')}
                 </button>
               </li>
               <li>
                 <button onClick={() => onOpenPage('privacy')} className="hover:text-indigo-400 transition-colors flex items-center gap-1.5">
-                  <ShieldAlert className="w-3 h-3 text-slate-500" /> Privacy Policy
+                  <ShieldAlert className="w-3 h-3 text-slate-500" /> {t('privacyPolicy')}
                 </button>
               </li>
               <li>
                 <button onClick={() => onOpenPage('terms')} className="hover:text-indigo-400 transition-colors flex items-center gap-1.5">
-                  <FileText className="w-3 h-3 text-slate-500" /> Terms & Conditions
+                  <FileText className="w-3 h-3 text-slate-500" /> {t('termsConditions')}
                 </button>
               </li>
               <li>
                 <button onClick={() => onOpenPage('disclaimer')} className="hover:text-indigo-400 transition-colors flex items-center gap-1.5">
-                  <ShieldCheck className="w-3 h-3 text-slate-500" /> Disclaimer
+                  <ShieldCheck className="w-3 h-3 text-slate-500" /> {t('disclaimer')}
                 </button>
               </li>
               <li>
                 <button onClick={() => onOpenPage('faq')} className="hover:text-indigo-400 transition-colors flex items-center gap-1.5">
-                  <HelpCircle className="w-3 h-3 text-slate-500" /> FAQ
+                  <HelpCircle className="w-3 h-3 text-slate-500" /> {t('faqHelp')}
                 </button>
               </li>
               <li>
                 <button onClick={() => onOpenPage('blog')} className="hover:text-indigo-400 transition-colors flex items-center gap-1.5">
-                  <BookOpen className="w-3 h-3 text-slate-500" /> Blog & Guides
+                  <BookOpen className="w-3 h-3 text-slate-500" /> {t('blogKnowledge')}
                 </button>
               </li>
               <li>
                 <button onClick={() => onOpenPage('contact')} className="hover:text-indigo-400 transition-colors flex items-center gap-1.5">
-                  <Mail className="w-3 h-3 text-slate-500" /> Contact Us
+                  <Mail className="w-3 h-3 text-slate-500" /> {t('contactSupport')}
                 </button>
               </li>
             </ul>
@@ -217,31 +220,31 @@ export const Footer: React.FC<FooterProps> = ({
         <div className="pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-4">
           <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-[11px]">
             <button onClick={() => onOpenPage('about')} className="hover:text-slate-200 transition-colors">
-              About Us
+              {t('aboutUs')}
             </button>
             <button onClick={() => onOpenPage('privacy')} className="hover:text-slate-200 transition-colors">
-              Privacy Policy
+              {t('privacyPolicy')}
             </button>
             <button onClick={() => onOpenPage('terms')} className="hover:text-slate-200 transition-colors">
-              Terms of Service
+              {t('termsConditions')}
             </button>
             <button onClick={() => onOpenPage('contact')} className="hover:text-slate-200 transition-colors">
-              Contact Support
+              {t('contactSupport')}
             </button>
             <button onClick={() => onOpenPage('admin')} className="hover:text-blue-400 text-blue-400 font-bold transition-colors flex items-center gap-1">
-              Admin Console
+              Admin
             </button>
           </div>
 
           <div className="flex items-center gap-2 text-[11px]">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-slate-300 font-medium">Server Status: Online & Secure</span>
+            <span className="text-slate-300 font-medium">Cloud Engine: Online (Latency ~12ms)</span>
           </div>
         </div>
 
         {/* Bottom Copyright */}
         <div className="pt-4 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-500 gap-2">
-          <p>© {new Date().getFullYear()} pdfeditfy.com. All rights reserved. Client-Side Document Utilities.</p>
+          <p>© {new Date().getFullYear()} {t('copyrightText')}</p>
           <div className="flex items-center gap-3">
             <a href="/sitemap.xml" target="_blank" rel="noreferrer" className="hover:underline text-slate-400">
               Sitemap.xml

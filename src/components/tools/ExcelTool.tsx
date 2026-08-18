@@ -3,6 +3,7 @@ import { Upload, Download, Table, ArrowLeft, Grid, RefreshCw, FileText } from 'l
 import { readExcelFile, exportSheetToXLSX, exportSheetToCSV, convertExcelToPDF, SheetData } from '../../utils/excelProcessor';
 import { extractTablesFromPDF } from '../../utils/pdfExtractor';
 import { downloadBlob } from '../../utils/batchProcessor';
+import { recordToolConversion } from '../../utils/activityTracker';
 
 interface ExcelToolProps {
   toolId?: string;
@@ -86,6 +87,7 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
       const bytes = await exportSheetToXLSX(sheets);
       const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const cleanName = file?.name ? file.name.replace(/\.[^/.]+$/, '') : 'spreadsheet';
+      recordToolConversion(toolId, file?.size || blob.size);
       downloadBlob(blob, `${cleanName}_exported.xlsx`);
     } catch (err) {
       console.error('XLSX export failed:', err);
@@ -100,6 +102,7 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
     const csvString = exportSheetToCSV(sheets[activeSheetIndex]);
     const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8' });
     const sheetName = sheets[activeSheetIndex].sheetName || 'sheet';
+    recordToolConversion(toolId, file?.size || blob.size);
     downloadBlob(blob, `${sheetName}.csv`);
   };
 
@@ -110,6 +113,7 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
       const pdfBytes = await convertExcelToPDF(file);
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const cleanName = file.name.replace(/\.[^/.]+$/, '');
+      recordToolConversion(toolId, file.size);
       downloadBlob(blob, `${cleanName}_converted.pdf`);
     } catch (err) {
       console.error('Excel to PDF failed:', err);

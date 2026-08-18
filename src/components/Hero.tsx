@@ -1,5 +1,6 @@
 import React from 'react';
 import { Upload, FileText, Zap, Sparkles } from 'lucide-react';
+import { useLanguage } from '../lib/LanguageContext';
 
 interface HeroProps {
   searchQuery: string;
@@ -8,6 +9,8 @@ interface HeroProps {
 }
 
 export const Hero: React.FC<HeroProps> = ({ searchQuery, setSearchQuery, onQuickSelect }) => {
+  const { t } = useLanguage();
+
   const handleFileDrop = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       // Launch universal batch converter tool if user drops/selects files directly
@@ -35,13 +38,13 @@ export const Hero: React.FC<HeroProps> = ({ searchQuery, setSearchQuery, onQuick
           </div>
           <div className="text-center">
             <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center justify-center gap-2">
-              Drag & Drop Files Here
+              {t('heroTitle')}
               <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
-                Auto-Detect
+                {t('autoDetect')}
               </span>
             </h2>
             <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
-              PDF, Word, Excel, JPG, PNG, and more (Max 1GB) • Zero Sign Up Required
+              {t('heroSub')}
             </p>
           </div>
         </label>
@@ -50,4 +53,5 @@ export const Hero: React.FC<HeroProps> = ({ searchQuery, setSearchQuery, onQuick
     </div>
   );
 };
+
 

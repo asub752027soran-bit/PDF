@@ -4,6 +4,7 @@ import { processImage, formatBytes } from '../../utils/imageProcessor';
 import { renderPDFToImages, PDFPageImage } from '../../utils/pdfExtractor';
 import { imagesToPDF } from '../../utils/pdfProcessor';
 import { createZipArchive, downloadBlob } from '../../utils/batchProcessor';
+import { recordToolConversion } from '../../utils/activityTracker';
 
 interface ImageEditorToolProps {
   toolId?: string;
@@ -77,8 +78,10 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'imag
     setIsProcessing(true);
     try {
       if (isImageToPdf) {
+        const totalSize = files.reduce((acc, f) => acc + f.size, 0);
         const pdfBytes = await imagesToPDF(files);
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        recordToolConversion(toolId, totalSize);
         downloadBlob(blob, 'converted_images.pdf');
       } else {
         const file = files[0];
@@ -98,6 +101,7 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'imag
         });
 
         const ext = targetFormat === 'jpeg' ? 'jpg' : targetFormat;
+        recordToolConversion(toolId, file.size);
         downloadBlob(res.blob, `${file.name.replace(/\.[^/.]+$/, '')}_processed.${ext}`);
       }
     } catch (err) {
@@ -121,6 +125,7 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'imag
       }));
 
       const zipBlob = await createZipArchive(zipFiles);
+      recordToolConversion(toolId, files[0]?.size || zipBlob.size);
       downloadBlob(zipBlob, `${cleanName}_images_all_pages.zip`);
     } catch (err) {
       console.error('Zip creation failed:', err);

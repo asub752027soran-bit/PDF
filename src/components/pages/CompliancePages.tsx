@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowLeft, ShieldCheck, FileText, AlertTriangle, Info } from 'lucide-react';
+import { AdSenseBanner } from '../AdSenseBanner';
 
 interface CompliancePagesProps {
   page: 'privacy' | 'terms' | 'disclaimer' | 'about';
@@ -10,6 +11,9 @@ export const CompliancePages: React.FC<CompliancePagesProps> = ({ page, onBack }
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
       
+      {/* Top Ad */}
+      <AdSenseBanner slotType="banner" className="my-2" />
+
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
         <button
@@ -86,6 +90,9 @@ export const CompliancePages: React.FC<CompliancePagesProps> = ({ page, onBack }
         )}
 
       </div>
+
+      {/* Bottom Ad */}
+      <AdSenseBanner slotType="leaderboard" className="mt-6" />
 
     </div>
   );

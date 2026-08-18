@@ -2,6 +2,7 @@ import React from 'react';
 import { CATEGORIES, TOOLS } from '../data/toolsData';
 import { CategoryType } from '../types';
 import { FileText, Shield, Sparkles, Clock, Layers, Lock, Zap } from 'lucide-react';
+import { useLanguage } from '../lib/LanguageContext';
 
 interface SidebarProps {
   currentCategory: CategoryType;
@@ -18,6 +19,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectTool,
   onOpenPage,
 }) => {
+  const { t, getCategoryName, getToolName } = useLanguage();
   const recentTools = TOOLS.filter((t) => recentlyUsed.includes(t.id));
 
   return (
@@ -28,13 +30,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
             <Clock className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-            Recently Used
+            {t('recentlyUsed')}
           </p>
         </div>
         
         {recentTools.length === 0 ? (
           <p className="text-xs text-slate-400 dark:text-slate-600 italic px-2">
-            No recently used tools yet.
+            {t('noRecentTools')}
           </p>
         ) : (
           <div className="space-y-1.5">
@@ -50,7 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <div className="flex items-center gap-2 truncate">
                   <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse shrink-0" />
-                  <span className="truncate">{tool.name}</span>
+                  <span className="truncate">{getToolName(tool.id, tool.name)}</span>
                 </div>
               </button>
             ))}
@@ -62,7 +64,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="space-y-3">
         <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
           <Layers className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-          Categories
+          {t('categories')}
         </p>
         
         <nav className="space-y-1">
@@ -78,7 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                <span>{cat}</span>
+                <span>{getCategoryName(cat)}</span>
               </button>
             );
           })}
@@ -89,10 +91,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="mt-8 p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl text-xs text-slate-500 dark:text-slate-400 space-y-1">
         <p className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1 text-[11px]">
           <Lock className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-          Privacy Promise:
+          {t('privacyPromiseTitle')}
         </p>
         <p className="text-[11px] leading-relaxed italic text-slate-500 dark:text-slate-400">
-          All files are processed locally or deleted instantly after download. No accounts required.
+          {t('privacyPromiseDesc')}
         </p>
       </div>
 

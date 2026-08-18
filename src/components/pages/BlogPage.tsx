@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { BLOG_POSTS } from '../../data/blogData';
 import { BlogPost } from '../../types';
 import { BookOpen, Clock, Calendar, User, ArrowLeft, Tag, ArrowRight } from 'lucide-react';
+import { AdSenseBanner } from '../AdSenseBanner';
 
 interface BlogPageProps {
   onBack: () => void;
@@ -14,6 +15,9 @@ export const BlogPage: React.FC<BlogPageProps> = ({ onBack, onSelectTool }) => {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
       
+      {/* Top Banner Ad */}
+      <AdSenseBanner slotType="banner" className="my-2" />
+
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
         <button
@@ -100,6 +104,9 @@ export const BlogPage: React.FC<BlogPageProps> = ({ onBack, onSelectTool }) => {
             ))}
           </div>
 
+          {/* In-Article AdSense Banner */}
+          <AdSenseBanner slotType="leaderboard" className="my-6" />
+
           {/* Related Tool Banner Callout */}
           <div className="p-6 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white flex flex-col sm:flex-row items-center justify-between gap-4 mt-8 shadow-lg">
             <div>
@@ -116,6 +123,9 @@ export const BlogPage: React.FC<BlogPageProps> = ({ onBack, onSelectTool }) => {
 
         </article>
       )}
+
+      {/* Bottom AdSense Banner */}
+      <AdSenseBanner slotType="leaderboard" className="mt-8" />
 
     </div>
   );

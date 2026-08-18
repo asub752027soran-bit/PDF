@@ -37,6 +37,7 @@ import {
 import { TOOLS } from '../../data/toolsData';
 import { AdminConfig, ContactInquiry, ToolItem } from '../../types';
 import { auth } from '../../lib/firebase';
+import { getLiveStats, resetLiveStats, formatBytes, LiveStats } from '../../utils/activityTracker';
 
 interface AdminDashboardProps {
   onBack: () => void;
@@ -58,6 +59,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [inquiries, setInquiries] = useState<ContactInquiry[]>([]);
   const [inquiryFilter, setInquiryFilter] = useState<'all' | 'unread' | 'read' | 'replied'>('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [liveStats, setLiveStats] = useState<LiveStats>(() => getLiveStats());
+
+  // Listen for real-time live stats updates
+  useEffect(() => {
+    const handleStatsUpdate = () => {
+      setLiveStats(getLiveStats());
+    };
+    window.addEventListener('pdfeditfy_stats_updated', handleStatsUpdate);
+    const interval = setInterval(handleStatsUpdate, 3000);
+    return () => {
+      window.removeEventListener('pdfeditfy_stats_updated', handleStatsUpdate);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Load user inquiries from localStorage
   useEffect(() => {
@@ -309,18 +324,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {activeTab === 'overview' && (
         <div className="space-y-6">
           
-          {/* Key Metrics Grid */}
+          {/* Key Metrics Grid - 100% Real Live Data */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Conversions Today</p>
-              <p className="text-2xl font-black text-slate-900 dark:text-white">1,842</p>
-              <p className="text-[10px] text-emerald-500 font-bold">↑ 14% vs yesterday</p>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Live Conversions</p>
+              <p className="text-2xl font-black text-slate-900 dark:text-white">
+                {liveStats.totalConversions.toLocaleString()}
+              </p>
+              <p className="text-[10px] text-emerald-500 font-bold">
+                {liveStats.totalConversions > 0 ? '✓ Live activity recorded' : 'Zero logs (Ready)'}
+              </p>
             </div>
 
             <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Bandwidth Saved</p>
-              <p className="text-2xl font-black text-slate-900 dark:text-white">12.4 GB</p>
-              <p className="text-[10px] text-blue-500 font-bold">Client-side processing</p>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Data Processed</p>
+              <p className="text-2xl font-black text-slate-900 dark:text-white">
+                {formatBytes(liveStats.bytesProcessed)}
+              </p>
+              <p className="text-[10px] text-blue-500 font-bold">Client memory buffer</p>
             </div>
 
             <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
@@ -329,18 +350,76 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {TOOLS.length - config.disabledTools.length} / {TOOLS.length}
               </p>
               <p className="text-[10px] text-slate-400 font-bold">
-                {config.disabledTools.length > 0 ? `${config.disabledTools.length} disabled` : 'All tools operational'}
+                {config.disabledTools.length > 0 ? `${config.disabledTools.length} disabled` : 'All tools active'}
               </p>
             </div>
 
             <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">System Status</p>
-              <p className="text-2xl font-black text-emerald-500 flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
-                Online
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Inquiries Inbox</p>
+              <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-2">
+                {inquiries.length}
               </p>
-              <p className="text-[10px] text-slate-400 font-bold">Uptime 99.98%</p>
+              <p className="text-[10px] text-amber-500 font-bold">
+                {unreadCount > 0 ? `${unreadCount} unread message(s)` : 'All messages handled'}
+              </p>
             </div>
+          </div>
+
+          {/* Real-time Tool Activity & Analytics Card */}
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 flex-wrap gap-2">
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <BarChart2 className="w-4 h-4 text-emerald-600" />
+                  Live Client Activity & Operations
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Real conversions and client-side processing logged in this browser environment
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (confirm('Reset real-time activity counters to zero?')) {
+                      resetLiveStats();
+                      setLiveStats(getLiveStats());
+                      showToast('Live activity counters reset');
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Reset Stats
+                </button>
+              </div>
+            </div>
+
+            {Object.keys(liveStats.toolUsage).length === 0 ? (
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 text-center text-xs text-slate-400 py-6">
+                <FileCode className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
+                <p className="font-semibold text-slate-600 dark:text-slate-300">No tool conversions executed yet in this session</p>
+                <p className="text-[11px] text-slate-400 mt-1">Conversions executed by any tool will automatically log here in real-time.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {Object.entries(liveStats.toolUsage).map(([toolId, count]) => {
+                  const toolObj = TOOLS.find((t) => t.id === toolId);
+                  return (
+                    <div
+                      key={toolId}
+                      className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between text-xs"
+                    >
+                      <span className="font-bold text-slate-800 dark:text-slate-200 truncate">
+                        {toolObj?.name || toolId}
+                      </span>
+                      <span className="font-extrabold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-[11px]">
+                        {count} ops
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Items Under Admin Panel - Control Modules Grid */}

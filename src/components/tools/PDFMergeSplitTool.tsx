@@ -13,10 +13,14 @@ import {
   Layers,
   FileCheck,
   Zap,
-  CheckCircle2
+  CheckCircle2,
+  ArrowUpDown,
+  ListOrdered,
+  Shuffle
 } from 'lucide-react';
 import { mergePDFs, splitPDF, manipulatePDFPages, readFileAsArrayBuffer } from '../../utils/pdfProcessor';
 import { createZipArchive, downloadBlob } from '../../utils/batchProcessor';
+import { recordToolConversion } from '../../utils/activityTracker';
 import { PDFDocument } from 'pdf-lib';
 
 interface PDFMergeSplitToolProps {
@@ -70,6 +74,18 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
     setFiles(updated);
   };
 
+  // Sorting utilities for exact merge sequence control
+  const sortFilesAlphabetical = (ascending = true) => {
+    const sorted = [...files].sort((a, b) => {
+      return ascending ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+    });
+    setFiles(sorted);
+  };
+
+  const reverseFileOrder = () => {
+    setFiles([...files].reverse());
+  };
+
   const rotatePage = (index: number, angle: number) => {
     setPagesList((prev) =>
       prev.map((p, i) =>
@@ -102,6 +118,7 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
       }));
       const resBytes = await manipulatePDFPages(files[0], pagesInfo);
       const blob = new Blob([resBytes], { type: 'application/pdf' });
+      recordToolConversion('organize-pdf', files[0].size);
       downloadBlob(blob, `${files[0].name.replace(/\.pdf$/i, '')}_organized.pdf`);
     } catch (err) {
       console.error('Organize failed:', err);
@@ -118,8 +135,10 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
     }
     setIsProcessing(true);
     try {
+      const totalBytes = files.reduce((acc, f) => acc + f.size, 0);
       const mergedBytes = await mergePDFs(files);
       const blob = new Blob([mergedBytes], { type: 'application/pdf' });
+      recordToolConversion('merge-pdf', totalBytes);
       downloadBlob(blob, 'merged_document.pdf');
     } catch (err) {
       console.error('Merge failed:', err);
@@ -146,6 +165,7 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
         });
 
       const splitResults = await splitPDF(files[0], ranges);
+      recordToolConversion('split-pdf', files[0].size);
 
       if (splitResults.length === 1) {
         const blob = new Blob([splitResults[0].data], { type: 'application/pdf' });
@@ -169,7 +189,7 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-colors"
+          className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" /> Back to Tools
         </button>
@@ -177,24 +197,24 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
           <h1 className="text-xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2 justify-end">
             {mode === 'merge' ? (
               <>
-                <Combine className="w-5 h-5 text-indigo-600" /> Merge PDF Files
+                <Combine className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> Merge PDF Files with Exact Order
               </>
             ) : mode === 'split' ? (
               <>
-                <Split className="w-5 h-5 text-indigo-600" /> Split PDF Document
+                <Split className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> Split PDF Document
               </>
             ) : (
               <>
-                <Layers className="w-5 h-5 text-indigo-600" /> Rearrange & Rotate Pages
+                <Layers className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> Rearrange, Reorder & Rotate Pages
               </>
             )}
           </h1>
           <p className="text-xs text-slate-500">
             {mode === 'merge'
-              ? 'Combine multiple PDF files into one clean organized document.'
+              ? 'Combine multiple PDF files into one clean document with 100% strict sequence order.'
               : mode === 'split'
-              ? 'Extract pages or split your PDF into independent file parts.'
-              : 'Reorder pages, rotate orientation, or remove unwanted pages.'}
+              ? 'Extract pages or split your PDF into independent file parts in exact index order.'
+              : 'Reorder pages, rotate orientation, or delete unwanted pages.'}
           </p>
         </div>
       </div>
@@ -212,7 +232,7 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
             : 'Select PDF File to Rearrange Pages'}
         </h3>
         <p className="text-xs text-slate-500 mb-5 max-w-sm mx-auto">
-          Drag & drop PDF files or click below. Zero account registration required.
+          Drag & drop PDF files or click below. Sequence numbers guarantee output page order.
         </p>
         <label className="inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-500/20 cursor-pointer transition-all">
           <Upload className="w-4 h-4" /> Browse PDF Files
@@ -229,12 +249,41 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
       {/* Selected File List / Page Grid */}
       {files.length > 0 && (
         <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200">
-            <span>
-              {mode === 'organize'
-                ? `Pages in ${files[0].name} (${pagesList.length} pages)`
-                : `Uploaded PDF Files (${files.length})`}
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200">
+            <span className="flex items-center gap-2">
+              <span>
+                {mode === 'organize'
+                  ? `Pages in ${files[0].name} (${pagesList.length} pages)`
+                  : `Merge Sequence (${files.length} files)`}
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
+                Order Locked
+              </span>
             </span>
+
+            {mode === 'merge' && files.length > 1 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => sortFilesAlphabetical(true)}
+                  className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                >
+                  <ArrowUpDown className="w-3 h-3" /> A-Z
+                </button>
+                <button
+                  onClick={() => sortFilesAlphabetical(false)}
+                  className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                >
+                  <ArrowUpDown className="w-3 h-3" /> Z-A
+                </button>
+                <button
+                  onClick={reverseFileOrder}
+                  className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                >
+                  <Shuffle className="w-3 h-3" /> Reverse
+                </button>
+              </div>
+            )}
+
             <button
               onClick={() => {
                 setFiles([]);
@@ -253,7 +302,10 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
                   key={idx}
                   className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-between text-xs space-y-2 relative"
                 >
-                  <div className="w-full text-center py-6 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-xl font-bold text-indigo-600 dark:text-indigo-400 flex flex-col items-center justify-center">
+                  <div className="w-full text-center py-6 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-xl font-bold text-indigo-600 dark:text-indigo-400 flex flex-col items-center justify-center relative">
+                    <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-indigo-600 text-white text-[10px] font-mono font-extrabold">
+                      #{idx + 1}
+                    </span>
                     <span className="text-lg">📄</span>
                     <span>Page {page.origIndex + 1}</span>
                     {page.rotation > 0 && (
@@ -296,8 +348,8 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
                     </button>
                     <button
                       onClick={() => removePage(idx)}
-                      title="Delete Page"
-                      className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-rose-500 hover:bg-rose-50"
+                      title="Delete / Erase Page"
+                      className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -306,102 +358,136 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
               ))}
             </div>
           ) : (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+            <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
               {files.map((file, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs"
+                  className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs"
                 >
-                  <div className="flex items-center gap-3 truncate">
-                    <span className="w-6 h-6 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 font-bold flex items-center justify-center text-[10px]">
-                      {idx + 1}
+                  <div className="flex items-center gap-3 truncate max-w-sm sm:max-w-md">
+                    <span className="w-7 h-7 rounded-xl bg-indigo-600 text-white font-mono font-extrabold flex items-center justify-center text-xs">
+                      #{idx + 1}
                     </span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
-                      {file.name}
-                    </span>
-                    <span className="text-[10px] text-slate-400">
-                      ({(file.size / (1024 * 1024)).toFixed(2)} MB)
-                    </span>
+                    <div>
+                      <h4 className="font-bold text-slate-800 dark:text-slate-200 truncate">
+                        {file.name}
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        {(file.size / 1024).toFixed(1)} KB • Order Position: {idx + 1} of {files.length}
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    {mode === 'merge' && (
-                      <>
-                        <button
-                          onClick={() => moveFile(idx, 'up')}
-                          disabled={idx === 0}
-                          className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30"
-                        >
-                          <MoveUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => moveFile(idx, 'down')}
-                          disabled={idx === files.length - 1}
-                          className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30"
-                        >
-                          <MoveDown className="w-3.5 h-3.5" />
-                        </button>
-                      </>
-                    )}
-                    <button
-                      onClick={() => removeFile(idx)}
-                      className="p-1 rounded text-rose-500 hover:text-rose-600"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  {mode === 'merge' && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => moveFile(idx, 'up')}
+                        disabled={idx === 0}
+                        title="Move Up in sequence"
+                        className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:text-indigo-600 disabled:opacity-30"
+                      >
+                        <MoveUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => moveFile(idx, 'down')}
+                        disabled={idx === files.length - 1}
+                        title="Move Down in sequence"
+                        className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:text-indigo-600 disabled:opacity-30"
+                      >
+                        <MoveDown className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => removeFile(idx)}
+                        title="Remove file"
+                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           )}
 
-          {/* Mode specific controls */}
+          {/* Split Mode Options */}
           {mode === 'split' && (
-            <div className="pt-2 text-xs space-y-2">
+            <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700 text-xs">
               <label className="block font-bold text-slate-700 dark:text-slate-300">
-                Split Page Ranges (e.g. "1-3, 4-6, 8")
+                Specify Page Ranges to Split (e.g., "1-2, 3-5, 6")
               </label>
               <input
                 type="text"
                 value={splitRange}
                 onChange={(e) => setSplitRange(e.target.value)}
-                placeholder="1-3, 4-6, 8"
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-white"
+                placeholder="1-3, 4-6"
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-white"
               />
+              <p className="text-[11px] text-slate-500">
+                Multi-part split outputs are packaged into a ZIP archive with each page sequence preserved.
+              </p>
             </div>
           )}
 
-          {/* Process Action Button */}
-          <button
-            onClick={
-              mode === 'merge'
-                ? handleMerge
-                : mode === 'split'
-                ? handleSplit
-                : handleOrganize
-            }
-            disabled={isProcessing}
-            className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-4"
-          >
-            {isProcessing ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Processing PDF...
-              </>
-            ) : mode === 'merge' ? (
-              <>
-                <Combine className="w-4 h-4" /> Merge PDF Files Now
-              </>
-            ) : mode === 'split' ? (
-              <>
-                <Split className="w-4 h-4" /> Split PDF & Download
-              </>
-            ) : (
-              <>
-                <Layers className="w-4 h-4" /> Download Rearranged PDF
-              </>
+          {/* Action Button */}
+          <div className="pt-3">
+            {mode === 'merge' && (
+              <button
+                onClick={handleMerge}
+                disabled={isProcessing || files.length < 2}
+                className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Merging in Exact Order...
+                  </>
+                ) : (
+                  <>
+                    <Combine className="w-4 h-4" /> Merge {files.length} PDFs in Sequence Order
+                  </>
+                )}
+              </button>
             )}
-          </button>
+
+            {mode === 'split' && (
+              <button
+                onClick={handleSplit}
+                disabled={isProcessing || files.length === 0}
+                className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Splitting Document...
+                  </>
+                ) : (
+                  <>
+                    <Split className="w-4 h-4" /> Split PDF by Specified Pages
+                  </>
+                )}
+              </button>
+            )}
+
+            {mode === 'organize' && (
+              <button
+                onClick={handleOrganize}
+                disabled={isProcessing || pagesList.length === 0}
+                className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Applying Page Order...
+                  </>
+                ) : (
+                  <>
+                    <Layers className="w-4 h-4" /> Save PDF with Reordered Pages
+                  </>
+                )}
+              </button>
+            )}
+          </div>
 
         </div>
       )}

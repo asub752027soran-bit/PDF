@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FAQ_ITEMS } from '../../data/faqData';
 import { HelpCircle, ChevronDown, ChevronUp, Search, ArrowLeft } from 'lucide-react';
+import { AdSenseBanner } from '../AdSenseBanner';
 
 interface FAQPageProps {
   onBack: () => void;
@@ -19,6 +20,9 @@ export const FAQPage: React.FC<FAQPageProps> = ({ onBack }) => {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
       
+      {/* Top Ad */}
+      <AdSenseBanner slotType="banner" className="my-2" />
+
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
         <button
@@ -75,6 +79,9 @@ export const FAQPage: React.FC<FAQPageProps> = ({ onBack }) => {
           );
         })}
       </div>
+
+      {/* Bottom Ad */}
+      <AdSenseBanner slotType="leaderboard" className="mt-8" />
 
     </div>
   );

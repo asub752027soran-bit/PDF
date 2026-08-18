@@ -3,6 +3,7 @@ import { Upload, Download, ScanText, ArrowLeft, Copy, Check, FileText } from 'lu
 import { createWorker } from 'tesseract.js';
 import { renderPDFToImages } from '../../utils/pdfExtractor';
 import { downloadBlob } from '../../utils/batchProcessor';
+import { recordToolConversion } from '../../utils/activityTracker';
 
 interface OCRToolProps {
   onBack: () => void;
@@ -56,6 +57,7 @@ export const OCRTool: React.FC<OCRToolProps> = ({ onBack }) => {
 
       setExtractedText(combinedText || 'No text could be extracted from this document.');
       setStatusMsg('OCR Recognition Complete!');
+      recordToolConversion('ocr-reader', file.size);
       await worker.terminate();
     } catch (err) {
       console.error('OCR failed:', err);

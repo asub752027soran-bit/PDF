@@ -3,6 +3,7 @@ import { Upload, Download, FileArchive, ArrowLeft, Check, Sparkles, Zap } from '
 import { compressPDF } from '../../utils/pdfProcessor';
 import { downloadBlob } from '../../utils/batchProcessor';
 import { formatBytes } from '../../utils/imageProcessor';
+import { recordToolConversion } from '../../utils/activityTracker';
 
 interface PDFCompressToolProps {
   onBack: () => void;
@@ -39,6 +40,7 @@ export const PDFCompressTool: React.FC<PDFCompressToolProps> = ({ onBack }) => {
       });
 
       const blob = new Blob([compressedBytes], { type: 'application/pdf' });
+      recordToolConversion('compress-pdf', origSize);
       downloadBlob(blob, `${file.name.replace(/\.pdf$/i, '')}_compressed.pdf`);
     } catch (err) {
       console.error('Compression failed:', err);
