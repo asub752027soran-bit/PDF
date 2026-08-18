@@ -43,15 +43,18 @@ export interface ProcessedFile {
 export interface PDFAnnotation {
   id: string;
   pageNumber: number; // 1-indexed
-  type: 'text' | 'draw' | 'shape' | 'signature' | 'highlight' | 'image';
-  x: number; // percentage or px
-  y: number;
+  type: 'text' | 'draw' | 'shape' | 'signature' | 'highlight' | 'image' | 'whiteout' | 'redact' | 'stamp';
+  x: number; // percentage (0-100) or px
+  y: number; // percentage (0-100) or px
   width?: number;
   height?: number;
   content?: string; // Text content or Image Data URL
   color?: string;
+  fillColor?: string;
   fontSize?: number;
   strokeWidth?: number;
+  opacity?: number;
+  isBold?: boolean;
   shapeType?: 'rectangle' | 'circle' | 'arrow' | 'line';
   points?: { x: number; y: number }[]; // For freehand draw
 }

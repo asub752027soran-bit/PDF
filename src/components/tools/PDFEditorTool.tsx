@@ -5,18 +5,13 @@ import {
   Upload,
   Download,
   Type,
-  Pencil,
   Square,
   Highlighter,
   PenTool,
   RotateCw,
   Trash2,
-  FileCheck,
-  Check,
   X,
-  Palette,
   Image as ImageIcon,
-  Sparkles,
   ArrowLeft,
   Lock,
   Unlock,
@@ -25,16 +20,28 @@ import {
   ZoomOut,
   ChevronLeft,
   ChevronRight,
-  Maximize2,
-  Move
+  Eraser,
+  EyeOff,
+  Bold,
+  FileText,
+  Layers
 } from 'lucide-react';
-import { applyPDFAnnotations, watermarkPDF, lockPDF, unlockPDF, readFileAsArrayBuffer, readFileAsDataURL } from '../../utils/pdfProcessor';
+import {
+  applyPDFAnnotations,
+  watermarkPDF,
+  lockPDF,
+  unlockPDF,
+  manipulatePDFPages,
+  readFileAsArrayBuffer,
+  readFileAsDataURL
+} from '../../utils/pdfProcessor';
 import { downloadBlob } from '../../utils/batchProcessor';
 import { PDFAnnotation } from '../../types';
 
 // Set up pdf.js worker URL safely
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker || `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    pdfWorker || `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 }
 
 interface PDFEditorToolProps {
@@ -45,19 +52,30 @@ interface PDFEditorToolProps {
 export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onBack }) => {
   const [file, setFile] = useState<File | null>(null);
   const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'text' | 'draw' | 'signature' | 'shape' | 'highlight'>('text');
-  
+  const [activeTab, setActiveTab] = useState<
+    'text' | 'whiteout' | 'signature' | 'shape' | 'highlight' | 'redact' | 'image'
+  >('text');
+
   // Annotation state
   const [annotations, setAnnotations] = useState<PDFAnnotation[]>([]);
   const [textInput, setTextInput] = useState('');
   const [fontSize, setFontSize] = useState(16);
   const [textColor, setTextColor] = useState('#1e293b');
+  const [isBold, setIsBold] = useState(false);
   const [showSigModal, setShowSigModal] = useState(false);
   const [sigDataUrl, setSigDataUrl] = useState<string | null>(null);
 
-  // Watermark state
-  const [watermarkText, setWatermarkText] = useState('CONFIDENTIAL');
-  const [watermarkOpacity, setWatermarkOpacity] = useState(0.3);
+  // Whiteout / Mark Remover sizing
+  const [whiteoutWidth, setWhiteoutWidth] = useState(140);
+  const [whiteoutHeight, setWhiteoutHeight] = useState(36);
+
+  // Redaction sizing
+  const [redactWidth, setRedactWidth] = useState(140);
+  const [redactHeight, setRedactHeight] = useState(28);
+
+  // Watermark state (clean default, no forced "CONFIDENTIAL")
+  const [watermarkText, setWatermarkText] = useState('');
+  const [watermarkOpacity, setWatermarkOpacity] = useState(0.25);
   const [watermarkAngle, setWatermarkAngle] = useState(45);
   const [watermarkFontSize, setWatermarkFontSize] = useState(48);
 
@@ -104,7 +122,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
         const canvas = pdfCanvasRef.current;
         if (!canvas) return;
 
-        const viewport = page.getViewport({ scale: zoomScale * 1.2 });
+        const viewport = page.getViewport({ scale: zoomScale * 1.35 });
         const context = canvas.getContext('2d');
 
         if (context) {
@@ -157,13 +175,42 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       content: textInput,
       fontSize: fontSize,
       color: textColor,
+      isBold: isBold,
     };
     setAnnotations([...annotations, newAnn]);
     setTextInput('');
   };
 
   const addTextAnnotation = () => {
-    addTextAnnotationAt(20, 20);
+    addTextAnnotationAt(25, 25);
+  };
+
+  // Add Whiteout Eraser (Removes/covers watermarks, confidential marks, or unwanted text)
+  const addWhiteoutAnnotation = () => {
+    const newAnn: PDFAnnotation = {
+      id: Math.random().toString(36).substring(7),
+      pageNumber: currentPage,
+      type: 'whiteout',
+      x: 30,
+      y: 30,
+      width: whiteoutWidth,
+      height: whiteoutHeight,
+    };
+    setAnnotations([...annotations, newAnn]);
+  };
+
+  // Add Blackout Redaction (Redacts sensitive confidential numbers/text)
+  const addRedactAnnotation = () => {
+    const newAnn: PDFAnnotation = {
+      id: Math.random().toString(36).substring(7),
+      pageNumber: currentPage,
+      type: 'redact',
+      x: 30,
+      y: 30,
+      width: redactWidth,
+      height: redactHeight,
+    };
+    setAnnotations([...annotations, newAnn]);
   };
 
   const addShapeAnnotation = () => {
@@ -174,8 +221,10 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       shapeType: 'rectangle',
       x: 30,
       y: 30,
-      width: 150,
-      height: 80,
+      width: 140,
+      height: 70,
+      color: textColor,
+      strokeWidth: 2,
     };
     setAnnotations([...annotations, newAnn]);
   };
@@ -187,8 +236,8 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       type: 'highlight',
       x: 25,
       y: 25,
-      width: 200,
-      height: 24,
+      width: 180,
+      height: 22,
     };
     setAnnotations([...annotations, newAnn]);
   };
@@ -201,12 +250,30 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       type: 'signature',
       x: 35,
       y: 35,
-      width: 140,
+      width: 150,
       height: 70,
       content: sigDataUrl,
     };
     setAnnotations([...annotations, newAnn]);
     setShowSigModal(false);
+  };
+
+  const handleImageStampUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const imgFile = e.target.files[0];
+      const dataUrl = await readFileAsDataURL(imgFile);
+      const newAnn: PDFAnnotation = {
+        id: Math.random().toString(36).substring(7),
+        pageNumber: currentPage,
+        type: 'image',
+        x: 30,
+        y: 30,
+        width: 140,
+        height: 70,
+        content: dataUrl,
+      };
+      setAnnotations([...annotations, newAnn]);
+    }
   };
 
   // Canvas interaction handlers
@@ -229,8 +296,8 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
   const handleMouseMoveContainer = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!draggingAnnId || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const newX = Math.min(90, Math.max(2, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
-    const newY = Math.min(90, Math.max(2, Math.round(((e.clientY - rect.top) / rect.height) * 100)));
+    const newX = Math.min(95, Math.max(2, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
+    const newY = Math.min(95, Math.max(2, Math.round(((e.clientY - rect.top) / rect.height) * 100)));
 
     setAnnotations((prev) =>
       prev.map((ann) => (ann.id === draggingAnnId ? { ...ann, x: newX, y: newY } : ann))
@@ -239,6 +306,27 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
 
   const handleMouseUpContainer = () => {
     setDraggingAnnId(null);
+  };
+
+  // Rotate Page 90 deg
+  const handleRotatePage = async () => {
+    if (!file) return;
+    setIsProcessing(true);
+    try {
+      const pageInfo = Array.from({ length: numPages }, (_, i) => ({
+        pageIndex: i,
+        rotation: i === currentPage - 1 ? 90 : 0,
+      }));
+      const rotatedBytes = await manipulatePDFPages(file, pageInfo);
+      const newFile = new File([rotatedBytes], file.name, { type: 'application/pdf' });
+      setFile(newFile);
+      const dataUrl = await readFileAsDataURL(newFile);
+      setFileDataUrl(dataUrl);
+    } catch (err) {
+      console.error('Rotate failed:', err);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   // Signature canvas handlers
@@ -303,11 +391,14 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
   };
 
   const handleWatermarkPDF = async () => {
-    if (!file) return;
+    if (!file || !watermarkText.trim()) {
+      alert('Please enter text for your watermark.');
+      return;
+    }
     setIsProcessing(true);
     try {
       const pdfBytes = await watermarkPDF(file, {
-        text: watermarkText,
+        text: watermarkText.trim(),
         opacity: watermarkOpacity,
         rotationAngle: watermarkAngle,
         fontSize: watermarkFontSize,
@@ -356,13 +447,13 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
       
       {/* Top Header */}
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-colors"
+          className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" /> Back to Tools
         </button>
@@ -381,17 +472,19 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                 <Unlock className="w-5 h-5 text-indigo-600" /> Unlock & Decrypt PDF
               </>
             ) : (
-              'Online Interactive PDF Editor'
+              <>
+                <FileText className="w-5 h-5 text-indigo-600" /> Professional PDF Editor
+              </>
             )}
           </h1>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             {mode === 'watermark'
               ? 'Add custom text watermarks to all pages in your PDF document.'
               : mode === 'lock'
               ? 'Encrypt and protect your PDF with custom password security.'
               : mode === 'unlock'
               ? 'Remove password restrictions and unlock protected PDF files.'
-              : 'Add text, signatures, highlights, and annotations to your PDF.'}
+              : 'Add text, signatures, whiteout eraser, redaction boxes, and annotations.'}
           </p>
         </div>
       </div>
@@ -403,10 +496,10 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
             <Upload className="w-8 h-8" />
           </div>
           <h3 className="text-base font-bold text-slate-900 dark:text-white mb-2">
-            Select or Drop a PDF File
+            Select or Drop a PDF File to Edit
           </h3>
-          <p className="text-xs text-slate-500 mb-6 max-w-sm mx-auto">
-            Upload any PDF document. Private in-browser processing.
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">
+            Upload your PDF document for secure, high-precision in-browser editing.
           </p>
           <label className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-500/20 cursor-pointer transition-all">
             <Upload className="w-4 h-4" /> Choose PDF File
@@ -437,7 +530,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                 type="text"
                 value={watermarkText}
                 onChange={(e) => setWatermarkText(e.target.value)}
-                placeholder="e.g. CONFIDENTIAL or DRAFT"
+                placeholder="Enter custom watermark text..."
                 className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
               />
             </div>
@@ -463,7 +556,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                 </label>
                 <input
                   type="range"
-                  min={0.1}
+                  min={0.05}
                   max={1.0}
                   step={0.05}
                   value={watermarkOpacity}
@@ -490,7 +583,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
 
             <button
               onClick={handleWatermarkPDF}
-              disabled={isProcessing}
+              disabled={isProcessing || !watermarkText.trim()}
               className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-4"
             >
               {isProcessing ? (
@@ -553,12 +646,12 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
           </div>
         </div>
       ) : (
-        /* Workspace */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        /* Full Workspace */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
-          {/* Left Controls & Annotations Panel */}
-          <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 space-y-6 shadow-sm">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-700">
+          {/* Left Controls & Tools Sidebar (4 Cols) */}
+          <div className="lg:col-span-4 bg-white dark:bg-slate-800 rounded-3xl p-5 border border-slate-200 dark:border-slate-700 space-y-5 shadow-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
               <span className="text-xs font-bold text-slate-900 dark:text-white truncate max-w-[200px]">
                 📄 {file.name}
               </span>
@@ -571,44 +664,91 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
             </div>
 
             {/* Tools Tabs */}
-            <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl text-xs font-bold">
+            <div className="grid grid-cols-4 gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl text-[11px] font-bold">
               <button
                 onClick={() => setActiveTab('text')}
-                className={`py-2 rounded-lg flex flex-col items-center gap-1 transition-all ${
-                  activeTab === 'text' ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow' : 'text-slate-500'
+                className={`py-2 px-1 rounded-xl flex flex-col items-center gap-1 transition-all ${
+                  activeTab === 'text'
+                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
                 <Type className="w-4 h-4" /> Text
               </button>
               <button
+                onClick={() => setActiveTab('whiteout')}
+                className={`py-2 px-1 rounded-xl flex flex-col items-center gap-1 transition-all ${
+                  activeTab === 'whiteout'
+                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+                title="Erase watermark or confidential mark"
+              >
+                <Eraser className="w-4 h-4" /> Erase
+              </button>
+              <button
                 onClick={() => setActiveTab('signature')}
-                className={`py-2 rounded-lg flex flex-col items-center gap-1 transition-all ${
-                  activeTab === 'signature' ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow' : 'text-slate-500'
+                className={`py-2 px-1 rounded-xl flex flex-col items-center gap-1 transition-all ${
+                  activeTab === 'signature'
+                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
                 <PenTool className="w-4 h-4" /> Sign
               </button>
               <button
-                onClick={() => setActiveTab('shape')}
-                className={`py-2 rounded-lg flex flex-col items-center gap-1 transition-all ${
-                  activeTab === 'shape' ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow' : 'text-slate-500'
-                }`}
-              >
-                <Square className="w-4 h-4" /> Shape
-              </button>
-              <button
                 onClick={() => setActiveTab('highlight')}
-                className={`py-2 rounded-lg flex flex-col items-center gap-1 transition-all ${
-                  activeTab === 'highlight' ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow' : 'text-slate-500'
+                className={`py-2 px-1 rounded-xl flex flex-col items-center gap-1 transition-all ${
+                  activeTab === 'highlight'
+                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
                 <Highlighter className="w-4 h-4" /> Highlight
+              </button>
+              <button
+                onClick={() => setActiveTab('redact')}
+                className={`py-2 px-1 rounded-xl flex flex-col items-center gap-1 transition-all ${
+                  activeTab === 'redact'
+                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+                title="Blackout sensitive data"
+              >
+                <EyeOff className="w-4 h-4" /> Redact
+              </button>
+              <button
+                onClick={() => setActiveTab('shape')}
+                className={`py-2 px-1 rounded-xl flex flex-col items-center gap-1 transition-all ${
+                  activeTab === 'shape'
+                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <Square className="w-4 h-4" /> Box
+              </button>
+              <button
+                onClick={() => setActiveTab('image')}
+                className={`py-2 px-1 rounded-xl flex flex-col items-center gap-1 transition-all ${
+                  activeTab === 'image'
+                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <ImageIcon className="w-4 h-4" /> Stamp
+              </button>
+              <button
+                onClick={handleRotatePage}
+                className="py-2 px-1 rounded-xl flex flex-col items-center gap-1 text-slate-500 hover:text-indigo-600 transition-all"
+                title="Rotate page 90°"
+              >
+                <RotateCw className="w-4 h-4" /> Rotate
               </button>
             </div>
 
             {/* Tab Controls */}
             {activeTab === 'text' && (
-              <div className="space-y-4 text-xs">
+              <div className="space-y-3 text-xs">
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Text Content
@@ -622,15 +762,17 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                   />
                 </div>
                 <div className="flex items-center gap-3">
-                  <div>
+                  <div className="flex-1">
                     <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Font Size
+                      Font Size ({fontSize}px)
                     </label>
                     <input
-                      type="number"
+                      type="range"
+                      min={10}
+                      max={48}
                       value={fontSize}
                       onChange={(e) => setFontSize(Number(e.target.value))}
-                      className="w-20 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                      className="w-full accent-indigo-600"
                     />
                   </div>
                   <div>
@@ -641,78 +783,229 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                       type="color"
                       value={textColor}
                       onChange={(e) => setTextColor(e.target.value)}
-                      className="w-12 h-9 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer p-0.5"
+                      className="w-10 h-8 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer p-0.5"
                     />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Bold
+                    </label>
+                    <button
+                      onClick={() => setIsBold(!isBold)}
+                      className={`p-1.5 rounded-lg border text-xs font-bold transition-all ${
+                        isBold
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      <Bold className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
                 <button
                   onClick={addTextAnnotation}
                   disabled={!textInput.trim()}
-                  className="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-500 disabled:opacity-50 transition-all"
+                  className="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-500 disabled:opacity-50 transition-all shadow-md shadow-indigo-600/20"
                 >
-                  + Add Text Overlay
+                  + Place Text on Document
+                </button>
+                <p className="text-[11px] text-slate-400">
+                  Tip: You can also click directly anywhere on the page to place text.
+                </p>
+              </div>
+            )}
+
+            {activeTab === 'whiteout' && (
+              <div className="space-y-3 text-xs">
+                <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/40 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                  <h5 className="font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5 mb-1">
+                    <Eraser className="w-3.5 h-3.5" /> Erase / Whiteout Tool
+                  </h5>
+                  <p className="text-[11px] text-indigo-700 dark:text-indigo-400">
+                    Place an opaque white block over any unwanted confidential watermark, stamp, date, or text to cleanly erase it from your document.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Width ({whiteoutWidth}px)
+                    </label>
+                    <input
+                      type="range"
+                      min={40}
+                      max={400}
+                      value={whiteoutWidth}
+                      onChange={(e) => setWhiteoutWidth(Number(e.target.value))}
+                      className="w-full accent-indigo-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Height ({whiteoutHeight}px)
+                    </label>
+                    <input
+                      type="range"
+                      min={15}
+                      max={200}
+                      value={whiteoutHeight}
+                      onChange={(e) => setWhiteoutHeight(Number(e.target.value))}
+                      className="w-full accent-indigo-600"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={addWhiteoutAnnotation}
+                  className="w-full py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-1.5"
+                >
+                  <Eraser className="w-4 h-4" /> Add Whiteout Eraser Box
+                </button>
+              </div>
+            )}
+
+            {activeTab === 'redact' && (
+              <div className="space-y-3 text-xs">
+                <div className="p-3 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <h5 className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 mb-1">
+                    <EyeOff className="w-3.5 h-3.5" /> Blackout Redaction
+                  </h5>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Place solid black redaction blocks to permanently conceal sensitive numbers, SSNs, or confidential terms.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Width ({redactWidth}px)
+                    </label>
+                    <input
+                      type="range"
+                      min={40}
+                      max={400}
+                      value={redactWidth}
+                      onChange={(e) => setRedactWidth(Number(e.target.value))}
+                      className="w-full accent-indigo-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Height ({redactHeight}px)
+                    </label>
+                    <input
+                      type="range"
+                      min={10}
+                      max={150}
+                      value={redactHeight}
+                      onChange={(e) => setRedactHeight(Number(e.target.value))}
+                      className="w-full accent-indigo-600"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={addRedactAnnotation}
+                  className="w-full py-2.5 rounded-xl bg-black text-white font-bold hover:bg-slate-900 transition-all flex items-center justify-center gap-1.5"
+                >
+                  <EyeOff className="w-4 h-4" /> Add Black Redaction Box
                 </button>
               </div>
             )}
 
             {activeTab === 'signature' && (
-              <div className="space-y-4 text-xs">
-                <p className="text-slate-500">
-                  Draw or generate your signature and embed it into your document.
+              <div className="space-y-3 text-xs">
+                <p className="text-slate-500 dark:text-slate-400">
+                  Draw your electronic signature or initials to sign contracts and legal forms.
                 </p>
                 <button
                   onClick={() => setShowSigModal(true)}
-                  className="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-500 transition-all"
+                  className="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-500 transition-all flex items-center justify-center gap-1.5"
                 >
-                  🖋️ Open Signature Pad
+                  <PenTool className="w-4 h-4" /> Open Signature Pad
                 </button>
               </div>
             )}
 
             {activeTab === 'shape' && (
-              <div className="space-y-4 text-xs">
+              <div className="space-y-3 text-xs">
                 <button
                   onClick={addShapeAnnotation}
-                  className="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-500 transition-all"
+                  className="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-500 transition-all flex items-center justify-center gap-1.5"
                 >
-                  + Add Rectangle Shape Box
+                  <Square className="w-4 h-4" /> Add Rectangle Border Box
                 </button>
               </div>
             )}
 
             {activeTab === 'highlight' && (
-              <div className="space-y-4 text-xs">
+              <div className="space-y-3 text-xs">
                 <button
                   onClick={addHighlightAnnotation}
-                  className="w-full py-2.5 rounded-xl bg-amber-500 text-white font-bold hover:bg-amber-400 transition-all"
+                  className="w-full py-2.5 rounded-xl bg-amber-500 text-white font-bold hover:bg-amber-400 transition-all flex items-center justify-center gap-1.5"
                 >
-                  + Add Yellow Highlight Marker
+                  <Highlighter className="w-4 h-4" /> Add Highlight Marker
                 </button>
               </div>
             )}
 
-            {/* Added Annotations List */}
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
-              <h4 className="font-bold text-xs text-slate-800 dark:text-slate-200 mb-2">
-                Active Elements ({annotations.length})
-              </h4>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
+            {activeTab === 'image' && (
+              <div className="space-y-3 text-xs">
+                <p className="text-slate-500 dark:text-slate-400">
+                  Insert a company logo, stamp graphic, or approval badge onto the page.
+                </p>
+                <label className="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-500 transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                  <ImageIcon className="w-4 h-4" /> Upload Image / Stamp
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageStampUpload}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            )}
+
+            {/* Active Annotations List */}
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-700">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-bold text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                  <Layers className="w-3.5 h-3.5 text-indigo-600" /> Active Elements ({annotations.length})
+                </h4>
+                {annotations.length > 0 && (
+                  <button
+                    onClick={() => setAnnotations([])}
+                    className="text-[10px] text-rose-500 hover:underline font-bold"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                 {annotations.length === 0 ? (
-                  <p className="text-[11px] text-slate-400 italic">No annotations added yet.</p>
+                  <p className="text-[11px] text-slate-400 italic">
+                    No annotations added yet. Select a tool above to begin.
+                  </p>
                 ) : (
                   annotations.map((ann) => (
                     <div
                       key={ann.id}
-                      className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                      className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
                     >
-                      <span className="font-semibold text-slate-700 dark:text-slate-300 capitalize truncate max-w-[150px]">
-                        {ann.type}: {ann.content || ann.shapeType || 'Annotation'}
+                      <span className="font-semibold text-slate-700 dark:text-slate-300 capitalize truncate max-w-[140px]">
+                        {ann.type === 'whiteout'
+                          ? '⬜ Whiteout Eraser'
+                          : ann.type === 'redact'
+                          ? '⬛ Redaction Box'
+                          : `${ann.type}: ${ann.content || ann.shapeType || 'Item'}`}
                       </span>
+                      <span className="text-[10px] text-slate-400">P.{ann.pageNumber}</span>
                       <button
                         onClick={() =>
                           setAnnotations(annotations.filter((a) => a.id !== ann.id))
                         }
-                        className="text-rose-500 hover:text-rose-600"
+                        className="text-rose-500 hover:text-rose-600 p-1"
+                        title="Delete"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -731,7 +1024,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               {isProcessing ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Generating PDF...
+                  Generating Clean PDF...
                 </>
               ) : (
                 <>
@@ -742,12 +1035,12 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
 
           </div>
 
-          {/* Right Live Document Preview Canvas */}
-          <div className="lg:col-span-2 bg-slate-100 dark:bg-slate-900/60 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 flex flex-col items-center relative min-h-[550px]">
+          {/* Right Live Document Preview Canvas (8 Cols) */}
+          <div className="lg:col-span-8 bg-slate-100 dark:bg-slate-900/60 rounded-3xl p-5 border border-slate-200 dark:border-slate-800 flex flex-col items-center relative min-h-[600px]">
             
             {/* Toolbar for Page Navigation & Zoom */}
-            <div className="w-full bg-white dark:bg-slate-800 rounded-2xl p-3 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-wrap items-center justify-between gap-3 mb-4 text-xs font-bold text-slate-700 dark:text-slate-200">
-              <div className="flex items-center gap-2">
+            <div className="w-full bg-white dark:bg-slate-800 rounded-2xl p-2.5 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-wrap items-center justify-between gap-2 mb-3 text-xs font-bold text-slate-700 dark:text-slate-200">
+              <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage <= 1}
@@ -756,8 +1049,8 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="px-2">
-                  Page {currentPage} of {numPages}
+                <span className="px-2 font-mono">
+                  Page {currentPage} / {numPages}
                 </span>
                 <button
                   onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
@@ -769,7 +1062,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                 </button>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setZoomScale((z) => Math.max(0.6, z - 0.2))}
                   className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-indigo-50 text-slate-700 dark:text-slate-200 hover:text-indigo-600 transition-all"
@@ -777,7 +1070,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                 >
                   <ZoomOut className="w-4 h-4" />
                 </button>
-                <span className="w-12 text-center">{Math.round(zoomScale * 100)}%</span>
+                <span className="w-12 text-center font-mono">{Math.round(zoomScale * 100)}%</span>
                 <button
                   onClick={() => setZoomScale((z) => Math.min(2.0, z + 0.2))}
                   className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-indigo-50 text-slate-700 dark:text-slate-200 hover:text-indigo-600 transition-all"
@@ -794,18 +1087,18 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               </div>
 
               <div className="text-[11px] text-slate-400 font-normal hidden sm:block">
-                💡 Drag annotations or click canvas to position text
+                💡 Drag any element to reposition on page
               </div>
             </div>
 
             {/* Document Preview Canvas Container */}
-            <div className="w-full bg-slate-200/60 dark:bg-slate-950/80 rounded-2xl p-4 shadow-inner relative min-h-[480px] flex items-center justify-center overflow-auto border border-slate-200 dark:border-slate-800">
+            <div className="w-full bg-slate-200/60 dark:bg-slate-950/80 rounded-2xl p-4 shadow-inner relative min-h-[520px] flex items-center justify-center overflow-auto border border-slate-200 dark:border-slate-800">
               
               {pdfRendering && (
                 <div className="absolute inset-0 z-20 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xs flex flex-col items-center justify-center space-y-2 rounded-2xl">
                   <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
                   <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Rendering PDF Canvas Page {currentPage}...
+                    Rendering PDF Page {currentPage}...
                   </span>
                 </div>
               )}
@@ -835,22 +1128,6 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                   </object>
                 )}
 
-                {/* Watermark Live Preview Overlay */}
-                {Boolean(watermarkText) && (
-                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden">
-                    <span
-                      style={{
-                        opacity: watermarkOpacity,
-                        fontSize: `${watermarkFontSize}px`,
-                        transform: `rotate(${watermarkAngle}deg)`,
-                      }}
-                      className="font-extrabold text-slate-900 dark:text-white uppercase tracking-widest whitespace-nowrap select-none drop-shadow-md"
-                    >
-                      {watermarkText}
-                    </span>
-                  </div>
-                )}
-
                 {/* Overlaid Interactive Draggable Annotations */}
                 {annotations
                   .filter((ann) => ann.pageNumber === currentPage)
@@ -858,15 +1135,15 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                     <div
                       key={ann.id}
                       onMouseDown={(e) => handleMouseDownAnn(e, ann.id)}
-                      className={`absolute p-1 rounded-lg border-2 border-dashed transition-shadow group cursor-grab active:cursor-grabbing z-10 hover:border-indigo-500 hover:bg-indigo-500/10 ${
+                      className={`absolute p-1 rounded-lg border-2 transition-shadow group cursor-grab active:cursor-grabbing z-10 ${
                         draggingAnnId === ann.id
                           ? 'border-indigo-600 shadow-xl bg-indigo-500/20'
-                          : 'border-transparent'
+                          : 'border-transparent hover:border-indigo-400 hover:bg-indigo-500/10'
                       }`}
                       style={{
                         left: `${ann.x}%`,
                         top: `${ann.y}%`,
-                        transform: 'translate(-10%, -10%)',
+                        transform: 'translate(-5%, -5%)',
                       }}
                     >
                       {/* Delete Handle */}
@@ -875,8 +1152,8 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                           e.stopPropagation();
                           setAnnotations(annotations.filter((a) => a.id !== ann.id));
                         }}
-                        className="absolute -top-2.5 -right-2.5 w-5 h-5 bg-rose-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-rose-700"
-                        title="Delete annotation"
+                        className="absolute -top-2.5 -right-2.5 w-5 h-5 bg-rose-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-rose-700 z-20"
+                        title="Delete element"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -886,27 +1163,82 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                           style={{
                             color: ann.color || '#1e293b',
                             fontSize: `${ann.fontSize || 16}px`,
+                            fontWeight: ann.isBold ? 800 : 600,
                           }}
-                          className="font-extrabold drop-shadow-sm whitespace-nowrap px-1"
+                          className="drop-shadow-sm whitespace-nowrap px-1 block"
                         >
                           {ann.content}
                         </span>
+                      )}
+
+                      {ann.type === 'whiteout' && (
+                        <div
+                          style={{
+                            width: `${ann.width || 120}px`,
+                            height: `${ann.height || 36}px`,
+                          }}
+                          className="bg-white border border-slate-300 rounded shadow-xs flex items-center justify-center"
+                        >
+                          <span className="text-[9px] text-slate-400 font-mono select-none">
+                            [Whiteout Eraser]
+                          </span>
+                        </div>
+                      )}
+
+                      {ann.type === 'redact' && (
+                        <div
+                          style={{
+                            width: `${ann.width || 120}px`,
+                            height: `${ann.height || 28}px`,
+                          }}
+                          className="bg-black rounded shadow-xs"
+                        />
                       )}
 
                       {ann.type === 'signature' && ann.content && (
                         <img
                           src={ann.content}
                           alt="Signature"
-                          className="h-14 object-contain pointer-events-none"
+                          style={{
+                            width: `${ann.width || 140}px`,
+                            height: `${ann.height || 70}px`,
+                          }}
+                          className="object-contain pointer-events-none"
+                        />
+                      )}
+
+                      {ann.type === 'image' && ann.content && (
+                        <img
+                          src={ann.content}
+                          alt="Stamp"
+                          style={{
+                            width: `${ann.width || 140}px`,
+                            height: `${ann.height || 70}px`,
+                          }}
+                          className="object-contain pointer-events-none rounded"
                         />
                       )}
 
                       {ann.type === 'shape' && (
-                        <div className="w-32 h-16 border-2 border-indigo-600 rounded bg-indigo-500/10 pointer-events-none" />
+                        <div
+                          style={{
+                            width: `${ann.width || 130}px`,
+                            height: `${ann.height || 65}px`,
+                            borderColor: ann.color || '#3b82f6',
+                            borderWidth: `${ann.strokeWidth || 2}px`,
+                          }}
+                          className="border-solid rounded bg-indigo-500/10 pointer-events-none"
+                        />
                       )}
 
                       {ann.type === 'highlight' && (
-                        <div className="w-40 h-6 bg-amber-300/60 rounded pointer-events-none" />
+                        <div
+                          style={{
+                            width: `${ann.width || 160}px`,
+                            height: `${ann.height || 22}px`,
+                          }}
+                          className="bg-amber-300/60 rounded pointer-events-none"
+                        />
                       )}
                     </div>
                   ))}
@@ -949,21 +1281,21 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                 onMouseMove={drawSig}
                 onMouseUp={stopSigDraw}
                 onMouseLeave={stopSigDraw}
-                className="w-full cursor-crosshair touch-none"
+                className="w-full cursor-crosshair touch-none bg-white dark:bg-slate-900"
               />
             </div>
 
             <div className="flex items-center justify-between pt-2">
               <button
                 onClick={clearSigCanvas}
-                className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-600 font-semibold"
+                className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 font-semibold hover:bg-slate-100 dark:hover:bg-slate-700"
               >
                 Clear Pad
               </button>
               <button
                 onClick={addSignatureAnnotation}
                 disabled={!sigDataUrl}
-                className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs disabled:opacity-50"
+                className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs disabled:opacity-50 hover:bg-indigo-500 shadow-md shadow-indigo-600/20"
               >
                 Insert Signature
               </button>

@@ -211,6 +211,18 @@ export async function compressPDF(
   });
 }
 
+// Helper to convert hex color to RGB (0-1)
+function hexToRgb01(hex: string = '#000000'): { r: number; g: number; b: number } {
+  const cleanHex = hex.replace('#', '');
+  if (cleanHex.length === 6) {
+    const r = parseInt(cleanHex.substring(0, 2), 16) / 255;
+    const g = parseInt(cleanHex.substring(2, 4), 16) / 255;
+    const b = parseInt(cleanHex.substring(4, 6), 16) / 255;
+    return { r: isNaN(r) ? 0 : r, g: isNaN(g) ? 0 : g, b: isNaN(b) ? 0 : b };
+  }
+  return { r: 0.1, g: 0.1, b: 0.1 };
+}
+
 // EDIT PDF WITH ANNOTATIONS
 export async function applyPDFAnnotations(
   file: File,
@@ -219,6 +231,7 @@ export async function applyPDFAnnotations(
   const arrayBuffer = await readFileAsArrayBuffer(file);
   const pdfDoc = await PDFDocument.load(arrayBuffer);
   const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const pages = pdfDoc.getPages();
 
   for (const ann of annotations) {
@@ -226,19 +239,48 @@ export async function applyPDFAnnotations(
     const page = pages[ann.pageNumber - 1];
     const { width, height } = page.getSize();
 
-    // Map percentage / coordinate to PDF page units
+    // Map percentage coordinates (0-100) to PDF page points
     const pdfX = (ann.x / 100) * width;
     const pdfY = height - ((ann.y / 100) * height); // Invert Y axis for PDF coordinate space
 
     if (ann.type === 'text' && ann.content) {
+      const colorRgb = hexToRgb01(ann.color || '#1e293b');
+      const font = ann.isBold ? helveticaBoldFont : helveticaFont;
       page.drawText(ann.content, {
         x: pdfX,
         y: pdfY,
         size: ann.fontSize || 16,
-        font: helveticaFont,
-        color: rgb(0.1, 0.1, 0.1),
+        font: font,
+        color: rgb(colorRgb.r, colorRgb.g, colorRgb.b),
+        opacity: ann.opacity ?? 1,
       });
-    } else if (ann.type === 'signature' || ann.type === 'image') {
+    } else if (ann.type === 'whiteout') {
+      // Solid white rectangle to erase/cover unwanted text, watermark, or confidential marks
+      const w = ann.width || 120;
+      const h = ann.height || 40;
+      page.drawRectangle({
+        x: pdfX,
+        y: pdfY - h,
+        width: w,
+        height: h,
+        color: rgb(1, 1, 1),
+        borderColor: rgb(1, 1, 1),
+        borderWidth: 0,
+        opacity: 1,
+      });
+    } else if (ann.type === 'redact') {
+      // Solid black redaction box to conceal sensitive information
+      const w = ann.width || 120;
+      const h = ann.height || 40;
+      page.drawRectangle({
+        x: pdfX,
+        y: pdfY - h,
+        width: w,
+        height: h,
+        color: rgb(0, 0, 0),
+        opacity: 1,
+      });
+    } else if (ann.type === 'signature' || ann.type === 'image' || ann.type === 'stamp') {
       if (ann.content && ann.content.startsWith('data:image')) {
         try {
           const imageBytes = await fetch(ann.content).then((res) => res.arrayBuffer());
@@ -254,32 +296,39 @@ export async function applyPDFAnnotations(
             y: pdfY - h,
             width: w,
             height: h,
+            opacity: ann.opacity ?? 1,
           });
         } catch (e) {
           console.error('Failed embedding annotation image:', e);
         }
       }
-    } else if (ann.type === 'shape' && ann.shapeType === 'rectangle') {
+    } else if (ann.type === 'shape') {
       const w = ann.width || 100;
       const h = ann.height || 50;
-      page.drawRectangle({
-        x: pdfX,
-        y: pdfY - h,
-        width: w,
-        height: h,
-        borderColor: rgb(0.1, 0.5, 0.9),
-        borderWidth: ann.strokeWidth || 2,
-      });
+      const strokeRgb = hexToRgb01(ann.color || '#3b82f6');
+
+      if (ann.shapeType === 'rectangle') {
+        page.drawRectangle({
+          x: pdfX,
+          y: pdfY - h,
+          width: w,
+          height: h,
+          borderColor: rgb(strokeRgb.r, strokeRgb.g, strokeRgb.b),
+          borderWidth: ann.strokeWidth || 2,
+          color: ann.fillColor ? rgb(0.9, 0.95, 1) : undefined,
+          opacity: ann.opacity ?? 1,
+        });
+      }
     } else if (ann.type === 'highlight') {
-      const w = ann.width || 120;
-      const h = ann.height || 20;
+      const w = ann.width || 140;
+      const h = ann.height || 22;
       page.drawRectangle({
         x: pdfX,
         y: pdfY - h,
         width: w,
         height: h,
-        color: rgb(1, 0.9, 0.2),
-        opacity: 0.4,
+        color: rgb(1, 0.88, 0.2),
+        opacity: 0.45,
       });
     }
   }
