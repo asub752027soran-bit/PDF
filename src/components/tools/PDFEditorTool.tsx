@@ -72,6 +72,7 @@ if (typeof window !== 'undefined') {
 interface PDFEditorToolProps {
   mode?: 'edit' | 'watermark' | 'lock' | 'unlock';
   onBack: () => void;
+  initialFile?: File | null;
 }
 
 type MainTool =
@@ -84,9 +85,9 @@ type MainTool =
   | 'eraser'
   | 'annotate'
   | 'image'
-  | 'ellipse';
+  | 'shape';
 
-export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onBack }) => {
+export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onBack, initialFile }) => {
   const [file, setFile] = useState<File | null>(null);
   const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);
 
@@ -130,9 +131,14 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentDrawPoints, setCurrentDrawPoints] = useState<{ x: number; y: number }[]>([]);
 
+  // Eraser Tool State
+  const [eraserSize, setEraserSize] = useState<'small' | 'medium' | 'large' | 'block'>('medium');
+
   // Shapes State
+  const [selectedShape, setSelectedShape] = useState<'rectangle' | 'circle' | 'line' | 'arrow'>('rectangle');
   const [shapeStrokeColor, setShapeStrokeColor] = useState('#2563eb');
-  const [shapeFillColor, setShapeFillColor] = useState('');
+  const [shapeFillColor, setShapeFillColor] = useState('transparent');
+  const [shapeStrokeWidth, setShapeStrokeWidth] = useState(2);
 
   // Signature Modal State
   const [showSigModal, setShowSigModal] = useState(false);
@@ -151,6 +157,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
   const [numPages, setNumPages] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
   const [zoomScale, setZoomScale] = useState(1.25);
+  const [renderedScale, setRenderedScale] = useState(1.25);
   const [pageRotation, setPageRotation] = useState(0);
   const [thumbnailUrls, setThumbnailUrls] = useState<string[]>([]);
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -262,6 +269,13 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
     }
   };
 
+  // Auto load file if passed as initialFile prop
+  useEffect(() => {
+    if (initialFile) {
+      handleFileUpload(initialFile);
+    }
+  }, [initialFile]);
+
   // Generate real page thumbnails
   const generateThumbnails = async (pdfDoc: any) => {
     const thumbs: string[] = [];
@@ -304,8 +318,10 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
         (containerWidth / baseViewport.width) * zoomScale,
         3.0
       );
+      const actualScale = Math.max(0.6, calculatedScale);
+      setRenderedScale(actualScale);
 
-      const viewport = page.getViewport({ scale: Math.max(0.6, calculatedScale), rotation: pageRotation });
+      const viewport = page.getViewport({ scale: actualScale, rotation: pageRotation });
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
@@ -358,7 +374,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
           for (const it of rawItems) {
             const tx = it.transform[4];
             const ty = it.transform[5];
-            const fHeight = Math.sqrt(it.transform[0] * it.transform[0] + it.transform[1] * it.transform[1]);
+            const fHeight = Math.hypot(it.transform[2], it.transform[3]) || Math.hypot(it.transform[0], it.transform[1]) || it.height || 13;
             const itemW = it.width || (it.str.length * fHeight * 0.55);
             const itemH = it.height || fHeight;
 
@@ -373,6 +389,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               last.str += addSpace + it.str;
               last.width = (tx + itemW) - last.tx;
               last.height = Math.max(last.height, itemH);
+              last.fontSize = Math.max(last.fontSize, fHeight);
             } else {
               lineGroups.push({
                 str: it.str,
@@ -396,57 +413,78 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
             const fontStyleObj = textContent.styles ? (textContent.styles as any)[lg.fontName] : null;
             const styleFamily = (fontStyleObj?.fontFamily || '').toLowerCase();
             const rawFont = (lg.fontName || '').toLowerCase();
+            const combinedFont = `${rawFont} ${styleFamily}`;
 
             const isSerif =
               styleFamily.includes('serif') ||
-              styleFamily.includes('times') ||
-              styleFamily.includes('roman') ||
-              styleFamily.includes('georgia') ||
-              styleFamily.includes('garamond') ||
-              styleFamily.includes('cambria') ||
-              styleFamily.includes('palatino') ||
-              rawFont.includes('times') ||
-              rawFont.includes('serif') ||
-              rawFont.includes('roman') ||
-              rawFont.includes('georgia') ||
-              rawFont.includes('garamond') ||
-              rawFont.includes('cambria') ||
-              rawFont.includes('palatino');
+              combinedFont.includes('times') ||
+              combinedFont.includes('roman') ||
+              combinedFont.includes('serif') ||
+              combinedFont.includes('georgia') ||
+              combinedFont.includes('garamond') ||
+              combinedFont.includes('cambria') ||
+              combinedFont.includes('palatino') ||
+              combinedFont.includes('baskerville') ||
+              combinedFont.includes('century') ||
+              combinedFont.includes('bookman') ||
+              combinedFont.includes('bookantiqua') ||
+              combinedFont.includes('didot') ||
+              combinedFont.includes('bodoni') ||
+              combinedFont.includes('minion') ||
+              combinedFont.includes('charter') ||
+              combinedFont.includes('liberationserif') ||
+              combinedFont.includes('nimbusrom') ||
+              combinedFont.includes('nimbusroman') ||
+              combinedFont.includes('dejavuserif') ||
+              combinedFont.includes('pt serif') ||
+              combinedFont.includes('lora') ||
+              combinedFont.includes('merriweather') ||
+              combinedFont.includes('stsong') ||
+              combinedFont.includes('mincho') ||
+              combinedFont.includes('batang') ||
+              combinedFont.includes('tnr');
 
             const isMono =
               styleFamily.includes('mono') ||
-              styleFamily.includes('courier') ||
-              styleFamily.includes('code') ||
-              styleFamily.includes('consolas') ||
-              rawFont.includes('courier') ||
-              rawFont.includes('mono') ||
-              rawFont.includes('code') ||
-              rawFont.includes('consolas');
+              combinedFont.includes('courier') ||
+              combinedFont.includes('mono') ||
+              combinedFont.includes('code') ||
+              combinedFont.includes('consolas') ||
+              combinedFont.includes('menlo') ||
+              combinedFont.includes('typewriter') ||
+              combinedFont.includes('sourcecodepro') ||
+              combinedFont.includes('firacode') ||
+              combinedFont.includes('cascadia') ||
+              combinedFont.includes('liberationmono') ||
+              combinedFont.includes('dejavusansmono');
 
             const isBold =
-              rawFont.includes('bold') ||
-              rawFont.includes('black') ||
-              rawFont.includes('heavy') ||
-              rawFont.includes('700') ||
-              rawFont.includes('800') ||
-              rawFont.includes('900') ||
-              styleFamily.includes('bold');
+              combinedFont.includes('bold') ||
+              combinedFont.includes('black') ||
+              combinedFont.includes('heavy') ||
+              combinedFont.includes('semibold') ||
+              combinedFont.includes('demi') ||
+              combinedFont.includes('-b') ||
+              combinedFont.endsWith('b') ||
+              combinedFont.includes('700') ||
+              combinedFont.includes('800') ||
+              combinedFont.includes('900');
 
             const isItalic =
-              rawFont.includes('italic') ||
-              rawFont.includes('oblique') ||
-              rawFont.includes('slanted') ||
-              styleFamily.includes('italic') ||
-              styleFamily.includes('oblique');
+              combinedFont.includes('italic') ||
+              combinedFont.includes('oblique') ||
+              combinedFont.includes('slanted') ||
+              combinedFont.includes('-i') ||
+              combinedFont.endsWith('i');
 
-            let cssFontFamily = 'Helvetica, Arial, -apple-system, BlinkMacSystemFont, sans-serif';
+            let cssFontFamily = 'Helvetica, Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
             let pdfFontType = 'sans-serif';
 
             if (isSerif) {
-              cssFontFamily = '"Times New Roman", Times, Georgia, "Liberation Serif", serif';
+              cssFontFamily = '"Times New Roman", Times, "Liberation Serif", Georgia, "DejaVu Serif", serif';
               pdfFontType = 'serif';
             } else if (isMono) {
-              cssFontFamily = '"Courier New", Courier, Menlo, Consolas, monospace';
+              cssFontFamily = '"Courier New", Courier, Menlo, Consolas, "Liberation Mono", monospace';
               pdfFontType = 'monospace';
             } else if (fontStyleObj?.fontFamily && fontStyleObj.fontFamily !== 'sans-serif') {
               cssFontFamily = `"${fontStyleObj.fontFamily}", Helvetica, Arial, sans-serif`;
@@ -461,7 +499,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               y: Math.max(0, yPct),
               width: Math.max(1, widthPct),
               height: Math.max(1, heightPct),
-              fontSize: Math.round(lg.fontSize),
+              fontSize: Math.round(lg.fontSize * 10) / 10,
               fontFamily: cssFontFamily,
               fontName: lg.fontName,
               pdfFontType,
@@ -602,16 +640,21 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
     setShowSearchModal(false);
   };
 
-  // Canvas Click Handler (For Adding New Text, Shapes, Highlighting)
+  // Canvas Coordinate Helper
+  const getCanvasCoords = (clientX: number, clientY: number) => {
+    const canvas = drawCanvasRef.current || pdfCanvasRef.current;
+    if (!canvas) return { xPct: 0, yPct: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const xPct = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+    const yPct = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
+    return { xPct, yPct };
+  };
+
+  // Canvas Click Handler (For Adding New Text, Shapes, Whiteout)
   const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!pdfCanvasRef.current || draggingAnnId || resizingAnnId || editingTextId) return;
+    if (!pdfCanvasRef.current || draggingAnnId || resizingAnnId || editingTextId || isDrawing) return;
 
-    const rect = pdfCanvasRef.current.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-
-    const xPct = (clickX / rect.width) * 100;
-    const yPct = (clickY / rect.height) * 100;
+    const { xPct, yPct } = getCanvasCoords(e.clientX, e.clientY);
 
     if (activeTool === 'add_text') {
       const newAnn: PDFAnnotation = {
@@ -634,33 +677,51 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       pushHistory(updated, extractedPageTexts);
       setActiveTool('select');
     } else if (activeTool === 'eraser') {
-      // Create a whiteout box to erase any section
+      // Create a whiteout eraser box to erase any section
+      const dimMap = {
+        small: { w: 10, h: 3 },
+        medium: { w: 18, h: 4.5 },
+        large: { w: 30, h: 8 },
+        block: { w: 40, h: 18 },
+      };
+      const dim = dimMap[eraserSize] || dimMap.medium;
+
       const newAnn: PDFAnnotation = {
         id: `whiteout_${Date.now()}`,
         pageNumber: currentPage,
         type: 'whiteout',
-        x: Math.max(1, Math.min(90, xPct)),
-        y: Math.max(1, Math.min(90, yPct)),
-        width: 15,
-        height: 4,
+        x: Math.max(0, Math.min(100 - dim.w, xPct - dim.w / 2)),
+        y: Math.max(0, Math.min(100 - dim.h, yPct - dim.h / 2)),
+        width: dim.w,
+        height: dim.h,
       };
       const updated = [...annotations, newAnn];
       setAnnotations(updated);
       setSelectedAnnId(newAnn.id);
       pushHistory(updated, extractedPageTexts);
-      setActiveTool('select');
-    } else if (activeTool === 'ellipse') {
+    } else if (activeTool === 'shape') {
+      let width = 20;
+      let height = 12;
+      if (selectedShape === 'circle') {
+        width = 16;
+        height = 16;
+      } else if (selectedShape === 'line' || selectedShape === 'arrow') {
+        width = 25;
+        height = 8;
+      }
+
       const newAnn: PDFAnnotation = {
         id: `shape_${Date.now()}`,
         pageNumber: currentPage,
         type: 'shape',
-        shapeType: 'circle',
-        x: Math.max(1, Math.min(85, xPct)),
-        y: Math.max(1, Math.min(85, yPct)),
-        width: 12,
-        height: 12,
+        shapeType: selectedShape,
+        x: Math.max(1, Math.min(100 - width, xPct - width / 2)),
+        y: Math.max(1, Math.min(100 - height, yPct - height / 2)),
+        width,
+        height,
         color: shapeStrokeColor,
-        fillColor: shapeFillColor,
+        fillColor: shapeFillColor === 'transparent' ? '' : shapeFillColor,
+        strokeWidth: shapeStrokeWidth,
       };
       const updated = [...annotations, newAnn];
       setAnnotations(updated);
@@ -672,9 +733,9 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
         id: `note_${Date.now()}`,
         pageNumber: currentPage,
         type: 'text',
-        content: 'Sticky Note: ',
-        x: Math.max(1, Math.min(90, xPct)),
-        y: Math.max(1, Math.min(90, yPct)),
+        content: 'Sticky Note: Click to edit comment...',
+        x: Math.max(1, Math.min(80, xPct)),
+        y: Math.max(1, Math.min(85, yPct)),
         fontSize: 12,
         fontFamily: 'Helvetica',
         color: '#854d0e',
@@ -688,29 +749,23 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
     }
   };
 
-  // Freehand Pencil & Highlighter Drawing
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Freehand Pencil & Highlighter Drawing Handlers (Mouse & Touch)
+  const handlePointerDown = (clientX: number, clientY: number) => {
     if (activeTool !== 'pencil' && activeTool !== 'highlight') return;
     const canvas = drawCanvasRef.current;
     if (!canvas) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
-    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
-
+    const { xPct, yPct } = getCanvasCoords(clientX, clientY);
     setIsDrawing(true);
     setCurrentDrawPoints([{ x: xPct, y: yPct }]);
   };
 
-  const drawMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handlePointerMove = (clientX: number, clientY: number) => {
     if (!isDrawing || (activeTool !== 'pencil' && activeTool !== 'highlight')) return;
     const canvas = drawCanvasRef.current;
     if (!canvas) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
-    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
-
+    const { xPct, yPct } = getCanvasCoords(clientX, clientY);
     const nextPoints = [...currentDrawPoints, { x: xPct, y: yPct }];
     setCurrentDrawPoints(nextPoints);
 
@@ -720,7 +775,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.beginPath();
       ctx.strokeStyle = activeTool === 'highlight' ? highlightColor : drawColor;
-      ctx.lineWidth = activeTool === 'highlight' ? strokeWidth * 3.5 : strokeWidth;
+      ctx.lineWidth = activeTool === 'highlight' ? strokeWidth * 4 : strokeWidth * 1.5;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.globalAlpha = activeTool === 'highlight' ? highlightOpacity : 1.0;
@@ -736,7 +791,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
     }
   };
 
-  const endDrawing = () => {
+  const handlePointerUp = () => {
     if (!isDrawing) return;
     setIsDrawing(false);
 
@@ -749,7 +804,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
         y: 0,
         points: currentDrawPoints,
         color: activeTool === 'highlight' ? highlightColor : drawColor,
-        strokeWidth: activeTool === 'highlight' ? strokeWidth * 3.5 : strokeWidth,
+        strokeWidth: activeTool === 'highlight' ? strokeWidth * 4 : strokeWidth * 1.5,
         opacity: activeTool === 'highlight' ? highlightOpacity : 1.0,
       };
       const updated = [...annotations, newAnn];
@@ -765,9 +820,33 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
     }
   };
 
+  // Global pointer release listener so drawing stroke never gets stuck
+  useEffect(() => {
+    const onWindowPointerUp = () => {
+      if (isDrawing) {
+        handlePointerUp();
+      }
+      if (draggingAnnId) {
+        setDraggingAnnId(null);
+        pushHistory(annotations, extractedPageTexts);
+      }
+    };
+
+    window.addEventListener('mouseup', onWindowPointerUp);
+    window.addEventListener('touchend', onWindowPointerUp);
+    return () => {
+      window.removeEventListener('mouseup', onWindowPointerUp);
+      window.removeEventListener('touchend', onWindowPointerUp);
+    };
+  }, [isDrawing, currentDrawPoints, draggingAnnId, annotations, extractedPageTexts, activeTool, currentPage, highlightColor, drawColor, strokeWidth, highlightOpacity]);
+
   // Annotation dragging
   const handleStartDrag = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (activeTool === 'eraser') {
+      deleteAnnotation(id);
+      return;
+    }
     setSelectedAnnId(id);
     setDraggingAnnId(id);
 
@@ -812,6 +891,14 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
     const updated = annotations.filter((a) => a.id !== id);
     setAnnotations(updated);
     if (selectedAnnId === id) setSelectedAnnId(null);
+    pushHistory(updated, extractedPageTexts);
+  };
+
+  // Clear all annotations on active page
+  const clearCurrentPageAnnotations = () => {
+    const updated = annotations.filter((a) => a.pageNumber !== currentPage);
+    setAnnotations(updated);
+    setSelectedAnnId(null);
     pushHistory(updated, extractedPageTexts);
   };
 
@@ -1171,10 +1258,10 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               onClick={() => setActiveTool('pencil')}
               className={`flex flex-col items-center justify-center px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
                 activeTool === 'pencil'
-                  ? 'bg-blue-50 text-blue-600 font-bold border border-blue-200'
+                  ? 'bg-blue-600 text-white font-bold shadow-sm shadow-blue-600/25'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
-              title="Freehand Pencil Drawing"
+              title="Freehand Pencil Drawing (Draw lines, marks, or annotations)"
             >
               <Sparkles className="w-4 h-4" />
               <span className="text-[10px] mt-0.5">Pencil</span>
@@ -1185,12 +1272,12 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               onClick={() => setActiveTool('highlight')}
               className={`flex flex-col items-center justify-center px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
                 activeTool === 'highlight'
-                  ? 'bg-blue-50 text-blue-600 font-bold border border-blue-200'
+                  ? 'bg-amber-500 text-white font-bold shadow-sm shadow-amber-500/25'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
-              title="Highlight Marker"
+              title="Freehand Highlight Marker"
             >
-              <Highlighter className="w-4 h-4 text-amber-500" />
+              <Highlighter className="w-4 h-4" />
               <span className="text-[10px] mt-0.5">Highlight</span>
             </button>
 
@@ -1199,13 +1286,27 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               onClick={() => setActiveTool('eraser')}
               className={`flex flex-col items-center justify-center px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
                 activeTool === 'eraser'
-                  ? 'bg-blue-50 text-blue-600 font-bold border border-blue-200'
+                  ? 'bg-rose-600 text-white font-bold shadow-sm shadow-rose-600/25'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
-              title="Whiteout Eraser"
+              title="Erase (Click annotations/words to delete, or click canvas to whiteout)"
             >
               <Eraser className="w-4 h-4" />
               <span className="text-[10px] mt-0.5">Eraser</span>
+            </button>
+
+            {/* Shapes */}
+            <button
+              onClick={() => setActiveTool('shape')}
+              className={`flex flex-col items-center justify-center px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
+                activeTool === 'shape'
+                  ? 'bg-blue-50 text-blue-600 font-bold border border-blue-200'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+              title="Insert Shapes (Rectangle, Circle, Arrow, Line)"
+            >
+              <Square className="w-4 h-4" />
+              <span className="text-[10px] mt-0.5">Shapes</span>
             </button>
 
             {/* Annotate */}
@@ -1228,20 +1329,6 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               <span className="text-[10px] mt-0.5">Image</span>
               <input type="file" accept="image/*" onChange={handleImageAnnotationUpload} className="hidden" />
             </label>
-
-            {/* Ellipse / Shape */}
-            <button
-              onClick={() => setActiveTool('ellipse')}
-              className={`flex flex-col items-center justify-center px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
-                activeTool === 'ellipse'
-                  ? 'bg-blue-50 text-blue-600 font-bold border border-blue-200'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-              title="Draw Circle / Ellipse"
-            >
-              <Circle className="w-4 h-4" />
-              <span className="text-[10px] mt-0.5">Ellipse</span>
-            </button>
           </div>
         )}
 
@@ -1336,7 +1423,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
 
       {/* CONTEXTUAL TOOLBAR FOR ACTIVE TOOL OPTIONS */}
       {file && (
-        <div className="h-10 bg-slate-50 border-b border-slate-200 flex items-center px-4 overflow-x-auto gap-4 text-xs shrink-0 z-20 text-slate-700">
+        <div className="min-h-10 bg-slate-50 border-b border-slate-200 flex items-center px-4 overflow-x-auto gap-4 text-xs shrink-0 z-20 text-slate-700 py-1.5">
           
           {activeTool === 'edit_text' && (
             <div className="flex items-center gap-2 text-xs">
@@ -1398,29 +1485,73 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                   <Italic className="w-3 h-3" />
                 </button>
               </div>
+              <span className="text-[11px] text-slate-500 ml-1">Click anywhere on document to place text box.</span>
             </div>
           )}
 
           {activeTool === 'highlight' && (
-            <div className="flex items-center gap-2">
-              <span className="text-slate-500 text-[11px]">Color:</span>
-              {['#FFE500', '#70E000', '#00E5FF', '#FF4081', '#C77DFF'].map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setHighlightColor(c)}
-                  className={`w-5 h-5 rounded-full border-2 transition-transform ${
-                    highlightColor === c ? 'scale-110 border-slate-800' : 'border-transparent'
-                  }`}
-                  style={{ backgroundColor: c }}
+            <div className="flex items-center gap-3">
+              <span className="font-semibold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded text-[11px] flex items-center gap-1">
+                <Highlighter className="w-3 h-3" />
+                Highlight Tool
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500 text-[11px]">Color:</span>
+                {['#FFE500', '#70E000', '#00E5FF', '#FF4081', '#C77DFF', '#FFA500'].map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setHighlightColor(c)}
+                    className={`w-4 h-4 rounded-full border-2 transition-transform ${
+                      highlightColor === c ? 'scale-125 border-slate-900 ring-1 ring-amber-400' : 'border-transparent hover:scale-110'
+                    }`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5 border-l border-slate-200 pl-3">
+                <span className="text-[11px] text-slate-500">Thickness:</span>
+                <input
+                  type="range"
+                  min="2"
+                  max="12"
+                  value={strokeWidth}
+                  onChange={(e) => setStrokeWidth(Number(e.target.value))}
+                  className="w-16 accent-amber-500"
                 />
-              ))}
+                <span className="text-[10px] text-slate-500 font-bold">{strokeWidth * 4}px</span>
+              </div>
+              <span className="text-slate-400 text-[10px] hidden lg:inline">Draw freehand over text or images to highlight.</span>
             </div>
           )}
 
           {activeTool === 'pencil' && (
             <div className="flex items-center gap-3">
+              <span className="font-semibold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded text-[11px] flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                Pencil Tool
+              </span>
               <div className="flex items-center gap-1.5">
-                <span className="text-[11px] text-slate-500">Thickness:</span>
+                <span className="text-[11px] text-slate-500">Color:</span>
+                {['#1e293b', '#2563eb', '#dc2626', '#16a34a', '#9333ea', '#ea580c'].map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setDrawColor(c)}
+                    className={`w-4 h-4 rounded-full border-2 transition-transform ${
+                      drawColor === c ? 'scale-125 border-slate-900 ring-1 ring-blue-400' : 'border-transparent hover:scale-110'
+                    }`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+                <input
+                  type="color"
+                  value={drawColor}
+                  onChange={(e) => setDrawColor(e.target.value)}
+                  className="w-5 h-5 rounded border border-slate-300 cursor-pointer ml-1"
+                  title="Custom Color"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 border-l border-slate-200 pl-3">
+                <span className="text-[11px] text-slate-500">Line Thickness:</span>
                 <input
                   type="range"
                   min="1"
@@ -1429,26 +1560,127 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                   onChange={(e) => setStrokeWidth(Number(e.target.value))}
                   className="w-20 accent-blue-600"
                 />
+                <span className="text-[10px] text-slate-500 font-bold">{strokeWidth}px</span>
               </div>
-              <input
-                type="color"
-                value={drawColor}
-                onChange={(e) => setDrawColor(e.target.value)}
-                className="w-5 h-5 rounded border border-slate-300 cursor-pointer"
-                title="Pen Color"
-              />
+              <span className="text-slate-400 text-[10px] hidden lg:inline">Draw freehand lines, annotations, or checks.</span>
             </div>
           )}
 
-          {activeTool === 'ellipse' && (
+          {activeTool === 'eraser' && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="font-semibold text-rose-700 bg-rose-100 px-2 py-0.5 rounded text-[11px] flex items-center gap-1">
+                <Eraser className="w-3 h-3" />
+                Smart Eraser & Whiteout
+              </span>
+              <span className="text-slate-600 text-[11px]">
+                Click any line/item to delete, or click on canvas to apply whiteout patch:
+              </span>
+              <div className="flex items-center bg-white border border-slate-300 rounded p-0.5 gap-1">
+                {(['small', 'medium', 'large', 'block'] as const).map((sz) => (
+                  <button
+                    key={sz}
+                    onClick={() => setEraserSize(sz)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold capitalize transition-colors ${
+                      eraserSize === sz ? 'bg-rose-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {sz}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={clearCurrentPageAnnotations}
+                className="px-2 py-0.5 bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 rounded text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                title="Remove all drawings & annotations on this page"
+              >
+                <Trash2 className="w-3 h-3" />
+                Clear Page Drawings
+              </button>
+            </div>
+          )}
+
+          {activeTool === 'shape' && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded text-[11px] flex items-center gap-1">
+                <Square className="w-3 h-3" />
+                Shape Tool
+              </span>
+              <div className="flex items-center bg-white border border-slate-300 rounded p-0.5 gap-1">
+                <button
+                  onClick={() => setSelectedShape('rectangle')}
+                  className={`px-2 py-0.5 rounded text-[11px] font-bold flex items-center gap-1 ${
+                    selectedShape === 'rectangle' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Square className="w-3 h-3" />
+                  Rectangle
+                </button>
+                <button
+                  onClick={() => setSelectedShape('circle')}
+                  className={`px-2 py-0.5 rounded text-[11px] font-bold flex items-center gap-1 ${
+                    selectedShape === 'circle' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Circle className="w-3 h-3" />
+                  Circle
+                </button>
+                <button
+                  onClick={() => setSelectedShape('line')}
+                  className={`px-2 py-0.5 rounded text-[11px] font-bold flex items-center gap-1 ${
+                    selectedShape === 'line' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Minus className="w-3 h-3" />
+                  Line
+                </button>
+                <button
+                  onClick={() => setSelectedShape('arrow')}
+                  className={`px-2 py-0.5 rounded text-[11px] font-bold flex items-center gap-1 ${
+                    selectedShape === 'arrow' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <ArrowRight className="w-3 h-3" />
+                  Arrow
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5 border-l border-slate-200 pl-3">
+                <span className="text-slate-500 text-[11px]">Border Color:</span>
+                <input
+                  type="color"
+                  value={shapeStrokeColor}
+                  onChange={(e) => setShapeStrokeColor(e.target.value)}
+                  className="w-5 h-5 rounded border border-slate-300 cursor-pointer"
+                />
+              </div>
+
+              {(selectedShape === 'rectangle' || selectedShape === 'circle') && (
+                <div className="flex items-center gap-1.5 border-l border-slate-200 pl-3">
+                  <span className="text-slate-500 text-[11px]">Fill:</span>
+                  <select
+                    value={shapeFillColor}
+                    onChange={(e) => setShapeFillColor(e.target.value)}
+                    className="px-2 py-0.5 bg-white border border-slate-300 rounded text-xs outline-none"
+                  >
+                    <option value="transparent">None (Transparent)</option>
+                    <option value="#ffffff">White Fill</option>
+                    <option value="#dbeafe">Light Blue</option>
+                    <option value="#fef3c7">Light Yellow</option>
+                    <option value="#fee2e2">Light Red</option>
+                  </select>
+                </div>
+              )}
+              <span className="text-[11px] text-slate-500">Click anywhere on document to place shape.</span>
+            </div>
+          )}
+
+          {activeTool === 'annotate' && (
             <div className="flex items-center gap-2">
-              <span className="text-slate-500 text-[11px]">Border Color:</span>
-              <input
-                type="color"
-                value={shapeStrokeColor}
-                onChange={(e) => setShapeStrokeColor(e.target.value)}
-                className="w-5 h-5 rounded border border-slate-300 cursor-pointer"
-              />
+              <span className="font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded text-[11px] flex items-center gap-1">
+                <MessageSquare className="w-3 h-3" />
+                Sticky Note Tool
+              </span>
+              <span className="text-slate-500 text-[11px]">Click anywhere on document to place a comment note.</span>
             </div>
           )}
         </div>
@@ -1569,7 +1801,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               {/* PDF.js Render Canvas */}
               <canvas ref={pdfCanvasRef} className="block pointer-events-none" />
 
-              {/* Freehand Drawing Temporary Stroke Canvas */}
+              {/* Freehand Drawing Temporary Stroke Canvas (Pencil & Highlighter) */}
               {(activeTool === 'pencil' || activeTool === 'highlight') && (
                 <canvas
                   ref={drawCanvasRef}
@@ -1578,11 +1810,21 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                   style={{
                     width: pdfCanvasRef.current?.style.width || '100%',
                     height: pdfCanvasRef.current?.style.height || '100%',
+                    touchAction: 'none',
                   }}
-                  onMouseDown={startDrawing}
-                  onMouseMove={drawMove}
-                  onMouseUp={endDrawing}
-                  className="absolute inset-0 z-20 cursor-crosshair"
+                  onMouseDown={(e) => handlePointerDown(e.clientX, e.clientY)}
+                  onMouseMove={(e) => handlePointerMove(e.clientX, e.clientY)}
+                  onMouseUp={handlePointerUp}
+                  onTouchStart={(e) => {
+                    const touch = e.touches[0];
+                    if (touch) handlePointerDown(touch.clientX, touch.clientY);
+                  }}
+                  onTouchMove={(e) => {
+                    const touch = e.touches[0];
+                    if (touch) handlePointerMove(touch.clientX, touch.clientY);
+                  }}
+                  onTouchEnd={handlePointerUp}
+                  className="absolute inset-0 z-30 cursor-crosshair"
                 />
               )}
 
@@ -1618,12 +1860,18 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                       onMouseLeave={() => setHoveredTextId(null)}
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (activeTool === 'eraser') {
+                          handleDeleteTextItem(item.id);
+                          return;
+                        }
                         if (isEditTextMode || activeTool === 'select') {
                           setEditingTextId(item.id);
                         }
                       }}
                       className={`absolute transition-all rounded-[2px] ${
-                        isEditing
+                        activeTool === 'eraser'
+                          ? 'hover:ring-2 hover:ring-rose-500 hover:bg-rose-100/40 cursor-pointer'
+                          : isEditing
                           ? 'ring-2 ring-blue-500 bg-white z-30 shadow-md'
                           : item.isModified
                           ? 'bg-white z-20 ring-1 ring-blue-400'
@@ -1716,14 +1964,14 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                             }}
                             className="w-full bg-white text-slate-900 outline-none px-0.5 border-none leading-none"
                             style={{
-                              fontSize: `${(item.fontSize || 13) * (zoomScale / 1.0)}px`,
+                              fontSize: `${(item.fontSize || 13) * renderedScale}px`,
                               fontFamily:
                                 item.fontFamily ||
                                 (item.pdfFontType === 'serif'
-                                  ? '"Times New Roman", Times, Georgia, serif'
+                                  ? '"Times New Roman", Times, "Liberation Serif", Georgia, "DejaVu Serif", serif'
                                   : item.pdfFontType === 'monospace'
-                                  ? '"Courier New", Courier, monospace'
-                                  : 'Helvetica, Arial, sans-serif'),
+                                  ? '"Courier New", Courier, Menlo, Consolas, monospace'
+                                  : 'Helvetica, Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'),
                               fontWeight: item.isBold ? 'bold' : 'normal',
                               fontStyle: item.isItalic ? 'italic' : 'normal',
                               color: item.color || '#111827',
@@ -1736,14 +1984,14 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                           <div
                             className="w-full h-full bg-white text-slate-900 px-0.5 leading-none select-text flex items-center"
                             style={{
-                              fontSize: `${(item.fontSize || 13) * (zoomScale / 1.0)}px`,
+                              fontSize: `${(item.fontSize || 13) * renderedScale}px`,
                               fontFamily:
                                 item.fontFamily ||
                                 (item.pdfFontType === 'serif'
-                                  ? '"Times New Roman", Times, Georgia, serif'
+                                  ? '"Times New Roman", Times, "Liberation Serif", Georgia, "DejaVu Serif", serif'
                                   : item.pdfFontType === 'monospace'
-                                  ? '"Courier New", Courier, monospace'
-                                  : 'Helvetica, Arial, sans-serif'),
+                                  ? '"Courier New", Courier, Menlo, Consolas, monospace'
+                                  : 'Helvetica, Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'),
                               fontWeight: item.isBold ? 'bold' : 'normal',
                               fontStyle: item.isItalic ? 'italic' : 'normal',
                               color: item.color || '#111827',
@@ -1764,6 +2012,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               <div className="absolute inset-0 z-20 pointer-events-none">
                 {activePageAnnotations.map((ann) => {
                   const isSelected = selectedAnnId === ann.id;
+                  const isEraser = activeTool === 'eraser';
 
                   return (
                     <div
@@ -1771,10 +2020,18 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                       onMouseDown={(e) => handleStartDrag(ann.id, e)}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedAnnId(ann.id);
+                        if (isEraser) {
+                          deleteAnnotation(ann.id);
+                        } else {
+                          setSelectedAnnId(ann.id);
+                        }
                       }}
-                      className={`absolute pointer-events-auto transition-shadow ${
-                        isSelected ? 'ring-2 ring-blue-500 shadow-lg' : 'hover:ring-1 hover:ring-blue-300'
+                      className={`absolute pointer-events-auto transition-all ${
+                        isEraser
+                          ? 'hover:ring-2 hover:ring-rose-500 hover:opacity-75 cursor-pointer'
+                          : isSelected
+                          ? 'ring-2 ring-blue-500 shadow-lg'
+                          : 'hover:ring-1 hover:ring-blue-300'
                       }`}
                       style={{
                         left: `${ann.x}%`,
@@ -1785,7 +2042,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                       }}
                     >
                       {/* Delete floating button when selected */}
-                      {isSelected && (
+                      {isSelected && !isEraser && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1802,19 +2059,19 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                       {ann.type === 'text' && (
                         <div
                           className={`p-1 select-text ${
-                            ann.hasWhiteoutBg ? 'bg-white rounded shadow-2xs' : ''
+                            ann.hasWhiteoutBg ? 'bg-white rounded shadow-2xs border border-amber-300' : ''
                           }`}
                           style={{
-                            fontSize: `${(ann.fontSize || 14) * (zoomScale / 1.0)}px`,
+                            fontSize: `${(ann.fontSize || 14) * renderedScale}px`,
                             color: ann.color || '#111827',
                             fontWeight: ann.isBold ? 'bold' : 'normal',
                             fontStyle: ann.isItalic ? 'italic' : 'normal',
                             fontFamily:
                               ann.fontFamily === 'Times-Roman'
-                                ? 'Times New Roman, serif'
+                                ? '"Times New Roman", Times, Georgia, serif'
                                 : ann.fontFamily === 'Courier'
-                                ? 'Courier New, monospace'
-                                : 'Helvetica, Arial, sans-serif',
+                                ? '"Courier New", Courier, monospace'
+                                : 'Helvetica, Arial, -apple-system, BlinkMacSystemFont, sans-serif',
                           }}
                         >
                           {ann.content}
@@ -1823,7 +2080,11 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
 
                       {/* Whiteout Patch */}
                       {ann.type === 'whiteout' && (
-                        <div className="w-full h-full bg-white border border-slate-300/40 rounded-xs shadow-2xs" />
+                        <div className="w-full h-full bg-white border border-slate-300/60 rounded-xs shadow-2xs flex items-center justify-center">
+                          {isEraser && (
+                            <span className="text-[9px] text-rose-500 font-bold select-none opacity-50">whiteout</span>
+                          )}
+                        </div>
                       )}
 
                       {/* Signature / Stamp Image */}
@@ -1835,18 +2096,59 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
                         />
                       )}
 
-                      {/* Circle / Ellipse Shape */}
+                      {/* Shapes: Rectangle, Circle, Line, Arrow */}
                       {ann.type === 'shape' && (
-                        <div
-                          className="w-full h-full rounded-full border-2"
-                          style={{
-                            borderColor: ann.color || '#2563eb',
-                            backgroundColor: ann.fillColor || 'transparent',
-                          }}
-                        />
+                        <div className="w-full h-full relative">
+                          {ann.shapeType === 'circle' && (
+                            <div
+                              className="w-full h-full rounded-full border-2"
+                              style={{
+                                borderColor: ann.color || '#2563eb',
+                                backgroundColor: ann.fillColor || 'transparent',
+                                borderWidth: `${ann.strokeWidth || 2}px`,
+                              }}
+                            />
+                          )}
+                          {ann.shapeType === 'rectangle' && (
+                            <div
+                              className="w-full h-full rounded-sm border-2"
+                              style={{
+                                borderColor: ann.color || '#2563eb',
+                                backgroundColor: ann.fillColor || 'transparent',
+                                borderWidth: `${ann.strokeWidth || 2}px`,
+                              }}
+                            />
+                          )}
+                          {ann.shapeType === 'line' && (
+                            <div
+                              className="w-full h-0.5 absolute top-1/2 -translate-y-1/2"
+                              style={{
+                                backgroundColor: ann.color || '#2563eb',
+                                height: `${ann.strokeWidth || 2}px`,
+                              }}
+                            />
+                          )}
+                          {ann.shapeType === 'arrow' && (
+                            <div className="w-full h-full flex items-center">
+                              <div
+                                className="flex-1"
+                                style={{
+                                  backgroundColor: ann.color || '#2563eb',
+                                  height: `${ann.strokeWidth || 2}px`,
+                                }}
+                              />
+                              <div
+                                className="w-0 h-0 border-t-4 border-t-transparent border-b-4 border-b-transparent border-l-8"
+                                style={{
+                                  borderLeftColor: ann.color || '#2563eb',
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
                       )}
 
-                      {/* Freehand Pencil Stroke Render */}
+                      {/* Freehand Pencil / Highlighter Stroke Render */}
                       {ann.type === 'draw' && ann.points && (
                         <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
                           <polyline

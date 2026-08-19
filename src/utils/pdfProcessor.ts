@@ -248,8 +248,14 @@ export async function applyPDFAnnotations(
   const courierOblique = await pdfDoc.embedFont(StandardFonts.CourierOblique);
   const courierBoldOblique = await pdfDoc.embedFont(StandardFonts.CourierBoldOblique);
 
-  const getExactFont = (fontFamilyStr?: string, pdfFontTypeStr?: string, isBold?: boolean, isItalic?: boolean) => {
-    const combined = `${fontFamilyStr || ''} ${pdfFontTypeStr || ''}`.toLowerCase();
+  const getExactFont = (
+    fontFamilyStr?: string,
+    pdfFontTypeStr?: string,
+    fontNameStr?: string,
+    isBold?: boolean,
+    isItalic?: boolean
+  ) => {
+    const combined = `${fontFamilyStr || ''} ${pdfFontTypeStr || ''} ${fontNameStr || ''}`.toLowerCase();
     const isSerif =
       combined.includes('times') ||
       combined.includes('serif') ||
@@ -260,7 +266,23 @@ export async function applyPDFAnnotations(
       combined.includes('palatino') ||
       combined.includes('baskerville') ||
       combined.includes('minion') ||
-      combined.includes('charter');
+      combined.includes('charter') ||
+      combined.includes('century') ||
+      combined.includes('bookman') ||
+      combined.includes('bookantiqua') ||
+      combined.includes('didot') ||
+      combined.includes('bodoni') ||
+      combined.includes('liberationserif') ||
+      combined.includes('nimbusrom') ||
+      combined.includes('nimbusroman') ||
+      combined.includes('dejavuserif') ||
+      combined.includes('pt serif') ||
+      combined.includes('lora') ||
+      combined.includes('merriweather') ||
+      combined.includes('tnr') ||
+      combined.includes('stsong') ||
+      combined.includes('mincho') ||
+      combined.includes('batang');
 
     const isMono =
       combined.includes('courier') ||
@@ -268,26 +290,52 @@ export async function applyPDFAnnotations(
       combined.includes('code') ||
       combined.includes('consolas') ||
       combined.includes('menlo') ||
-      combined.includes('typewriter');
+      combined.includes('typewriter') ||
+      combined.includes('sourcecodepro') ||
+      combined.includes('firacode') ||
+      combined.includes('cascadia') ||
+      combined.includes('liberationmono') ||
+      combined.includes('dejavusansmono');
+
+    const checkBold =
+      isBold ||
+      combined.includes('bold') ||
+      combined.includes('black') ||
+      combined.includes('heavy') ||
+      combined.includes('semibold') ||
+      combined.includes('demi') ||
+      combined.includes('-b') ||
+      combined.endsWith('b') ||
+      combined.includes('700') ||
+      combined.includes('800') ||
+      combined.includes('900');
+
+    const checkItalic =
+      isItalic ||
+      combined.includes('italic') ||
+      combined.includes('oblique') ||
+      combined.includes('slanted') ||
+      combined.includes('-i') ||
+      combined.endsWith('i');
 
     if (isSerif) {
-      if (isBold && isItalic) return timesBoldItalic;
-      if (isBold) return timesBold;
-      if (isItalic) return timesItalic;
+      if (checkBold && checkItalic) return timesBoldItalic;
+      if (checkBold) return timesBold;
+      if (checkItalic) return timesItalic;
       return timesRoman;
     }
 
     if (isMono) {
-      if (isBold && isItalic) return courierBoldOblique;
-      if (isBold) return courierBold;
-      if (isItalic) return courierOblique;
+      if (checkBold && checkItalic) return courierBoldOblique;
+      if (checkBold) return courierBold;
+      if (checkItalic) return courierOblique;
       return courier;
     }
 
     // Default Sans-Serif (Helvetica / Arial / Calibri / etc.)
-    if (isBold && isItalic) return helveticaBoldOblique;
-    if (isBold) return helveticaBold;
-    if (isItalic) return helveticaOblique;
+    if (checkBold && checkItalic) return helveticaBoldOblique;
+    if (checkBold) return helveticaBold;
+    if (checkItalic) return helveticaOblique;
     return helvetica;
   };
 
@@ -318,13 +366,13 @@ export async function applyPDFAnnotations(
 
     // If text was not deleted and has content, write the new updated text using the exact matched original font
     if (!item.isDeleted && item.currentText && item.currentText.trim().length > 0) {
-      const selectedFont = getExactFont(item.fontFamily, item.pdfFontType, item.isBold, item.isItalic);
+      const selectedFont = getExactFont(item.fontFamily, item.pdfFontType, item.fontName, item.isBold, item.isItalic);
       const fSize = Math.max(item.fontSize || 12, 6);
       const colorRgb = hexToRgb01(item.color || '#111827');
 
       page.drawText(item.currentText, {
         x: pdfX,
-        y: pdfY - fSize * 0.9,
+        y: pdfY - fSize * 0.85,
         size: fSize,
         font: selectedFont,
         color: rgb(colorRgb.r, colorRgb.g, colorRgb.b),

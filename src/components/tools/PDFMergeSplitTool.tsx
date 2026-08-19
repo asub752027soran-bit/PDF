@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Upload,
   Download,
@@ -26,34 +26,48 @@ import { PDFDocument } from 'pdf-lib';
 interface PDFMergeSplitToolProps {
   mode: 'merge' | 'split' | 'organize';
   onBack: () => void;
+  initialFiles?: File[] | null;
+  initialFile?: File | null;
 }
 
-export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBack }) => {
+export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBack, initialFiles, initialFile }) => {
   const [files, setFiles] = useState<File[]>([]);
   const [splitRange, setSplitRange] = useState('1-3, 4-6');
   const [pagesList, setPagesList] = useState<{ origIndex: number; rotation: number }[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  const addFiles = async (incomingFiles: File[]) => {
+    setFiles((prev) => [...prev, ...incomingFiles]);
+
+    if (mode === 'organize' && incomingFiles.length > 0) {
+      try {
+        const targetFile = incomingFiles[0] as File;
+        const buf = await readFileAsArrayBuffer(targetFile);
+        const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
+        const count = doc.getPageCount();
+        const initialPages = Array.from({ length: count }, (_, i) => ({
+          origIndex: i,
+          rotation: 0,
+        }));
+        setPagesList(initialPages);
+      } catch (err) {
+        console.error('Failed reading page count:', err);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (initialFiles && initialFiles.length > 0) {
+      addFiles(initialFiles);
+    } else if (initialFile) {
+      addFiles([initialFile]);
+    }
+  }, [initialFiles, initialFile]);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files);
-      setFiles((prev) => [...prev, ...newFiles]);
-
-      if (mode === 'organize' && newFiles.length > 0) {
-        try {
-          const targetFile = newFiles[0] as File;
-          const buf = await readFileAsArrayBuffer(targetFile);
-          const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
-          const count = doc.getPageCount();
-          const initialPages = Array.from({ length: count }, (_, i) => ({
-            origIndex: i,
-            rotation: 0,
-          }));
-          setPagesList(initialPages);
-        } catch (err) {
-          console.error('Failed reading page count:', err);
-        }
-      }
+      addFiles(newFiles);
     }
   };
 

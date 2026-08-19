@@ -138,3 +138,16 @@ export interface ContactInquiry {
   date: string;
   status: 'unread' | 'read' | 'replied';
 }
+
+export interface ActionLogEntry {
+  id: string;
+  timestamp: number;
+  toolId: string;
+  toolName: string;
+  category: string;
+  action: string;
+  fileSizeBytes: number;
+  formattedSize: string;
+  status: 'success' | 'failed';
+  details?: string;
+}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Upload, Download, FileArchive, ArrowLeft, Check, Sparkles, Zap } from 'lucide-react';
 import { compressPDF } from '../../utils/pdfProcessor';
 import { downloadBlob } from '../../utils/batchProcessor';
@@ -7,13 +7,21 @@ import { recordToolConversion } from '../../utils/activityTracker';
 
 interface PDFCompressToolProps {
   onBack: () => void;
+  initialFile?: File | null;
 }
 
-export const PDFCompressTool: React.FC<PDFCompressToolProps> = ({ onBack }) => {
+export const PDFCompressTool: React.FC<PDFCompressToolProps> = ({ onBack, initialFile }) => {
   const [file, setFile] = useState<File | null>(null);
   const [compressionLevel, setCompressionLevel] = useState<'extreme' | 'recommended' | 'light'>('recommended');
   const [isProcessing, setIsProcessing] = useState(false);
   const [resultInfo, setResultInfo] = useState<{ origSize: number; newSize: number; savedPercent: number } | null>(null);
+
+  useEffect(() => {
+    if (initialFile) {
+      setFile(initialFile);
+      setResultInfo(null);
+    }
+  }, [initialFile]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {

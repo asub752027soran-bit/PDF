@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Upload,
   Download,
@@ -25,13 +25,23 @@ import { imagesToPDF } from '../../utils/pdfProcessor';
 
 interface UniversalConvertToolProps {
   onBack: () => void;
+  initialFiles?: File[] | null;
+  initialFile?: File | null;
 }
 
-export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBack }) => {
+export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBack, initialFiles, initialFile }) => {
   const [files, setFiles] = useState<File[]>([]);
   const [targetFormat, setTargetFormat] = useState<string>('pdf');
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    if (initialFiles && initialFiles.length > 0) {
+      setFiles((prev) => [...prev, ...initialFiles]);
+    } else if (initialFile) {
+      setFiles((prev) => [...prev, initialFile]);
+    }
+  }, [initialFiles, initialFile]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {

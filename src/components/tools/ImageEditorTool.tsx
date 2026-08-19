@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Upload, Download, Image as ImageIcon, ArrowLeft, RotateCw, Crop, Minimize2, Sparkles, Layers, FileArchive } from 'lucide-react';
 import { processImage, formatBytes } from '../../utils/imageProcessor';
 import { renderPDFToImages, PDFPageImage } from '../../utils/pdfExtractor';
@@ -9,9 +9,11 @@ import { recordToolConversion } from '../../utils/activityTracker';
 interface ImageEditorToolProps {
   toolId?: string;
   onBack: () => void;
+  initialFiles?: File[] | null;
+  initialFile?: File | null;
 }
 
-export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'image-converter', onBack }) => {
+export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'image-converter', onBack, initialFiles, initialFile }) => {
   const [files, setFiles] = useState<File[]>([]);
   const [targetFormat, setTargetFormat] = useState<'jpeg' | 'png' | 'webp'>('jpeg');
   const [quality, setQuality] = useState(80); // 1-100
@@ -49,27 +51,39 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'imag
     return 'Convert images between JPG, PNG, WEBP, SVG, and BMP formats.';
   };
 
+  const processIncomingFiles = async (selected: File[]) => {
+    setFiles(selected);
+    setProcessedResult(null);
+    setPdfPageImages([]);
+
+    if (isPdfToImage && selected.length > 0 && selected[0].name.toLowerCase().endsWith('.pdf')) {
+      setIsProcessing(true);
+      setStatusMsg('Rendering PDF pages as images...');
+      try {
+        const pageImgs = await renderPDFToImages(selected[0], targetFormat === 'png' ? 'png' : 'jpeg', 2.0);
+        setPdfPageImages(pageImgs);
+        setStatusMsg(`Rendered ${pageImgs.length} pages`);
+      } catch (err) {
+        console.error('PDF page rendering failed:', err);
+        alert('Failed to extract images from PDF.');
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (initialFiles && initialFiles.length > 0) {
+      processIncomingFiles(initialFiles);
+    } else if (initialFile) {
+      processIncomingFiles([initialFile]);
+    }
+  }, [initialFiles, initialFile]);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const selected: File[] = Array.from(e.target.files);
-      setFiles(selected);
-      setProcessedResult(null);
-      setPdfPageImages([]);
-
-      if (isPdfToImage && selected.length > 0 && selected[0].name.toLowerCase().endsWith('.pdf')) {
-        setIsProcessing(true);
-        setStatusMsg('Rendering PDF pages as images...');
-        try {
-          const pageImgs = await renderPDFToImages(selected[0], targetFormat === 'png' ? 'png' : 'jpeg', 2.0);
-          setPdfPageImages(pageImgs);
-          setStatusMsg(`Rendered ${pageImgs.length} pages`);
-        } catch (err) {
-          console.error('PDF page rendering failed:', err);
-          alert('Failed to extract images from PDF.');
-        } finally {
-          setIsProcessing(false);
-        }
-      }
+      processIncomingFiles(selected);
     }
   };
 

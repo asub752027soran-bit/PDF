@@ -17,7 +17,8 @@ import {
   Globe,
   Lock,
   Check,
-  Languages
+  Languages,
+  Share2
 } from 'lucide-react';
 import { CATEGORIES, TOOLS } from '../data/toolsData';
 import { CategoryType } from '../types';
@@ -30,6 +31,7 @@ interface HeaderProps {
   onSelectTool: (toolId: string) => void;
   onOpenAdmin: (tabId?: string) => void;
   recentlyUsed: string[];
+  onClearRecentlyUsed?: () => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   darkMode: boolean;
@@ -45,6 +47,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectTool,
   onOpenAdmin,
   recentlyUsed,
+  onClearRecentlyUsed,
   searchQuery,
   setSearchQuery,
   darkMode,
@@ -54,11 +57,56 @@ export const Header: React.FC<HeaderProps> = ({
   const [showRecentDropdown, setShowRecentDropdown] = useState(false);
   const [showCatMenu, setShowCatMenu] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
 
   const { currentLanguage, setLanguage, t } = useLanguage();
 
   const handleLanguageChange = (lang: LanguageCode) => {
     setLanguage(lang);
+  };
+
+  const handleShare = async () => {
+    const shareTitle = document.title || 'pdfeditfy.com - Free Online PDF, Word & Document Tools';
+    const shareText = 'Check out pdfeditfy.com for fast, secure, and private PDF editing, conversions, compression, and document tools with zero signup!';
+    const currentUrl = window.location.href;
+
+    const shareData = {
+      title: shareTitle,
+      text: shareText,
+      url: currentUrl,
+    };
+
+    // Use native Web Share API if available
+    if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          return; // User cancelled share modal
+        }
+      }
+    }
+
+    // Fallback: Copy link to clipboard with responsive feedback
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(currentUrl);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = currentUrl;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2200);
+    } catch {
+      // Ignore clipboard write errors
+    }
   };
 
   const selectedLangObj = LANGUAGES.find((l) => l.code === currentLanguage) || LANGUAGES[0];
@@ -140,8 +188,21 @@ export const Header: React.FC<HeaderProps> = ({
                 className="absolute right-0 mt-2 w-56 rounded-xl bg-white dark:bg-slate-800 shadow-xl border border-slate-200 dark:border-slate-700 py-2 z-50"
                 onMouseLeave={() => setShowRecentDropdown(false)}
               >
-                <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-700 mb-1">
-                  {t('recentlyUsed')}
+                <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-700 mb-1 flex items-center justify-between">
+                  <span>{t('recentlyUsed')}</span>
+                  {onClearRecentlyUsed && (
+                    <button
+                      id="clear-recently-used-header-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onClearRecentlyUsed();
+                        setShowRecentDropdown(false);
+                      }}
+                      className="text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 text-[10px] font-semibold lowercase hover:underline cursor-pointer"
+                    >
+                      clear
+                    </button>
+                  )}
                 </div>
                 {recentTools.map((tool) => (
                   <button
@@ -160,6 +221,29 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
         )}
+
+        {/* Share Button (Web Share API with Clipboard Fallback) */}
+        <button
+          onClick={handleShare}
+          className={`px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 font-bold text-xs cursor-pointer active:scale-95 ${
+            isCopied
+              ? 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 shadow-xs'
+              : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+          }`}
+          title={isCopied ? t('linkCopied') : t('shareTitle')}
+        >
+          {isCopied ? (
+            <>
+              <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span className="hidden sm:inline text-emerald-600 dark:text-emerald-400">{t('linkCopied')}</span>
+            </>
+          ) : (
+            <>
+              <Share2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+              <span className="hidden sm:inline">{t('share')}</span>
+            </>
+          )}
+        </button>
 
         {/* Language Switcher Dropdown Component */}
         <div className="relative">

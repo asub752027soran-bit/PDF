@@ -32,19 +32,29 @@ import {
   ExternalLink,
   Cpu,
   HardDrive,
-  FileCode
+  FileCode,
+  Activity,
+  TrendingUp
 } from 'lucide-react';
 import { TOOLS } from '../../data/toolsData';
-import { AdminConfig, ContactInquiry, ToolItem } from '../../types';
-import { auth } from '../../lib/firebase';
-import { getLiveStats, resetLiveStats, formatBytes, LiveStats } from '../../utils/activityTracker';
+import { AdminConfig, ContactInquiry, ToolItem, ActionLogEntry } from '../../types';
+import {
+  getLiveStats,
+  resetLiveStats,
+  formatBytes,
+  LiveStats,
+  getActionLogs,
+  getPopularToolsMetrics,
+  ToolPopularityMetric
+} from '../../utils/activityTracker';
+import { ActionLogView } from './ActionLogView';
 
 interface AdminDashboardProps {
   onBack: () => void;
   config: AdminConfig;
   onUpdateConfig: (newConfig: AdminConfig) => void;
   onLogout: () => void;
-  initialTab?: 'overview' | 'tools' | 'monetization' | 'inquiries' | 'seo' | 'security';
+  initialTab?: 'overview' | 'action-log' | 'tools' | 'monetization' | 'inquiries' | 'seo' | 'security';
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -54,22 +64,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onLogout,
   initialTab = 'overview',
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'tools' | 'monetization' | 'inquiries' | 'seo' | 'security'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'overview' | 'action-log' | 'tools' | 'monetization' | 'inquiries' | 'seo' | 'security'>(initialTab);
   const [toolSearch, setToolSearch] = useState('');
   const [inquiries, setInquiries] = useState<ContactInquiry[]>([]);
   const [inquiryFilter, setInquiryFilter] = useState<'all' | 'unread' | 'read' | 'replied'>('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [liveStats, setLiveStats] = useState<LiveStats>(() => getLiveStats());
+  const [actionLogs, setActionLogs] = useState<ActionLogEntry[]>(() => getActionLogs());
 
-  // Listen for real-time live stats updates
+  // Listen for real-time live stats and action logs updates
   useEffect(() => {
     const handleStatsUpdate = () => {
       setLiveStats(getLiveStats());
+      setActionLogs(getActionLogs());
     };
     window.addEventListener('pdfeditfy_stats_updated', handleStatsUpdate);
+    window.addEventListener('pdfeditfy_action_logged', handleStatsUpdate);
     const interval = setInterval(handleStatsUpdate, 3000);
     return () => {
       window.removeEventListener('pdfeditfy_stats_updated', handleStatsUpdate);
+      window.removeEventListener('pdfeditfy_action_logged', handleStatsUpdate);
       clearInterval(interval);
     };
   }, []);
@@ -211,16 +225,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </h1>
               <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Firebase Auth Connected
+                Admin Console Active
               </span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
-                <svg className="w-3 h-3" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                </svg>
-                {auth.currentUser?.email || JSON.parse(localStorage.getItem('pdfeditfy_admin_google_user') || '{}')?.email || 'asbsoran@gmail.com'}
+                <Key className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                Passcode Protected
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -252,6 +261,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         >
           <LayoutDashboard className="w-4 h-4" />
           Overview
+        </button>
+
+        <button
+          onClick={() => setActiveTab('action-log')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 relative ${
+            activeTab === 'action-log'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
+          }`}
+        >
+          <Activity className="w-4 h-4 text-emerald-500" />
+          Action Log
+          {actionLogs.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-[10px] font-extrabold">
+              {actionLogs.length}
+            </span>
+          )}
         </button>
 
         <button
@@ -370,54 +396,129 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 flex-wrap gap-2">
               <div>
                 <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                  <BarChart2 className="w-4 h-4 text-emerald-600" />
-                  Live Client Activity & Operations
+                  <Activity className="w-4 h-4 text-emerald-600" />
+                  Tool Popularity & Live Action Snapshot
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Real conversions and client-side processing logged in this browser environment
+                  Track volume of successful conversions and tool usages to identify popular tools
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setActiveTab('action-log')}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs"
+                >
+                  <Activity className="w-3.5 h-3.5" />
+                  Open Full Action Log ({actionLogs.length}) →
+                </button>
                 <button
                   onClick={() => {
                     if (confirm('Reset real-time activity counters to zero?')) {
                       resetLiveStats();
                       setLiveStats(getLiveStats());
+                      setActionLogs(getActionLogs());
                       showToast('Live activity counters reset');
                     }
                   }}
                   className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all flex items-center gap-1.5"
                 >
                   <RefreshCw className="w-3 h-3" />
-                  Reset Stats
+                  Reset
                 </button>
               </div>
             </div>
 
-            {Object.keys(liveStats.toolUsage).length === 0 ? (
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 text-center text-xs text-slate-400 py-6">
-                <FileCode className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
-                <p className="font-semibold text-slate-600 dark:text-slate-300">No tool conversions executed yet in this session</p>
-                <p className="text-[11px] text-slate-400 mt-1">Conversions executed by any tool will automatically log here in real-time.</p>
+            {/* Popular Tools Top 4 Leaderboard */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+                  Most Popular Tools (By Conversions Volume)
+                </span>
+                <span className="text-[11px] text-blue-600 dark:text-blue-400 font-bold">
+                  {Object.keys(liveStats.toolUsage).length} Total Tools Used
+                </span>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                {Object.entries(liveStats.toolUsage).map(([toolId, count]) => {
-                  const toolObj = TOOLS.find((t) => t.id === toolId);
-                  return (
+
+              {Object.keys(liveStats.toolUsage).length === 0 ? (
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 text-center text-xs text-slate-400 py-6 space-y-2">
+                  <FileCode className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600" />
+                  <p className="font-semibold text-slate-600 dark:text-slate-300">No tool conversions executed yet in this session</p>
+                  <p className="text-[11px] text-slate-400">Conversions executed by any tool will automatically log here in real-time.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                  {getPopularToolsMetrics().slice(0, 4).map((tool, idx) => (
                     <div
-                      key={toolId}
-                      className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between text-xs"
+                      key={tool.toolId}
+                      className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2"
                     >
-                      <span className="font-bold text-slate-800 dark:text-slate-200 truncate">
-                        {toolObj?.name || toolId}
-                      </span>
-                      <span className="font-extrabold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-[11px]">
-                        {count} ops
-                      </span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
+                          #{idx + 1}
+                        </span>
+                        <span className="font-extrabold text-blue-600 dark:text-blue-400 text-xs">
+                          {tool.conversionsCount} ops ({tool.percentage}%)
+                        </span>
+                      </div>
+                      <p className="font-bold text-slate-900 dark:text-white text-xs truncate">
+                        {tool.toolName}
+                      </p>
+                      <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-blue-600 rounded-full"
+                          style={{ width: `${Math.max(5, tool.percentage)}%` }}
+                        />
+                      </div>
+                      <div className="text-[10px] text-slate-400 text-right">
+                        {tool.formattedBytes}
+                      </div>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Recent 3 Action Logs Preview */}
+            {actionLogs.length > 0 && (
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+                    Latest Activity Feed
+                  </span>
+                  <button
+                    onClick={() => setActiveTab('action-log')}
+                    className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    View All {actionLogs.length} Records →
+                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  {actionLogs.slice(0, 3).map((log) => (
+                    <div
+                      key={log.id}
+                      onClick={() => setActiveTab('action-log')}
+                      className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-xs hover:border-blue-400/60 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                        <span className="font-bold text-slate-900 dark:text-white truncate">
+                          {log.toolName}
+                        </span>
+                        <span className="text-slate-400 truncate hidden sm:inline">
+                          — {log.action}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 text-[11px]">
+                        <span className="font-mono text-slate-500 dark:text-slate-400">
+                          {log.formattedSize}
+                        </span>
+                        <span className="text-slate-400">
+                          {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -464,7 +565,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Item 2: Tools Manager */}
+              {/* Item 2: Action Log & Tool Popularity */}
+              <div 
+                onClick={() => setActiveTab('action-log')}
+                className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 hover:border-emerald-500 transition-all cursor-pointer group space-y-2"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 font-bold">
+                    <Activity className="w-4 h-4" />
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
+                    {actionLogs.length} Records
+                  </span>
+                </div>
+                <div>
+                  <h4 className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors">
+                    2. Action Log & Tool Popularity
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Track conversions volume, identify most popular tools, and export CSV audit logs.
+                  </p>
+                </div>
+              </div>
+
+              {/* Item 3: Tools Manager */}
               <div 
                 onClick={() => setActiveTab('tools')}
                 className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 hover:border-purple-500 transition-all cursor-pointer group space-y-2"
@@ -479,7 +603,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
                 <div>
                   <h4 className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-purple-600 transition-colors">
-                    2. Tools Control & Badges
+                    3. Tools Control & Badges
                   </h4>
                   <p className="text-[11px] text-slate-500">
                     Enable/disable individual PDF tools and assign custom feature badges.
@@ -487,7 +611,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Item 3: AdSense & Ads */}
+              {/* Item 4: AdSense & Ads */}
               <div 
                 onClick={() => setActiveTab('monetization')}
                 className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 hover:border-emerald-500 transition-all cursor-pointer group space-y-2"
@@ -502,7 +626,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
                 <div>
                   <h4 className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors">
-                    3. AdSense & Monetization
+                    4. AdSense & Monetization
                   </h4>
                   <p className="text-[11px] text-slate-500">
                     Configure Google AdSense publisher ID and auto-ad banner positions.
@@ -510,7 +634,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Item 4: Support Inquiries */}
+              {/* Item 5: Support Inquiries */}
               <div 
                 onClick={() => setActiveTab('inquiries')}
                 className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 hover:border-amber-500 transition-all cursor-pointer group space-y-2"
@@ -525,7 +649,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
                 <div>
                   <h4 className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-amber-600 transition-colors">
-                    4. Support Messages Inbox
+                    5. Support Messages Inbox
                   </h4>
                   <p className="text-[11px] text-slate-500">
                     Review and reply to user feedback and contact form submissions.
@@ -533,7 +657,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Item 5: SEO & Metadata */}
+              {/* Item 6: SEO & Metadata */}
               <div 
                 onClick={() => setActiveTab('seo')}
                 className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 hover:border-cyan-500 transition-all cursor-pointer group space-y-2"
@@ -548,7 +672,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
                 <div>
                   <h4 className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-cyan-600 transition-colors">
-                    5. SEO & Google Analytics
+                    6. SEO & Google Analytics
                   </h4>
                   <p className="text-[11px] text-slate-500">
                     Update meta title, description tags, search keywords, and GA tracking.
@@ -556,7 +680,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Item 6: Security & Export */}
+              {/* Item 7: Security & Export */}
               <div 
                 onClick={() => setActiveTab('security')}
                 className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 hover:border-red-500 transition-all cursor-pointer group space-y-2"
@@ -571,7 +695,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
                 <div>
                   <h4 className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-red-600 transition-colors">
-                    6. Security & Passcode
+                    7. Security & Passcode
                   </h4>
                   <p className="text-[11px] text-slate-500">
                     Change admin access passcode and export/backup site configuration.
@@ -723,6 +847,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
         </div>
+      )}
+
+      {/* TAB: ACTION LOG & TOOL POPULARITY */}
+      {activeTab === 'action-log' && (
+        <ActionLogView
+          logs={actionLogs}
+          liveStats={liveStats}
+          onRefresh={() => {
+            setLiveStats(getLiveStats());
+            setActionLogs(getActionLogs());
+          }}
+          showToast={showToast}
+        />
       )}
 
       {/* TAB 2: TOOLS MANAGER */}

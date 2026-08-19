@@ -49,9 +49,10 @@ import { recordToolConversion } from '../../utils/activityTracker';
 interface WordToolProps {
   toolId?: string;
   onBack: () => void;
+  initialFile?: File | null;
 }
 
-export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBack }) => {
+export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBack, initialFile }) => {
   const [file, setFile] = useState<File | null>(null);
   const [extractedText, setExtractedText] = useState('');
   const [history, setHistory] = useState<string[]>([]);
@@ -131,37 +132,46 @@ export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBa
     }
   };
 
+  const processFile = async (selected: File) => {
+    setFile(selected);
+    setIsProcessing(true);
+    setStatusMsg('Reading and parsing document structure...');
+
+    try {
+      if (selected.name.toLowerCase().endsWith('.pdf')) {
+        const pages = await extractTextFromPDF(selected);
+        // Preserve exact sequential page order
+        const fullText = pages
+          .sort((a, b) => a.pageNumber - b.pageNumber)
+          .map((p) => `# Page ${p.pageNumber}\n\n${p.text}`)
+          .join('\n\n--- PAGE BREAK ---\n\n');
+        updateContentWithHistory(fullText);
+      } else if (selected.name.toLowerCase().endsWith('.docx')) {
+        const { text } = await extractDocxHtml(selected);
+        updateContentWithHistory(text || '');
+      } else {
+        const rawText = await selected.text();
+        updateContentWithHistory(rawText || `Document loaded: ${selected.name}`);
+      }
+      setStatusMsg('Document loaded successfully with exact page order preserved.');
+    } catch (err) {
+      console.error('Failed reading document file:', err);
+      const fallback = `Loaded ${selected.name}. Edit or type content below:`;
+      updateContentWithHistory(fallback);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (initialFile) {
+      processFile(initialFile);
+    }
+  }, [initialFile]);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const selected = e.target.files[0];
-      setFile(selected);
-      setIsProcessing(true);
-      setStatusMsg('Reading and parsing document structure...');
-
-      try {
-        if (selected.name.toLowerCase().endsWith('.pdf')) {
-          const pages = await extractTextFromPDF(selected);
-          // Preserve exact sequential page order
-          const fullText = pages
-            .sort((a, b) => a.pageNumber - b.pageNumber)
-            .map((p) => `# Page ${p.pageNumber}\n\n${p.text}`)
-            .join('\n\n--- PAGE BREAK ---\n\n');
-          updateContentWithHistory(fullText);
-        } else if (selected.name.toLowerCase().endsWith('.docx')) {
-          const { text } = await extractDocxHtml(selected);
-          updateContentWithHistory(text || '');
-        } else {
-          const rawText = await selected.text();
-          updateContentWithHistory(rawText || `Document loaded: ${selected.name}`);
-        }
-        setStatusMsg('Document loaded successfully with exact page order preserved.');
-      } catch (err) {
-        console.error('Failed reading document file:', err);
-        const fallback = `Loaded ${selected.name}. Edit or type content below:`;
-        updateContentWithHistory(fallback);
-      } finally {
-        setIsProcessing(false);
-      }
+      processFile(e.target.files[0]);
     }
   };
 

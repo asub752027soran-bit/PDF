@@ -40,7 +40,7 @@ import { CategoryType, AdminConfig } from './types';
 import { LanguageCode } from './data/translations';
 import { updateSEOMeta } from './utils/seo';
 import { Megaphone, AlertTriangle } from 'lucide-react';
-import { auth, onAuthStateChanged, signOut as firebaseSignOut } from './lib/firebase';
+import { GlobalDropZone } from './components/common/GlobalDropZone';
 
 const DEFAULT_ADMIN_CONFIG: AdminConfig = {
   siteName: 'pdfeditfy.com',
@@ -106,6 +106,45 @@ export default function App() {
     return (localStorage.getItem('pdfeditfy_lang') as LanguageCode) || 'en';
   });
 
+  // Global Drag and Drop dropped files state
+  const [droppedFiles, setDroppedFiles] = useState<{ files: File[]; timestamp: number } | null>(null);
+
+  // Global Drag and Drop Handler
+  const handleGlobalFilesDropped = (files: File[]) => {
+    if (!files || files.length === 0) return;
+
+    if (activeToolId) {
+      setDroppedFiles({ files, timestamp: Date.now() });
+      return;
+    }
+
+    // Automatically pick the most appropriate tool based on file type
+    const firstFile = files[0];
+    const name = firstFile.name.toLowerCase();
+
+    let targetTool = 'edit-pdf';
+    if (name.endsWith('.pdf')) {
+      if (files.length > 1) {
+        targetTool = 'merge-pdf';
+      } else {
+        targetTool = 'edit-pdf';
+      }
+    } else if (name.endsWith('.docx') || name.endsWith('.doc') || name.endsWith('.rtf') || name.endsWith('.odt')) {
+      targetTool = 'word-to-pdf';
+    } else if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv') || name.endsWith('.ods')) {
+      targetTool = 'edit-excel';
+    } else if (name.endsWith('.pptx') || name.endsWith('.ppt') || name.endsWith('.odp')) {
+      targetTool = 'ppt-to-pdf';
+    } else if (name.match(/\.(jpg|jpeg|png|webp|svg|bmp|tiff|gif)$/i)) {
+      targetTool = 'image-converter';
+    } else {
+      targetTool = 'universal-converter';
+    }
+
+    handleSelectTool(targetTool);
+    setDroppedFiles({ files, timestamp: Date.now() });
+  };
+
   // Sync Dark Mode class on document HTML root
   useEffect(() => {
     if (darkMode) {
@@ -145,7 +184,7 @@ export default function App() {
     localStorage.setItem('pdfeditfy_admin_config', JSON.stringify(newConfig));
   };
 
-  const [adminInitialTab, setAdminInitialTab] = useState<'overview' | 'tools' | 'monetization' | 'inquiries' | 'seo' | 'security'>('overview');
+  const [adminInitialTab, setAdminInitialTab] = useState<'overview' | 'action-log' | 'tools' | 'monetization' | 'inquiries' | 'seo' | 'security'>('overview');
 
   // Admin login trigger
   const handleOpenAdminConsole = (targetTab?: string) => {
@@ -161,31 +200,6 @@ export default function App() {
     }
   };
 
-  // Firebase Auth Observer
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setIsAdminLoggedIn(true);
-        sessionStorage.setItem('pdfeditfy_admin_authed', 'true');
-        if (!localStorage.getItem('pdfeditfy_admin_google_user')) {
-          localStorage.setItem(
-            'pdfeditfy_admin_google_user',
-            JSON.stringify({
-              uid: user.uid,
-              email: user.email,
-              name: user.displayName || user.email?.split('@')[0],
-              photoURL: user.photoURL,
-              authenticatedAt: new Date().toISOString(),
-              provider: 'firebase',
-              role: 'SUPER_ADMIN'
-            })
-          );
-        }
-      }
-    });
-    return () => unsubscribe();
-  }, []);
-
   const handleAdminLoginSuccess = () => {
     setIsAdminLoggedIn(true);
     sessionStorage.setItem('pdfeditfy_admin_authed', 'true');
@@ -195,12 +209,7 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleAdminLogout = async () => {
-    try {
-      await firebaseSignOut(auth);
-    } catch (err) {
-      console.warn('Firebase logout notice:', err);
-    }
+  const handleAdminLogout = () => {
     setIsAdminLoggedIn(false);
     sessionStorage.removeItem('pdfeditfy_admin_authed');
     localStorage.removeItem('pdfeditfy_admin_google_user');
@@ -278,6 +287,13 @@ export default function App() {
     localStorage.setItem('pdfeditfy_recent', JSON.stringify(updatedRecent));
   };
 
+  // Clear Recently Used handler
+  const handleClearRecentlyUsed = () => {
+    setRecentlyUsed([]);
+    localStorage.removeItem('pdfeditfy_recent');
+    localStorage.removeItem('docushift_recent');
+  };
+
   const handleOpenPage = (pageName: string) => {
     if (pageName === 'admin') {
       handleOpenAdminConsole();
@@ -330,6 +346,7 @@ export default function App() {
         onSelectTool={handleSelectTool}
         onOpenAdmin={handleOpenAdminConsole}
         recentlyUsed={recentlyUsed}
+        onClearRecentlyUsed={handleClearRecentlyUsed}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         darkMode={darkMode}
@@ -362,6 +379,7 @@ export default function App() {
             currentCategory={currentCategory}
             onSelectCategory={setCurrentCategory}
             recentlyUsed={recentlyUsed}
+            onClearRecentlyUsed={handleClearRecentlyUsed}
             onSelectTool={handleSelectTool}
             onOpenPage={handleOpenPage}
           />
@@ -401,31 +419,31 @@ export default function App() {
               <AdSenseBanner slotType="banner" className="mb-2" />
             )}
 
-            {activeToolId === 'edit-pdf' && <PDFEditorTool mode="edit" onBack={handleGoHome} />}
-            {activeToolId === 'watermark-pdf' && <PDFEditorTool mode="watermark" onBack={handleGoHome} />}
-            {activeToolId === 'lock-pdf' && <PDFEditorTool mode="lock" onBack={handleGoHome} />}
-            {activeToolId === 'unlock-pdf' && <PDFEditorTool mode="unlock" onBack={handleGoHome} />}
+            {activeToolId === 'edit-pdf' && <PDFEditorTool mode="edit" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
+            {activeToolId === 'watermark-pdf' && <PDFEditorTool mode="watermark" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
+            {activeToolId === 'lock-pdf' && <PDFEditorTool mode="lock" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
+            {activeToolId === 'unlock-pdf' && <PDFEditorTool mode="unlock" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
 
-            {activeToolId === 'merge-pdf' && <PDFMergeSplitTool mode="merge" onBack={handleGoHome} />}
-            {activeToolId === 'split-pdf' && <PDFMergeSplitTool mode="split" onBack={handleGoHome} />}
-            {activeToolId === 'organize-pdf' && <PDFMergeSplitTool mode="organize" onBack={handleGoHome} />}
+            {activeToolId === 'merge-pdf' && <PDFMergeSplitTool mode="merge" onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />}
+            {activeToolId === 'split-pdf' && <PDFMergeSplitTool mode="split" onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />}
+            {activeToolId === 'organize-pdf' && <PDFMergeSplitTool mode="organize" onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />}
 
-            {activeToolId === 'compress-pdf' && <PDFCompressTool onBack={handleGoHome} />}
+            {activeToolId === 'compress-pdf' && <PDFCompressTool onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
 
             {(activeToolId === 'pdf-to-word' || activeToolId === 'word-to-pdf' || activeToolId === 'edit-word' || activeToolId === 'word-to-txt' || activeToolId === 'ppt-to-pdf') && (
-              <WordTool toolId={activeToolId} onBack={handleGoHome} />
+              <WordTool toolId={activeToolId} onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />
             )}
 
             {(activeToolId === 'pdf-to-excel' || activeToolId === 'excel-to-pdf' || activeToolId === 'edit-excel' || activeToolId === 'csv-excel-converter') && (
-              <ExcelTool toolId={activeToolId} onBack={handleGoHome} />
+              <ExcelTool toolId={activeToolId} onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />
             )}
 
             {(activeToolId === 'image-converter' || activeToolId === 'image-compressor' || activeToolId === 'image-resizer' || activeToolId === 'image-to-pdf' || activeToolId === 'pdf-to-image') && (
-              <ImageEditorTool toolId={activeToolId} onBack={handleGoHome} />
+              <ImageEditorTool toolId={activeToolId} onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />
             )}
 
-            {activeToolId === 'ocr-reader' && <OCRTool onBack={handleGoHome} />}
-            {activeToolId === 'universal-converter' && <UniversalConvertTool onBack={handleGoHome} />}
+            {activeToolId === 'ocr-reader' && <OCRTool onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
+            {activeToolId === 'universal-converter' && <UniversalConvertTool onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />}
 
             {/* COMPLIANCE & CONTENT PAGES */}
             {activePage === 'blog' && <BlogPage onBack={handleGoHome} onSelectTool={handleSelectTool} />}
@@ -466,6 +484,12 @@ export default function App() {
       />
 
       <CookieBanner />
+
+      {/* Global Drag and Drop Zone Overlay */}
+      <GlobalDropZone
+        activeToolId={activeToolId}
+        onFilesDropped={handleGlobalFilesDropped}
+      />
 
       <AdminLoginModal
         isOpen={showAdminLogin}

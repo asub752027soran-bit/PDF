@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Upload, Download, ScanText, ArrowLeft, Copy, Check, FileText } from 'lucide-react';
 import { createWorker } from 'tesseract.js';
 import { renderPDFToImages } from '../../utils/pdfExtractor';
@@ -7,15 +7,25 @@ import { recordToolConversion } from '../../utils/activityTracker';
 
 interface OCRToolProps {
   onBack: () => void;
+  initialFile?: File | null;
 }
 
-export const OCRTool: React.FC<OCRToolProps> = ({ onBack }) => {
+export const OCRTool: React.FC<OCRToolProps> = ({ onBack, initialFile }) => {
   const [file, setFile] = useState<File | null>(null);
   const [extractedText, setExtractedText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [copied, setCopied] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+
+  useEffect(() => {
+    if (initialFile) {
+      setFile(initialFile);
+      setExtractedText('');
+      setProgress(0);
+      setStatusMsg('');
+    }
+  }, [initialFile]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {

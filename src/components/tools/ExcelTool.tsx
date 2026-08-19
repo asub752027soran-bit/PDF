@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Upload, Download, Table, ArrowLeft, Grid, RefreshCw, FileText } from 'lucide-react';
 import { readExcelFile, exportSheetToXLSX, exportSheetToCSV, convertExcelToPDF, SheetData } from '../../utils/excelProcessor';
 import { extractTablesFromPDF } from '../../utils/pdfExtractor';
@@ -8,9 +8,10 @@ import { recordToolConversion } from '../../utils/activityTracker';
 interface ExcelToolProps {
   toolId?: string;
   onBack: () => void;
+  initialFile?: File | null;
 }
 
-export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onBack }) => {
+export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onBack, initialFile }) => {
   const [file, setFile] = useState<File | null>(null);
   const [sheets, setSheets] = useState<SheetData[]>([]);
   const [activeSheetIndex, setActiveSheetIndex] = useState(0);
@@ -40,33 +41,42 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
     return 'Fast, private in-browser spreadsheet tools.';
   };
 
+  const processFile = async (selected: File) => {
+    setFile(selected);
+    setIsProcessing(true);
+    setStatusMsg('Parsing spreadsheet data...');
+
+    try {
+      if (selected.name.toLowerCase().endsWith('.pdf')) {
+        const pdfPagesData = await extractTablesFromPDF(selected);
+        const loadedSheets: SheetData[] = pdfPagesData.map((pageRows, idx) => ({
+          sheetName: `PDF Page ${idx + 1}`,
+          data: pageRows.length > 0 ? pageRows : [['No structured text found']],
+        }));
+        setSheets(loadedSheets);
+      } else {
+        const loadedSheets = await readExcelFile(selected);
+        setSheets(loadedSheets);
+      }
+      setActiveSheetIndex(0);
+      setStatusMsg('Data parsed successfully');
+    } catch (err) {
+      console.error('Failed reading file:', err);
+      alert('Failed to parse file. Please ensure file format is valid.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (initialFile) {
+      processFile(initialFile);
+    }
+  }, [initialFile]);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const selected = e.target.files[0];
-      setFile(selected);
-      setIsProcessing(true);
-      setStatusMsg('Parsing spreadsheet data...');
-
-      try {
-        if (selected.name.toLowerCase().endsWith('.pdf')) {
-          const pdfPagesData = await extractTablesFromPDF(selected);
-          const loadedSheets: SheetData[] = pdfPagesData.map((pageRows, idx) => ({
-            sheetName: `PDF Page ${idx + 1}`,
-            data: pageRows.length > 0 ? pageRows : [['No structured text found']],
-          }));
-          setSheets(loadedSheets);
-        } else {
-          const loadedSheets = await readExcelFile(selected);
-          setSheets(loadedSheets);
-        }
-        setActiveSheetIndex(0);
-        setStatusMsg('Data parsed successfully');
-      } catch (err) {
-        console.error('Failed reading file:', err);
-        alert('Failed to parse file. Please ensure file format is valid.');
-      } finally {
-        setIsProcessing(false);
-      }
+      processFile(e.target.files[0]);
     }
   };
 

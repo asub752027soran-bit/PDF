@@ -1,13 +1,14 @@
 import React from 'react';
 import { CATEGORIES, TOOLS } from '../data/toolsData';
 import { CategoryType } from '../types';
-import { FileText, Shield, Sparkles, Clock, Layers, Lock, Zap } from 'lucide-react';
+import { FileText, Shield, Sparkles, Clock, Layers, Lock, Zap, Trash2 } from 'lucide-react';
 import { useLanguage } from '../lib/LanguageContext';
 
 interface SidebarProps {
   currentCategory: CategoryType;
   onSelectCategory: (category: CategoryType) => void;
   recentlyUsed: string[];
+  onClearRecentlyUsed?: () => void;
   onSelectTool: (toolId: string) => void;
   onOpenPage?: (page: string) => void;
 }
@@ -16,6 +17,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentCategory,
   onSelectCategory,
   recentlyUsed,
+  onClearRecentlyUsed,
   onSelectTool,
   onOpenPage,
 }) => {
@@ -32,6 +34,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <Clock className="w-3 h-3 text-blue-600 dark:text-blue-400" />
             {t('recentlyUsed')}
           </p>
+          {onClearRecentlyUsed && recentTools.length > 0 && (
+            <button
+              id="clear-recently-used-sidebar-btn"
+              onClick={onClearRecentlyUsed}
+              className="text-[11px] font-medium text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 transition-colors flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              title="Clear recently used tools history"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Clear</span>
+            </button>
+          )}
         </div>
         
         {recentTools.length === 0 ? (
