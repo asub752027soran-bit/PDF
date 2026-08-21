@@ -1146,27 +1146,76 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* TAB 5: SEO & ANALYTICS */}
       {activeTab === 'seo' && (
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-6 text-xs">
-          <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
-            <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-              <Globe className="w-4 h-4 text-blue-600" />
-              SEO & Google Analytics Configuration
-            </h3>
-            <p className="text-xs text-slate-500">
-              Manage meta tags, site title, and analytics tracking IDs
-            </p>
+          <div className="border-b border-slate-100 dark:border-slate-800 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                <Globe className="w-4 h-4 text-blue-600" />
+                SEO, Google Search Console &amp; Analytics
+              </h3>
+              <p className="text-xs text-slate-500">
+                Manage verification codes, meta tags, Schema.org configurations, and search visibility
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href="https://search.google.com/search-console"
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1.5 hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors"
+              >
+                Google Search Console <ExternalLink className="w-3 h-3" />
+              </a>
+              <a
+                href="https://validator.schema.org/"
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold flex items-center gap-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                Schema Validator <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
           </div>
 
+          {/* Section 1: Google Search Console & Global Meta */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
                 <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Primary Website Title
+                  Google Search Console HTML Verification Code / Tag
                 </label>
                 <input
                   type="text"
-                  value={config.siteName}
-                  onChange={(e) => onUpdateConfig({ ...config, siteName: e.target.value })}
+                  value={config.gscVerificationCode || ''}
+                  onChange={(e) => onUpdateConfig({ ...config, gscVerificationCode: e.target.value })}
+                  placeholder="e.g. google-site-verification code string"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Injected dynamically into &lt;head&gt; as &lt;meta name="google-site-verification" content="..." /&gt;
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Homepage Title (Title Tag)
+                </label>
+                <input
+                  type="text"
+                  value={config.homepageSeoTitle || 'PDF Editfy – Free Online PDF Editor, Converter & Compressor'}
+                  onChange={(e) => onUpdateConfig({ ...config, homepageSeoTitle: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Homepage Meta Description
+                </label>
+                <textarea
+                  rows={2}
+                  value={config.homepageSeoDescription || 'Edit, convert, compress, merge, split and manage PDF files online with PDF Editfy. Fast, easy and free online PDF tools.'}
+                  onChange={(e) => onUpdateConfig({ ...config, homepageSeoDescription: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                 />
               </div>
 
@@ -1184,23 +1233,123 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            <div className="space-y-3">
-              <p className="font-bold text-slate-700 dark:text-slate-300">
-                Generated Sitemap.xml Preview
-              </p>
-              <div className="p-3 rounded-xl bg-slate-950 text-slate-300 font-mono text-[10px] leading-relaxed border border-slate-800 max-h-40 overflow-y-auto">
-{`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://${config.siteName}/</loc>
-    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
-  </url>
-</urlset>`}
+            {/* Sitemap & Robots Inspector */}
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 dark:text-white">Active Robots.txt Policy</span>
+                  <a href="/robots.txt" target="_blank" rel="noreferrer" className="text-blue-600 font-bold hover:underline text-[11px] flex items-center gap-1">
+                    Open /robots.txt <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                <div className="p-2.5 rounded-lg bg-slate-950 text-slate-300 font-mono text-[10px] leading-relaxed">
+{`User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://pdfeditfy.com/sitemap.xml`}
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 dark:text-white">Live XML Sitemap</span>
+                  <a href="/sitemap.xml" target="_blank" rel="noreferrer" className="text-blue-600 font-bold hover:underline text-[11px] flex items-center gap-1">
+                    Open /sitemap.xml <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Includes {TOOLS.length} tool URLs, all informational hub pages, and blog posts. Excludes admin console and processing APIs.
+                </p>
               </div>
             </div>
           </div>
+
+          {/* Section 2: Individual Tool SEO Overrides */}
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-4">
+            <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+              Tool-by-Tool Custom SEO Metadata &amp; Indexing Controls
+            </h4>
+            <p className="text-xs text-slate-500">
+              Customize title tags and meta descriptions for individual PDF tool pages
+            </p>
+
+            <div className="max-h-80 overflow-y-auto space-y-3 pr-2">
+              {TOOLS.map((tool) => {
+                const currentOverride = (config.toolSeoOverrides || {})[tool.id] || {};
+                const isNoIndex = currentOverride.indexable === false;
+
+                return (
+                  <div
+                    key={tool.id}
+                    className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-slate-900 dark:text-white">{tool.name}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono">
+                          /tool/{tool.id}
+                        </span>
+                      </div>
+                      <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={!isNoIndex}
+                          onChange={(e) => {
+                            const newOverrides = { ...(config.toolSeoOverrides || {}) };
+                            newOverrides[tool.id] = {
+                              ...currentOverride,
+                              indexable: e.target.checked
+                            };
+                            onUpdateConfig({ ...config, toolSeoOverrides: newOverrides });
+                          }}
+                          className="rounded text-blue-600"
+                        />
+                        Indexable in Google
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                      <div>
+                        <input
+                          type="text"
+                          value={currentOverride.seoTitle !== undefined ? currentOverride.seoTitle : tool.seoTitle}
+                          onChange={(e) => {
+                            const newOverrides = { ...(config.toolSeoOverrides || {}) };
+                            newOverrides[tool.id] = {
+                              ...currentOverride,
+                              seoTitle: e.target.value
+                            };
+                            onUpdateConfig({ ...config, toolSeoOverrides: newOverrides });
+                          }}
+                          placeholder="Custom SEO Title"
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          value={currentOverride.seoDescription !== undefined ? currentOverride.seoDescription : tool.seoDescription}
+                          onChange={(e) => {
+                            const newOverrides = { ...(config.toolSeoOverrides || {}) };
+                            newOverrides[tool.id] = {
+                              ...currentOverride,
+                              seoDescription: e.target.value
+                            };
+                            onUpdateConfig({ ...config, toolSeoOverrides: newOverrides });
+                          }}
+                          placeholder="Custom Meta Description"
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
         </div>
       )}
 

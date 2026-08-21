@@ -117,10 +117,16 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 sticky top-0 z-40 transition-colors">
       
       {/* Brand & Logo */}
-      <div className="flex items-center gap-3 cursor-pointer shrink-0" onClick={onGoHome}>
-        <img src="/favicon.svg" alt="pdfeditfy logo" className="w-8 h-8 rounded-lg shadow-xs object-cover" />
-        <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-          pdfeditfy<span className="text-blue-600 font-black italic underline">.com</span>
+      <div className="flex items-center gap-2.5 cursor-pointer shrink-0" onClick={onGoHome}>
+        <img
+          src="/favicon.svg"
+          alt="PDF Editfy – Free Online PDF Tools"
+          width="32"
+          height="32"
+          className="w-8 h-8 rounded-lg shadow-xs object-cover"
+        />
+        <span className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+          PDF Editfy
         </span>
       </div>
 

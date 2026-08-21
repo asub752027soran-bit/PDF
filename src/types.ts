@@ -111,6 +111,15 @@ export interface FAQItem {
   answer: string;
 }
 
+export interface ToolSeoConfig {
+  seoTitle?: string;
+  seoDescription?: string;
+  slug?: string;
+  canonicalUrl?: string;
+  ogImage?: string;
+  indexable?: boolean;
+}
+
 export interface AdminConfig {
   siteName: string;
   announcementBar: {
@@ -128,6 +137,13 @@ export interface AdminConfig {
   analyticsEnabled: boolean;
   gaTrackingId: string;
   maxUploadSizeMB: number;
+  // Comprehensive SEO Settings
+  homepageSeoTitle?: string;
+  homepageSeoDescription?: string;
+  gscVerificationCode?: string;
+  canonicalBaseUrl?: string;
+  ogImage?: string;
+  toolSeoOverrides?: Record<string, ToolSeoConfig>;
 }
 
 export interface ContactInquiry {

@@ -7,6 +7,7 @@ import { Footer } from './components/Footer';
 import { AdSenseBanner } from './components/AdSenseBanner';
 import { CookieBanner } from './components/CookieBanner';
 import { AdminLoginModal } from './components/admin/AdminLoginModal';
+import { ToolPageLayout } from './components/tools/ToolPageLayout';
 
 // Lazy Loaded Tool Components
 const PDFEditorTool = lazy(() => import('./components/tools/PDFEditorTool').then(m => ({ default: m.PDFEditorTool })));
@@ -24,18 +25,20 @@ const FAQPage = lazy(() => import('./components/pages/FAQPage').then(m => ({ def
 const ContactPage = lazy(() => import('./components/pages/ContactPage').then(m => ({ default: m.ContactPage })));
 const CompliancePages = lazy(() => import('./components/pages/CompliancePages').then(m => ({ default: m.CompliancePages })));
 const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const NotFoundPage = lazy(() => import('./components/pages/NotFoundPage').then(m => ({ default: m.NotFoundPage })));
 
 // Loading Spinner Fallback for Lazy Loaded Components
 const ToolLoadingFallback = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] p-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm animate-pulse">
-    <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
-    <p className="text-slate-600 dark:text-slate-300 font-bold text-sm">Loading Tool Workspace...</p>
-    <p className="text-slate-400 dark:text-slate-500 text-xs mt-1">Initializing fast browser processor</p>
+    <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
+    <p className="text-slate-600 dark:text-slate-300 font-bold text-sm">Loading Workspace...</p>
+    <p className="text-slate-400 dark:text-slate-500 text-xs mt-1">Initializing fast in-browser processor</p>
   </div>
 );
 
 // Data & Helpers
 import { TOOLS } from './data/toolsData';
+import { TOOL_SEO_DETAILS } from './data/toolSeoData';
 import { CategoryType, AdminConfig } from './types';
 import { LanguageCode } from './data/translations';
 import { updateSEOMeta } from './utils/seo';
@@ -44,9 +47,11 @@ import { GlobalDropZone } from './components/common/GlobalDropZone';
 
 const DEFAULT_ADMIN_CONFIG: AdminConfig = {
   siteName: 'pdfeditfy.com',
+  homepageSeoTitle: 'PDF Editfy – Free Online PDF Editor, Converter & Compressor',
+  homepageSeoDescription: 'Edit, convert, compress, merge, split and manage PDF files online with PDF Editfy. Fast, easy and free online PDF tools.',
   announcementBar: {
     enabled: true,
-    text: '🎉 Welcome to pdfeditfy.com - Fast & private PDF tools, Word converters, and image compressor!',
+    text: '🎉 Welcome to PDF Editfy – 100% Free Online PDF, Word, Excel & Image Tools with Zero Sign Up!',
     type: 'info',
   },
   maintenanceMode: false,
@@ -58,19 +63,22 @@ const DEFAULT_ADMIN_CONFIG: AdminConfig = {
   analyticsEnabled: true,
   gaTrackingId: 'G-PDFEDITFY01',
   maxUploadSizeMB: 100,
+  gscVerificationCode: '',
+  toolSeoOverrides: {},
 };
 
 export default function App() {
   const [currentCategory, setCurrentCategory] = useState<CategoryType>('All');
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const [activePage, setActivePage] = useState<string | null>(null);
+  const [isNotFound, setIsNotFound] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Single Admin State & Config
   const [adminConfig, setAdminConfig] = useState<AdminConfig>(() => {
     try {
       const saved = localStorage.getItem('pdfeditfy_admin_config');
-      return saved ? JSON.parse(saved) : DEFAULT_ADMIN_CONFIG;
+      return saved ? { ...DEFAULT_ADMIN_CONFIG, ...JSON.parse(saved) } : DEFAULT_ADMIN_CONFIG;
     } catch {
       return DEFAULT_ADMIN_CONFIG;
     }
@@ -82,7 +90,6 @@ export default function App() {
 
   const [showAdminLogin, setShowAdminLogin] = useState<boolean>(false);
 
-  
   // Theme state
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('pdfeditfy_theme') || localStorage.getItem('docushift_theme');
@@ -158,25 +165,114 @@ export default function App() {
     }
   }, [darkMode]);
 
-  // Dynamic SEO Title & Meta update based on active view
+  // Dynamic SEO Title & Meta update based on active view with full Structured Data
   useEffect(() => {
+    if (isNotFound) {
+      updateSEOMeta({
+        title: '404 - Page Not Found',
+        description: 'The requested page or tool does not exist on PDF Editfy.',
+        canonicalUrl: 'https://pdfeditfy.com/404',
+        noindex: true,
+        gscVerificationCode: adminConfig.gscVerificationCode,
+      });
+      return;
+    }
+
     if (activeToolId) {
       const tool = TOOLS.find((t) => t.id === activeToolId);
+      const seoDetail = TOOL_SEO_DETAILS[activeToolId];
+      const customOverride = (adminConfig.toolSeoOverrides || {})[activeToolId] || {};
+
       if (tool) {
-        updateSEOMeta(tool.seoTitle, tool.seoDescription);
+        const title = customOverride.seoTitle || tool.seoTitle || `${tool.name} – Free Online Tool`;
+        const description = customOverride.seoDescription || tool.seoDescription || seoDetail?.shortIntro || tool.description;
+        const canonicalUrl = `https://pdfeditfy.com/tool/${tool.id}`;
+        const isNoIndex = customOverride.indexable === false;
+
+        updateSEOMeta({
+          title,
+          description,
+          canonicalUrl,
+          noindex: isNoIndex,
+          breadcrumbs: [
+            { name: 'Home', url: 'https://pdfeditfy.com/' },
+            { name: tool.category, url: `https://pdfeditfy.com/#${tool.category}` },
+            { name: tool.name, url: canonicalUrl },
+          ],
+          faqs: seoDetail?.faqs,
+          softwareApp: {
+            name: tool.name,
+            description,
+            url: canonicalUrl,
+            category: 'UtilitiesApplication',
+          },
+          gscVerificationCode: adminConfig.gscVerificationCode,
+        });
       }
     } else if (activePage) {
-      updateSEOMeta(
-        `pdfeditfy.com | ${activePage.toUpperCase()}`,
-        'pdfeditfy.com free online PDF editor, converter, and file tools.'
-      );
+      const pageTitles: Record<string, { title: string; desc: string }> = {
+        about: {
+          title: 'About Us – PDF Editfy',
+          desc: 'Learn about PDF Editfy, our mission to provide free, private, and secure online document and PDF tools for everyone without sign-up.',
+        },
+        contact: {
+          title: 'Contact Support – PDF Editfy',
+          desc: 'Contact the PDF Editfy team with support questions, inquiries, or feedback.',
+        },
+        privacy: {
+          title: 'Privacy Policy – PDF Editfy',
+          desc: 'PDF Editfy privacy policy, zero data retention guarantee, and client-side processing details.',
+        },
+        terms: {
+          title: 'Terms of Service – PDF Editfy',
+          desc: 'Terms of service and acceptable use agreement for PDF Editfy tools.',
+        },
+        disclaimer: {
+          title: 'Disclaimer – PDF Editfy',
+          desc: 'Legal disclaimer and service availability guidelines for PDF Editfy online platform.',
+        },
+        faq: {
+          title: 'Frequently Asked Questions – PDF Editfy',
+          desc: 'Answers to frequently asked questions about PDF Editfy features, tools, conversions, and security.',
+        },
+        blog: {
+          title: 'PDF & Document Guides – PDF Editfy Knowledge Hub',
+          desc: 'Helpful tutorials, document management advice, and guides for PDFs, Word files, spreadsheets, and images.',
+        },
+        admin: {
+          title: 'Admin Console – PDF Editfy',
+          desc: 'PDF Editfy Administrator Dashboard',
+        },
+      };
+
+      const pageMeta = pageTitles[activePage] || {
+        title: `${activePage.toUpperCase()} – PDF Editfy`,
+        desc: 'PDF Editfy free online PDF editor, converter, and document workstation.',
+      };
+
+      updateSEOMeta({
+        title: pageMeta.title,
+        description: pageMeta.desc,
+        canonicalUrl: activePage === 'admin' ? undefined : `https://pdfeditfy.com/${activePage}`,
+        noindex: activePage === 'admin',
+        breadcrumbs: [
+          { name: 'Home', url: 'https://pdfeditfy.com/' },
+          { name: pageMeta.title.replace(' – PDF Editfy', ''), url: `https://pdfeditfy.com/${activePage}` },
+        ],
+        gscVerificationCode: adminConfig.gscVerificationCode,
+      });
     } else {
-      updateSEOMeta(
-        'pdfeditfy.com - Free Online PDF Editor, Converter & Compressor',
-        'Fast, private online tools to edit PDF, convert Word to PDF, compress images, and merge files without creating an account.'
-      );
+      // Homepage
+      updateSEOMeta({
+        title: adminConfig.homepageSeoTitle || 'PDF Editfy – Free Online PDF Editor, Converter & Compressor',
+        description:
+          adminConfig.homepageSeoDescription ||
+          'Edit, convert, compress, merge, split and manage PDF files online with PDF Editfy. Fast, easy and free online PDF tools.',
+        canonicalUrl: 'https://pdfeditfy.com/',
+        gscVerificationCode: adminConfig.gscVerificationCode,
+      });
     }
-  }, [activeToolId, activePage]);
+  }, [activeToolId, activePage, isNotFound, adminConfig]);
 
   // Update admin config helper
   const handleUpdateAdminConfig = (newConfig: AdminConfig) => {
@@ -184,7 +280,9 @@ export default function App() {
     localStorage.setItem('pdfeditfy_admin_config', JSON.stringify(newConfig));
   };
 
-  const [adminInitialTab, setAdminInitialTab] = useState<'overview' | 'action-log' | 'tools' | 'monetization' | 'inquiries' | 'seo' | 'security'>('overview');
+  const [adminInitialTab, setAdminInitialTab] = useState<
+    'overview' | 'action-log' | 'tools' | 'monetization' | 'inquiries' | 'seo' | 'security'
+  >('overview');
 
   // Admin login trigger
   const handleOpenAdminConsole = (targetTab?: string) => {
@@ -194,6 +292,7 @@ export default function App() {
     if (isAdminLoggedIn) {
       setActivePage('admin');
       setActiveToolId(null);
+      setIsNotFound(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       setShowAdminLogin(true);
@@ -206,6 +305,7 @@ export default function App() {
     setShowAdminLogin(false);
     setActivePage('admin');
     setActiveToolId(null);
+    setIsNotFound(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -214,51 +314,86 @@ export default function App() {
     sessionStorage.removeItem('pdfeditfy_admin_authed');
     localStorage.removeItem('pdfeditfy_admin_google_user');
     setActivePage(null);
+    setIsNotFound(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // URL Route Parser for deep-linking (sitemap crawling & direct links)
+  // URL Route Parser for deep-linking (sitemap crawling & clean direct URLs)
   useEffect(() => {
     const parseRoute = () => {
-      const path = window.location.pathname.replace(/^\//, '').toLowerCase();
+      const rawPath = window.location.pathname.replace(/^\//, '').toLowerCase();
       const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
       const params = new URLSearchParams(window.location.search);
 
-      // Tool route matching
-      let toolMatch: string | null = null;
-      if (path.startsWith('tool/')) {
-        toolMatch = path.replace('tool/', '');
-      } else if (hash.startsWith('tool/')) {
-        toolMatch = hash.replace('tool/', '');
-      } else if (params.get('tool')) {
-        toolMatch = params.get('tool');
-      }
-
-      if (toolMatch && TOOLS.some(t => t.id === toolMatch)) {
-        setActiveToolId(toolMatch);
+      if (!rawPath && !hash && !params.get('tool') && !params.get('page')) {
+        setActiveToolId(null);
         setActivePage(null);
+        setIsNotFound(false);
         return;
       }
 
-      // Page route matching
-      const validPages = ['about', 'privacy', 'terms', 'disclaimer', 'contact', 'faq', 'blog', 'admin'];
-      let pageMatch: string | null = null;
-
-      if (validPages.includes(path)) {
-        pageMatch = path;
-      } else if (validPages.includes(hash)) {
-        pageMatch = hash;
-      } else if (params.get('page') && validPages.includes(params.get('page')!)) {
-        pageMatch = params.get('page');
+      // Check tool routes: /tool/:id or direct slug match
+      let candidate = '';
+      if (rawPath.startsWith('tool/')) {
+        candidate = rawPath.replace('tool/', '');
+      } else if (hash.startsWith('tool/')) {
+        candidate = hash.replace('tool/', '');
+      } else if (params.get('tool')) {
+        candidate = params.get('tool') || '';
+      } else {
+        candidate = rawPath || hash;
       }
 
-      if (pageMatch) {
-        if (pageMatch === 'admin' && !sessionStorage.getItem('pdfeditfy_admin_authed')) {
+      // 1. Direct tool ID match
+      const directTool = TOOLS.find((t) => t.id === candidate);
+      if (directTool) {
+        setActiveToolId(directTool.id);
+        setActivePage(null);
+        setIsNotFound(false);
+        return;
+      }
+
+      // 2. Alias / Canonical Slug match from TOOL_SEO_DETAILS
+      for (const [toolId, detail] of Object.entries(TOOL_SEO_DETAILS)) {
+        if (
+          detail.canonicalSlug === candidate ||
+          (detail.alternateSlugs && detail.alternateSlugs.includes(candidate))
+        ) {
+          setActiveToolId(toolId);
+          setActivePage(null);
+          setIsNotFound(false);
+          return;
+        }
+      }
+
+      // 3. Static Pages
+      const validPages = ['about', 'privacy', 'terms', 'disclaimer', 'contact', 'faq', 'blog', 'admin'];
+      let matchedPage: string | null = null;
+
+      if (validPages.includes(rawPath)) {
+        matchedPage = rawPath;
+      } else if (validPages.includes(hash)) {
+        matchedPage = hash;
+      } else if (params.get('page') && validPages.includes(params.get('page')!)) {
+        matchedPage = params.get('page');
+      }
+
+      if (matchedPage) {
+        if (matchedPage === 'admin' && !sessionStorage.getItem('pdfeditfy_admin_authed')) {
           setShowAdminLogin(true);
         } else {
-          setActivePage(pageMatch);
+          setActivePage(matchedPage);
           setActiveToolId(null);
+          setIsNotFound(false);
         }
+        return;
+      }
+
+      // If URL was provided but matched neither tool nor valid page -> 404
+      if (rawPath && rawPath !== '' && rawPath !== '/') {
+        setIsNotFound(true);
+        setActiveToolId(null);
+        setActivePage(null);
       }
     };
 
@@ -275,6 +410,7 @@ export default function App() {
     }
     setActiveToolId(toolId);
     setActivePage(null);
+    setIsNotFound(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     if (window.location.pathname !== `/tool/${toolId}`) {
@@ -301,6 +437,7 @@ export default function App() {
     }
     setActivePage(pageName);
     setActiveToolId(null);
+    setIsNotFound(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     if (window.location.pathname !== `/${pageName}`) {
@@ -311,6 +448,7 @@ export default function App() {
   const handleGoHome = () => {
     setActiveToolId(null);
     setActivePage(null);
+    setIsNotFound(false);
     setSearchQuery('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -322,21 +460,23 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
       
-      {/* Announcement Bar (Configured via Admin Panel) */}
+      {/* Announcement Bar */}
       {adminConfig.announcementBar.enabled && adminConfig.announcementBar.text && (
-        <div className={`px-4 py-2 text-center text-xs font-extrabold flex items-center justify-center gap-2 shrink-0 ${
-          adminConfig.announcementBar.type === 'warning'
-            ? 'bg-amber-500 text-slate-950'
-            : adminConfig.announcementBar.type === 'success'
-            ? 'bg-emerald-600 text-white'
-            : 'bg-blue-600 text-white'
-        }`}>
+        <div
+          className={`px-4 py-2 text-center text-xs font-extrabold flex items-center justify-center gap-2 shrink-0 ${
+            adminConfig.announcementBar.type === 'warning'
+              ? 'bg-amber-500 text-slate-950'
+              : adminConfig.announcementBar.type === 'success'
+              ? 'bg-emerald-600 text-white'
+              : 'bg-blue-600 text-white'
+          }`}
+        >
           <Megaphone className="w-3.5 h-3.5 shrink-0" />
           <span>{adminConfig.announcementBar.text}</span>
         </div>
       )}
 
-      {/* High Density Navigation Header */}
+      {/* Header */}
       <Header
         currentCategory={currentCategory}
         onSelectCategory={(cat) => {
@@ -370,11 +510,11 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Content & Sidebar Layout */}
+      {/* Main Content Layout */}
       <div className="flex-1 flex overflow-hidden">
         
-        {/* Left Sidebar for High Density Homepage */}
-        {!activeToolId && !activePage && (
+        {/* Left Sidebar for Homepage */}
+        {!activeToolId && !activePage && !isNotFound && (
           <Sidebar
             currentCategory={currentCategory}
             onSelectCategory={setCurrentCategory}
@@ -385,11 +525,11 @@ export default function App() {
           />
         )}
 
-        {/* Main Content Area */}
+        {/* Main Content Workspace */}
         <main className="flex-1 flex flex-col p-4 sm:p-6 gap-6 overflow-y-auto">
           
           {/* HOMEPAGE VIEW */}
-          {!activeToolId && !activePage && (
+          {!activeToolId && !activePage && !isNotFound && (
             <>
               <Hero
                 searchQuery={searchQuery}
@@ -413,67 +553,86 @@ export default function App() {
             </>
           )}
 
-          {/* ACTIVE TOOL WORKSPACES & PAGES WITH SUSPENSE LAZY LOADING */}
-          <Suspense fallback={<ToolLoadingFallback />}>
-            {activeToolId && adminConfig.adsEnabled && (
-              <AdSenseBanner slotType="banner" className="mb-2" />
-            )}
+          {/* 404 NOT FOUND PAGE */}
+          {isNotFound && (
+            <Suspense fallback={<ToolLoadingFallback />}>
+              <NotFoundPage onGoHome={handleGoHome} onSelectTool={handleSelectTool} />
+            </Suspense>
+          )}
 
-            {activeToolId === 'edit-pdf' && <PDFEditorTool mode="edit" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
-            {activeToolId === 'watermark-pdf' && <PDFEditorTool mode="watermark" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
-            {activeToolId === 'lock-pdf' && <PDFEditorTool mode="lock" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
-            {activeToolId === 'unlock-pdf' && <PDFEditorTool mode="unlock" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
+          {/* ACTIVE TOOL WORKSPACES WRAPPED WITH SEO LAYOUT */}
+          {activeToolId && (
+            <Suspense fallback={<ToolLoadingFallback />}>
+              {adminConfig.adsEnabled && (
+                <AdSenseBanner slotType="banner" className="mb-2" />
+              )}
 
-            {activeToolId === 'merge-pdf' && <PDFMergeSplitTool mode="merge" onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />}
-            {activeToolId === 'split-pdf' && <PDFMergeSplitTool mode="split" onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />}
-            {activeToolId === 'organize-pdf' && <PDFMergeSplitTool mode="organize" onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />}
+              <ToolPageLayout
+                toolId={activeToolId}
+                onSelectTool={handleSelectTool}
+                onGoHome={handleGoHome}
+                onSelectCategory={setCurrentCategory}
+              >
+                {activeToolId === 'edit-pdf' && <PDFEditorTool mode="edit" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
+                {activeToolId === 'watermark-pdf' && <PDFEditorTool mode="watermark" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
+                {activeToolId === 'lock-pdf' && <PDFEditorTool mode="lock" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
+                {activeToolId === 'unlock-pdf' && <PDFEditorTool mode="unlock" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
 
-            {activeToolId === 'compress-pdf' && <PDFCompressTool onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
+                {activeToolId === 'merge-pdf' && <PDFMergeSplitTool mode="merge" onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />}
+                {activeToolId === 'split-pdf' && <PDFMergeSplitTool mode="split" onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />}
+                {activeToolId === 'organize-pdf' && <PDFMergeSplitTool mode="organize" onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />}
 
-            {(activeToolId === 'pdf-to-word' || activeToolId === 'word-to-pdf' || activeToolId === 'edit-word' || activeToolId === 'word-to-txt' || activeToolId === 'ppt-to-pdf') && (
-              <WordTool toolId={activeToolId} onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />
-            )}
+                {activeToolId === 'compress-pdf' && <PDFCompressTool onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
 
-            {(activeToolId === 'pdf-to-excel' || activeToolId === 'excel-to-pdf' || activeToolId === 'edit-excel' || activeToolId === 'csv-excel-converter') && (
-              <ExcelTool toolId={activeToolId} onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />
-            )}
+                {(activeToolId === 'pdf-to-word' || activeToolId === 'word-to-pdf' || activeToolId === 'edit-word' || activeToolId === 'word-to-txt' || activeToolId === 'ppt-to-pdf') && (
+                  <WordTool toolId={activeToolId} onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />
+                )}
 
-            {(activeToolId === 'image-converter' || activeToolId === 'image-compressor' || activeToolId === 'image-resizer' || activeToolId === 'image-to-pdf' || activeToolId === 'pdf-to-image') && (
-              <ImageEditorTool toolId={activeToolId} onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />
-            )}
+                {(activeToolId === 'pdf-to-excel' || activeToolId === 'excel-to-pdf' || activeToolId === 'edit-excel' || activeToolId === 'csv-excel-converter') && (
+                  <ExcelTool toolId={activeToolId} onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />
+                )}
 
-            {activeToolId === 'ocr-reader' && <OCRTool onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
-            {activeToolId === 'universal-converter' && <UniversalConvertTool onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />}
+                {(activeToolId === 'image-converter' || activeToolId === 'image-compressor' || activeToolId === 'image-resizer' || activeToolId === 'image-to-pdf' || activeToolId === 'pdf-to-image') && (
+                  <ImageEditorTool toolId={activeToolId} onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />
+                )}
 
-            {/* COMPLIANCE & CONTENT PAGES */}
-            {activePage === 'blog' && <BlogPage onBack={handleGoHome} onSelectTool={handleSelectTool} />}
-            {activePage === 'faq' && <FAQPage onBack={handleGoHome} />}
-            {activePage === 'contact' && <ContactPage onBack={handleGoHome} />}
-            {(activePage === 'privacy' || activePage === 'terms' || activePage === 'disclaimer' || activePage === 'about') && (
-              <CompliancePages page={activePage as any} onBack={handleGoHome} />
-            )}
+                {activeToolId === 'ocr-reader' && <OCRTool onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
+                {activeToolId === 'universal-converter' && <UniversalConvertTool onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />}
+              </ToolPageLayout>
 
-            {/* ADMIN DASHBOARD PAGE */}
-            {activePage === 'admin' && isAdminLoggedIn && (
-              <AdminDashboard
-                onBack={handleGoHome}
-                config={adminConfig}
-                onUpdateConfig={handleUpdateAdminConfig}
-                onLogout={handleAdminLogout}
-                initialTab={adminInitialTab}
-              />
-            )}
+              {adminConfig.adsEnabled && (
+                <AdSenseBanner slotType="leaderboard" className="mt-6" />
+              )}
+            </Suspense>
+          )}
 
-            {/* Bottom Ad for Active Tool pages */}
-            {activeToolId && adminConfig.adsEnabled && (
-              <AdSenseBanner slotType="leaderboard" className="mt-6" />
-            )}
-          </Suspense>
+          {/* COMPLIANCE & INFORMATIONAL PAGES */}
+          {activePage && (
+            <Suspense fallback={<ToolLoadingFallback />}>
+              {activePage === 'blog' && <BlogPage onBack={handleGoHome} onSelectTool={handleSelectTool} />}
+              {activePage === 'faq' && <FAQPage onBack={handleGoHome} />}
+              {activePage === 'contact' && <ContactPage onBack={handleGoHome} />}
+              {(activePage === 'privacy' || activePage === 'terms' || activePage === 'disclaimer' || activePage === 'about') && (
+                <CompliancePages page={activePage as any} onBack={handleGoHome} />
+              )}
+
+              {/* ADMIN DASHBOARD PAGE */}
+              {activePage === 'admin' && isAdminLoggedIn && (
+                <AdminDashboard
+                  onBack={handleGoHome}
+                  config={adminConfig}
+                  onUpdateConfig={handleUpdateAdminConfig}
+                  onLogout={handleAdminLogout}
+                  initialTab={adminInitialTab}
+                />
+              )}
+            </Suspense>
+          )}
 
         </main>
       </div>
 
-      {/* Footer & Cookie Banner */}
+      {/* Footer */}
       <Footer
         onSelectCategory={(cat) => {
           setCurrentCategory(cat);
@@ -501,4 +660,3 @@ export default function App() {
     </div>
   );
 }
-

@@ -1,5 +1,6 @@
 import { TOOLS } from '../data/toolsData';
 import { BLOG_POSTS } from '../data/blogData';
+import { TOOL_SEO_DETAILS } from '../data/toolSeoData';
 
 export function generateSitemapXml(customDomain?: string): string {
   const domain = customDomain || 'https://pdfeditfy.com';
@@ -8,13 +9,13 @@ export function generateSitemapXml(customDomain?: string): string {
 
   const staticPages = [
     { path: '', priority: '1.0', changefreq: 'daily' },
+    { path: 'faq', priority: '0.8', changefreq: 'weekly' },
+    { path: 'blog', priority: '0.8', changefreq: 'weekly' },
     { path: 'about', priority: '0.7', changefreq: 'monthly' },
+    { path: 'contact', priority: '0.7', changefreq: 'monthly' },
     { path: 'privacy', priority: '0.7', changefreq: 'monthly' },
     { path: 'terms', priority: '0.7', changefreq: 'monthly' },
     { path: 'disclaimer', priority: '0.7', changefreq: 'monthly' },
-    { path: 'contact', priority: '0.7', changefreq: 'monthly' },
-    { path: 'faq', priority: '0.8', changefreq: 'weekly' },
-    { path: 'blog', priority: '0.8', changefreq: 'weekly' },
   ];
 
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
@@ -22,8 +23,8 @@ export function generateSitemapXml(customDomain?: string): string {
   xml += `        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n`;
   xml += `        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">\n`;
 
-  // 1. Static Pages
-  staticPages.forEach(p => {
+  // 1. Static Informational & Hub Pages
+  staticPages.forEach((p) => {
     const url = p.path === '' ? `${baseUrl}/` : `${baseUrl}/${p.path}`;
     xml += `  <url>\n`;
     xml += `    <loc>${url}</loc>\n`;
@@ -33,11 +34,13 @@ export function generateSitemapXml(customDomain?: string): string {
     xml += `  </url>\n`;
   });
 
-  // 2. Dynamic Tool Pages (Both clean paths and direct hash routes for indexing)
-  TOOLS.forEach(tool => {
-    const priority = tool.badge === 'Popular' ? '0.9' : '0.8';
-    const changefreq = tool.badge === 'Popular' ? 'daily' : 'weekly';
+  // 2. Individual PDF Tool Pages
+  TOOLS.forEach((tool) => {
+    const isPopular = tool.badge === 'Popular';
+    const priority = isPopular ? '0.9' : '0.8';
+    const changefreq = isPopular ? 'daily' : 'weekly';
 
+    // Canonical tool path: /tool/:id
     xml += `  <url>\n`;
     xml += `    <loc>${baseUrl}/tool/${tool.id}</loc>\n`;
     xml += `    <lastmod>${currentDate}</lastmod>\n`;
@@ -45,16 +48,20 @@ export function generateSitemapXml(customDomain?: string): string {
     xml += `    <priority>${priority}</priority>\n`;
     xml += `  </url>\n`;
 
-    xml += `  <url>\n`;
-    xml += `    <loc>${baseUrl}/#${tool.id}</loc>\n`;
-    xml += `    <lastmod>${currentDate}</lastmod>\n`;
-    xml += `    <changefreq>${changefreq}</changefreq>\n`;
-    xml += `    <priority>${priority}</priority>\n`;
-    xml += `  </url>\n`;
+    // Also include direct clean slug alias if present (e.g. /edit-pdf)
+    const seoDetail = TOOL_SEO_DETAILS[tool.id];
+    if (seoDetail && seoDetail.canonicalSlug && seoDetail.canonicalSlug !== tool.id) {
+      xml += `  <url>\n`;
+      xml += `    <loc>${baseUrl}/${seoDetail.canonicalSlug}</loc>\n`;
+      xml += `    <lastmod>${currentDate}</lastmod>\n`;
+      xml += `    <changefreq>${changefreq}</changefreq>\n`;
+      xml += `    <priority>${priority}</priority>\n`;
+      xml += `  </url>\n`;
+    }
   });
 
-  // 3. Dynamic Blog Article Pages
-  BLOG_POSTS.forEach(post => {
+  // 3. Blog Articles
+  BLOG_POSTS.forEach((post) => {
     xml += `  <url>\n`;
     xml += `    <loc>${baseUrl}/blog/${post.slug}</loc>\n`;
     xml += `    <lastmod>${currentDate}</lastmod>\n`;

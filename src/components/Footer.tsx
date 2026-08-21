@@ -77,11 +77,15 @@ export const Footer: React.FC<FooterProps> = ({
           {/* Brand Column */}
           <div className="col-span-2 space-y-4">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
-                <FileStack className="w-4 h-4" />
-              </div>
+              <img
+                src="/favicon.svg"
+                alt="PDF Editfy – Free Online PDF Tools"
+                width="32"
+                height="32"
+                className="w-8 h-8 rounded-lg shadow-xs object-cover"
+              />
               <span className="font-extrabold text-xl tracking-tight text-white">
-                pdfeditfy.com
+                PDF Editfy
               </span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed max-w-sm">

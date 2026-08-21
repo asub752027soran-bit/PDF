@@ -1,6 +1,6 @@
 {
-  "name": "pdfeditfy.com",
-  "description": "Fast, private, and secure online file converter, PDF editor, compressor, and image processing tools at pdfeditfy.com with zero signup required.",
+  "name": "PDF Editfy",
+  "description": "Fast, private, and free online PDF editor, converter, compressor, and document processing tools at pdfeditfy.com with zero signup required.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

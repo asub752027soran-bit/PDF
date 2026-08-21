@@ -46,7 +46,7 @@ setInterval(() => {
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
-    app: 'PDFEditfy',
+    app: 'PDF Editfy',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
     privacyNotice: 'Uploaded temporary processing files are purged automatically within 15 minutes.',
@@ -63,6 +63,7 @@ app.get('/robots.txt', (req, res) => {
   res.send(
 `User-agent: *
 Allow: /
+Disallow: /admin
 Disallow: /api/
 
 Sitemap: ${baseUrl}/sitemap.xml`

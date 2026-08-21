@@ -89,11 +89,11 @@ export const TRANSLATIONS: Record<LanguageCode, Record<string, string>> = {
     blogKnowledge: "Knowledge Hub / Guides",
     faqHelp: "FAQ & Questions",
     contactSupport: "Contact & Support",
-    copyrightText: "pdfeditfy.com. All rights reserved. Free online document workstation.",
+    copyrightText: "PDF Editfy (pdfeditfy.com). All rights reserved. Free online PDF and document workstation.",
 
     // Cookie Banner
     cookieTitle: "Privacy & Cookie Preferences",
-    cookieText: "pdfeditfy.com uses essential browser storage and standard Google AdSense cookies to personalize advertisements, maintain session settings, and analyze anonymous site traffic.",
+    cookieText: "PDF Editfy uses essential browser storage and standard Google AdSense cookies to personalize advertisements, maintain session settings, and analyze anonymous site traffic.",
     acceptAll: "Accept All & Continue",
     essentialOnly: "Essential Only",
     viewPrivacy: "Privacy Policy",
