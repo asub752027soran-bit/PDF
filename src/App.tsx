@@ -57,6 +57,17 @@ const DEFAULT_ADMIN_CONFIG: AdminConfig = {
   maintenanceMode: false,
   adsensePublisherId: 'ca-pub-9806760868514523',
   adsEnabled: true,
+  toolAdSlotType: 'banner',
+  toolAdSlots: {
+    leaderboard: true,
+    banner: true,
+    sidebar: true,
+  },
+  adsenseCustomSlots: {
+    leaderboard: '',
+    banner: '',
+    sidebar: '',
+  },
   disabledTools: [],
   customBadges: {},
   adminPasscode: 'Sobha@752027',
@@ -563,15 +574,16 @@ export default function App() {
           {/* ACTIVE TOOL WORKSPACES WRAPPED WITH SEO LAYOUT */}
           {activeToolId && (
             <Suspense fallback={<ToolLoadingFallback />}>
-              {adminConfig.adsEnabled && (
-                <AdSenseBanner slotType="banner" className="mb-2" />
-              )}
-
               <ToolPageLayout
                 toolId={activeToolId}
                 onSelectTool={handleSelectTool}
                 onGoHome={handleGoHome}
                 onSelectCategory={setCurrentCategory}
+                adsEnabled={adminConfig.adsEnabled}
+                adSlotPlacement={adminConfig.toolAdSlotType || 'banner'}
+                adSlotsConfig={adminConfig.toolAdSlots}
+                adsensePublisherId={adminConfig.adsensePublisherId}
+                adsenseCustomSlots={adminConfig.adsenseCustomSlots}
               >
                 {activeToolId === 'edit-pdf' && <PDFEditorTool mode="edit" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
                 {activeToolId === 'watermark-pdf' && <PDFEditorTool mode="watermark" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
@@ -599,10 +611,6 @@ export default function App() {
                 {activeToolId === 'ocr-reader' && <OCRTool onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
                 {activeToolId === 'universal-converter' && <UniversalConvertTool onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />}
               </ToolPageLayout>
-
-              {adminConfig.adsEnabled && (
-                <AdSenseBanner slotType="leaderboard" className="mt-6" />
-              )}
             </Suspense>
           )}
 

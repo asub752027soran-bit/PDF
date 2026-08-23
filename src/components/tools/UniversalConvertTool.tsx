@@ -22,6 +22,7 @@ import {
   exportTextToDocxBlob
 } from '../../utils/docProcessor';
 import { imagesToPDF } from '../../utils/pdfProcessor';
+import { MultiFilePreviewList } from '../common/MultiFilePreviewList';
 
 interface UniversalConvertToolProps {
   onBack: () => void;
@@ -184,92 +185,19 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
       </div>
 
       {files.length > 0 && (
-        <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200">
-            <span className="flex items-center gap-2">
-              <span>Conversion Sequence ({files.length} files)</span>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 text-[10px]">
-                Order Locked
-              </span>
-            </span>
+        <div className="space-y-6">
+          <MultiFilePreviewList
+            files={files}
+            onRemoveFile={removeFile}
+            onMoveFile={moveFile}
+            onClearAll={() => setFiles([])}
+            onSortAlphabetical={sortAlphabetical}
+            onReverseOrder={reverseOrder}
+            title="Batch Files Queue & Visual Preview"
+          />
 
-            {files.length > 1 && (
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => sortAlphabetical(true)}
-                  className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-[11px] font-semibold flex items-center gap-1 transition-colors"
-                >
-                  <ArrowUpDown className="w-3 h-3" /> A-Z
-                </button>
-                <button
-                  onClick={() => sortAlphabetical(false)}
-                  className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-[11px] font-semibold flex items-center gap-1 transition-colors"
-                >
-                  <ArrowUpDown className="w-3 h-3" /> Z-A
-                </button>
-                <button
-                  onClick={reverseOrder}
-                  className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-[11px] font-semibold flex items-center gap-1 transition-colors"
-                >
-                  <Shuffle className="w-3 h-3" /> Reverse
-                </button>
-              </div>
-            )}
-
-            <button onClick={() => setFiles([])} className="text-rose-500 hover:underline">
-              Clear All
-            </button>
-          </div>
-
-          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-            {files.map((file, idx) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs"
-              >
-                <div className="flex items-center gap-3 truncate max-w-sm sm:max-w-md">
-                  <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white font-mono font-extrabold flex items-center justify-center text-xs">
-                    #{idx + 1}
-                  </span>
-                  <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
-                  <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
-                    {file.name}
-                  </span>
-                  <span className="text-[10px] text-slate-400 shrink-0">
-                    ({(file.size / 1024).toFixed(1)} KB)
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => moveFile(idx, 'up')}
-                    disabled={idx === 0}
-                    title="Move Up"
-                    className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:text-indigo-600 disabled:opacity-30"
-                  >
-                    <MoveUp className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => moveFile(idx, 'down')}
-                    disabled={idx === files.length - 1}
-                    title="Move Down"
-                    className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:text-indigo-600 disabled:opacity-30"
-                  >
-                    <MoveDown className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => removeFile(idx)}
-                    className="p-1.5 text-rose-500 hover:text-rose-600"
-                    title="Remove"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Target Format Selector */}
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
+            {/* Target Format Selector */}
           <div className="text-xs space-y-2">
             <label className="block font-bold text-slate-700 dark:text-slate-300">
               Target Batch Export Format
@@ -302,6 +230,7 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
             )}
           </button>
         </div>
+      </div>
       )}
 
     </div>

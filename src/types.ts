@@ -137,6 +137,18 @@ export interface AdminConfig {
   analyticsEnabled: boolean;
   gaTrackingId: string;
   maxUploadSizeMB: number;
+  // AdSense Tool Page Slot Placement Controls
+  toolAdSlotType?: 'leaderboard' | 'banner' | 'sidebar';
+  toolAdSlots?: {
+    leaderboard: boolean;
+    banner: boolean;
+    sidebar: boolean;
+  };
+  adsenseCustomSlots?: {
+    leaderboard?: string;
+    banner?: string;
+    sidebar?: string;
+  };
   // Comprehensive SEO Settings
   homepageSeoTitle?: string;
   homepageSeoDescription?: string;

@@ -4,6 +4,7 @@ import { compressPDF } from '../../utils/pdfProcessor';
 import { downloadBlob } from '../../utils/batchProcessor';
 import { formatBytes } from '../../utils/imageProcessor';
 import { recordToolConversion } from '../../utils/activityTracker';
+import { FilePreviewCard } from '../common/FilePreviewCard';
 
 interface PDFCompressToolProps {
   onBack: () => void;
@@ -101,22 +102,15 @@ export const PDFCompressTool: React.FC<PDFCompressToolProps> = ({ onBack, initia
           </label>
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-700">
-            <div>
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-xs">
-                📄 {file.name}
-              </h4>
-              <p className="text-xs text-slate-500">Original Size: {formatBytes(file.size)}</p>
-            </div>
-            <button
-              onClick={() => setFile(null)}
-              className="text-xs font-bold text-rose-500 hover:underline"
-            >
-              Change File
-            </button>
-          </div>
+        <div className="space-y-6">
+          {/* Client-Side Visual File Preview */}
+          <FilePreviewCard
+            file={file}
+            onRemove={() => setFile(null)}
+            onReplace={(newF) => setFile(newF)}
+          />
 
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
           {/* Compression Presets */}
           <div className="space-y-3">
             <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -191,6 +185,7 @@ export const PDFCompressTool: React.FC<PDFCompressToolProps> = ({ onBack, initia
             )}
           </button>
         </div>
+      </div>
       )}
 
     </div>

@@ -8,7 +8,7 @@ declare global {
 }
 
 interface AdSenseBannerProps {
-  slotType?: 'leaderboard' | 'rectangle' | 'banner' | 'in-article';
+  slotType?: 'leaderboard' | 'rectangle' | 'banner' | 'in-article' | 'sidebar';
   client?: string;
   slot?: string;
   className?: string;
@@ -46,6 +46,9 @@ export const AdSenseBanner: React.FC<AdSenseBannerProps> = ({
   if (slotType === 'rectangle') {
     containerStyle = 'w-full max-w-[336px] min-h-[280px] mx-auto';
     adFormat = 'rectangle';
+  } else if (slotType === 'sidebar') {
+    containerStyle = 'w-full max-w-[320px] min-h-[280px] lg:min-h-[600px] mx-auto';
+    adFormat = 'vertical';
   } else if (slotType === 'banner') {
     containerStyle = 'w-full max-w-3xl min-h-[60px] mx-auto';
     adFormat = 'horizontal';

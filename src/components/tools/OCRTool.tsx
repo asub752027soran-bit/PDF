@@ -4,6 +4,7 @@ import { createWorker } from 'tesseract.js';
 import { renderPDFToImages } from '../../utils/pdfExtractor';
 import { downloadBlob } from '../../utils/batchProcessor';
 import { recordToolConversion } from '../../utils/activityTracker';
+import { FilePreviewCard } from '../common/FilePreviewCard';
 
 interface OCRToolProps {
   onBack: () => void;
@@ -133,23 +134,15 @@ export const OCRTool: React.FC<OCRToolProps> = ({ onBack, initialFile }) => {
           </label>
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-700">
-            <div>
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-md">
-                📄 {file.name}
-              </h4>
-              <p className="text-xs text-slate-500">
-                {(file.size / 1024).toFixed(1)} KB {statusMsg && `• ${statusMsg}`}
-              </p>
-            </div>
-            <button
-              onClick={() => { setFile(null); setExtractedText(''); }}
-              className="text-xs font-bold text-rose-500 hover:underline"
-            >
-              Change File
-            </button>
-          </div>
+        <div className="space-y-6">
+          {/* Client-Side Visual File Preview */}
+          <FilePreviewCard
+            file={file}
+            onRemove={() => { setFile(null); setExtractedText(''); }}
+            onReplace={(newF) => { setFile(newF); setExtractedText(''); }}
+          />
+
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
 
           {/* Progress Bar */}
           {isProcessing && (
@@ -211,6 +204,7 @@ export const OCRTool: React.FC<OCRToolProps> = ({ onBack, initialFile }) => {
           )}
 
         </div>
+      </div>
       )}
 
     </div>

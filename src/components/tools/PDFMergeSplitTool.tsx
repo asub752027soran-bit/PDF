@@ -22,6 +22,8 @@ import { mergePDFs, splitPDF, manipulatePDFPages, readFileAsArrayBuffer } from '
 import { createZipArchive, downloadBlob } from '../../utils/batchProcessor';
 import { recordToolConversion } from '../../utils/activityTracker';
 import { PDFDocument } from 'pdf-lib';
+import { FilePreviewCard } from '../common/FilePreviewCard';
+import { MultiFilePreviewList } from '../common/MultiFilePreviewList';
 
 interface PDFMergeSplitToolProps {
   mode: 'merge' | 'split' | 'organize';
@@ -371,56 +373,27 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
                 </div>
               ))}
             </div>
+          ) : mode === 'merge' ? (
+            <div className="space-y-3">
+              <MultiFilePreviewList
+                files={files}
+                onRemoveFile={removeFile}
+                onMoveFile={moveFile}
+                onClearAll={() => { setFiles([]); setPagesList([]); }}
+                onSortAlphabetical={sortFilesAlphabetical}
+                onReverseOrder={reverseFileOrder}
+                title="Merge Queue & Visual Previews"
+              />
+            </div>
           ) : (
-            <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-              {files.map((file, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs"
-                >
-                  <div className="flex items-center gap-3 truncate max-w-sm sm:max-w-md">
-                    <span className="w-7 h-7 rounded-xl bg-indigo-600 text-white font-mono font-extrabold flex items-center justify-center text-xs">
-                      #{idx + 1}
-                    </span>
-                    <div>
-                      <h4 className="font-bold text-slate-800 dark:text-slate-200 truncate">
-                        {file.name}
-                      </h4>
-                      <p className="text-[11px] text-slate-500">
-                        {(file.size / 1024).toFixed(1)} KB • Order Position: {idx + 1} of {files.length}
-                      </p>
-                    </div>
-                  </div>
-
-                  {mode === 'merge' && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => moveFile(idx, 'up')}
-                        disabled={idx === 0}
-                        title="Move Up in sequence"
-                        className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:text-indigo-600 disabled:opacity-30"
-                      >
-                        <MoveUp className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => moveFile(idx, 'down')}
-                        disabled={idx === files.length - 1}
-                        title="Move Down in sequence"
-                        className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:text-indigo-600 disabled:opacity-30"
-                      >
-                        <MoveDown className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => removeFile(idx)}
-                        title="Remove file"
-                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+            <div className="space-y-3">
+              {files[0] && (
+                <FilePreviewCard
+                  file={files[0]}
+                  onRemove={() => { setFiles([]); setPagesList([]); }}
+                  onReplace={(newF) => setFiles([newF])}
+                />
+              )}
             </div>
           )}
 

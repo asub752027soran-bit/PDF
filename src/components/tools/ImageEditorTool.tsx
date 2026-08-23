@@ -5,6 +5,8 @@ import { renderPDFToImages, PDFPageImage } from '../../utils/pdfExtractor';
 import { imagesToPDF } from '../../utils/pdfProcessor';
 import { createZipArchive, downloadBlob } from '../../utils/batchProcessor';
 import { recordToolConversion } from '../../utils/activityTracker';
+import { FilePreviewCard } from '../common/FilePreviewCard';
+import { MultiFilePreviewList } from '../common/MultiFilePreviewList';
 
 interface ImageEditorToolProps {
   toolId?: string;
@@ -193,23 +195,33 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'imag
           </label>
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-700">
-            <div>
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-md">
-                🖼️ {files.length === 1 ? files[0].name : `${files.length} Image Files Selected`}
-              </h4>
-              <p className="text-xs text-slate-500">
-                {files.length === 1 ? formatBytes(files[0].size) : 'Batch selection'} {statusMsg && `• ${statusMsg}`}
-              </p>
-            </div>
-            <button
-              onClick={() => { setFiles([]); setPdfPageImages([]); setProcessedResult(null); }}
-              className="text-xs font-bold text-rose-500 hover:underline"
-            >
-              Change File
-            </button>
-          </div>
+        <div className="space-y-6">
+          {/* Client-Side Visual Preview for Uploaded Images / PDF */}
+          {files.length === 1 ? (
+            <FilePreviewCard
+              file={files[0]}
+              onRemove={() => { setFiles([]); setPdfPageImages([]); setProcessedResult(null); }}
+              onReplace={(newF) => processIncomingFiles([newF])}
+            />
+          ) : (
+            <MultiFilePreviewList
+              files={files}
+              onRemoveFile={(idx) => setFiles(files.filter((_, i) => i !== idx))}
+              onMoveFile={(idx, dir) => {
+                const target = dir === 'up' ? idx - 1 : idx + 1;
+                if (target < 0 || target >= files.length) return;
+                const next = [...files];
+                const temp = next[idx];
+                next[idx] = next[target];
+                next[target] = temp;
+                setFiles(next);
+              }}
+              onClearAll={() => { setFiles([]); setPdfPageImages([]); setProcessedResult(null); }}
+              title="Image Conversion Queue & Visual Previews"
+            />
+          )}
+
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
 
           {/* PDF Page Images Grid (For PDF to Image) */}
           {isPdfToImage && pdfPageImages.length > 0 && (
@@ -317,6 +329,7 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'imag
           )}
 
         </div>
+      </div>
       )}
 
     </div>
