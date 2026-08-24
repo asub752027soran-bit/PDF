@@ -113,6 +113,22 @@ export function getAdSyncedStats(ad: CustomAdItem): { impressions: number; click
 }
 
 /**
+ * Resets tracked impression/click stats for an ad item
+ */
+export function resetAdStats(adId: string): void {
+  try {
+    const raw = localStorage.getItem('pdfeditfy_ad_stats') || '{}';
+    const stats: Record<string, { impressions: number; clicks: number }> = JSON.parse(raw);
+    if (stats[adId]) {
+      stats[adId] = { impressions: 0, clicks: 0 };
+      localStorage.setItem('pdfeditfy_ad_stats', JSON.stringify(stats));
+    }
+  } catch (e) {
+    console.debug('Failed to reset ad stats:', e);
+  }
+}
+
+/**
  * Selects the best active custom ad matching the requested slot and current tool context
  */
 export function pickCustomAd(

@@ -599,6 +599,37 @@ export const TOOL_SEO_DETAILS: Record<string, ToolSeoDetail> = {
     alternateSlugs: ['crop-image', 'resize-photo']
   },
 
+  'image-to-url': {
+    h1: 'Image to URL Converter - Convert Images to Data URL & Base64 Online',
+    shortIntro: 'Convert any image into Data URL, Base64 URI, Blob URL, HTML <img> embed tags, CSS backgrounds, and shareable preview links.',
+    fullDescription: 'Convert photos and graphics into inline Base64 Data URLs and local URLs with PDF Editfy. Generate ready-to-copy HTML <img> tags, CSS background-image rules, React JSX snippets, and QR codes instantly without server uploads.',
+    howToSteps: [
+      { title: 'Upload Image or Paste from Clipboard', description: 'Drag and drop your image file, browse your device, or press Ctrl+V to paste directly from your clipboard.' },
+      { title: 'Choose Format & Compression (Optional)', description: 'Select encoding format (PNG, JPEG, WEBP) and adjust quality or resize settings to optimize URL payload length.' },
+      { title: 'Select Code Snippet Format', description: 'Switch between Data URL, Clean Base64 String, HTML <img> tag, CSS background, React JSX, Markdown, or Blob URL tabs.' },
+      { title: 'Copy with 1-Click or Download HTML Demo', description: 'Click "Copy" to put the code on your clipboard or download a standalone HTML demo file.' }
+    ],
+    features: [
+      'Data URL (RFC 2397) & Pure Base64 String Generation',
+      'One-Click Code Snippets for HTML <img>, CSS, React JSX, and Markdown',
+      'Built-in QR Code Generator for Mobile Link Testing',
+      'Format Re-encoding (WEBP, PNG, JPEG) to Minimize URL Payload Size',
+      'Batch Image Processing & JSON Bulk Export',
+      '100% Private Client-Side In-Memory Processing'
+    ],
+    supportedInput: 'JPG, JPEG, PNG, WEBP, SVG, GIF, BMP, ICO, AVIF',
+    supportedOutput: 'Data URL, Base64 URI, HTML embed snippet, CSS snippet, Blob URL, QR Code',
+    faqs: [
+      { question: 'What is a Data URL and how does it work?', answer: 'A Data URL (RFC 2397) is a URI scheme that allows images to be embedded directly inline inside HTML, CSS, or JSON documents as Base64-encoded strings without requiring external image hosting.' },
+      { question: 'Why should I convert images to Data URLs?', answer: 'Data URLs eliminate external HTTP requests for small icons and logos, prevent broken image links in HTML emails, and enable self-contained single-file HTML reports and dashboards.' },
+      { question: 'Are my images uploaded to any server?', answer: 'No. The image to URL conversion runs 100% locally inside your web browser using HTML5 Canvas and FileReader APIs. Your images are completely private.' },
+      { question: 'How can I reduce the length of a Base64 Data URL?', answer: 'Use our built-in optimization controls: select "WEBP" format, reduce compression quality (e.g. to 80%), or choose a maximum dimension like 400px or 800px before generating the URL.' }
+    ],
+    relatedToolIds: ['image-converter', 'image-compressor', 'image-resizer', 'image-to-pdf'],
+    canonicalSlug: 'image-to-url',
+    alternateSlugs: ['image-to-base64', 'image-url-converter', 'img-to-url', 'base64-image']
+  },
+
   'ocr-reader': {
     h1: 'Free Online OCR - Extract Text from Images & PDF',
     shortIntro: 'Extract editable text from scanned documents, PDF pages, photos, and receipts using Optical Character Recognition.',

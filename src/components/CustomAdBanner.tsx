@@ -2,11 +2,10 @@ import React, { useEffect, useRef } from 'react';
 import {
   ExternalLink,
   Sparkles,
-  ShieldCheck,
-  Zap,
   ArrowRight,
   Info,
-  Tag
+  Tag,
+  Code
 } from 'lucide-react';
 import { CustomAdItem, AdSlotType } from '../types';
 import { recordAdImpression, recordAdClick } from '../utils/customAdTracker';
@@ -17,6 +16,62 @@ interface CustomAdBannerProps {
   className?: string;
   showLabel?: boolean;
 }
+
+// Script & HTML Container that evaluates any injected <script> tags safely
+const CustomHtmlScriptContainer: React.FC<{
+  htmlContent?: string;
+  scriptCode?: string;
+  onClick?: (e: React.MouseEvent) => void;
+  className?: string;
+}> = ({ htmlContent, scriptCode, onClick, className = '' }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const container = containerRef.current;
+    
+    // Combine html content and script code
+    const fullHtml = [htmlContent || '', scriptCode ? `<script>${scriptCode}</script>` : ''].filter(Boolean).join('\n');
+    
+    // Clear and insert content
+    container.innerHTML = fullHtml;
+
+    // Search and re-create all <script> elements so browsers execute them
+    const scriptElements = Array.from(container.querySelectorAll('script'));
+    scriptElements.forEach((oldScript) => {
+      const newScript = document.createElement('script');
+      
+      // Copy attributes (src, type, async, defer, data-* etc.)
+      Array.from(oldScript.attributes).forEach((attr) => {
+        newScript.setAttribute(attr.name, attr.value);
+      });
+
+      // Copy inline script text content
+      if (oldScript.textContent) {
+        newScript.textContent = oldScript.textContent;
+      }
+
+      // Replace old non-executing script with executable script element
+      if (oldScript.parentNode) {
+        oldScript.parentNode.replaceChild(newScript, oldScript);
+      }
+    });
+
+    return () => {
+      if (container) {
+        container.innerHTML = '';
+      }
+    };
+  }, [htmlContent, scriptCode]);
+
+  return (
+    <div
+      ref={containerRef}
+      onClick={onClick}
+      className={`custom-ad-html-container overflow-hidden w-full flex items-center justify-center ${className}`}
+    />
+  );
+};
 
 export const CustomAdBanner: React.FC<CustomAdBannerProps> = ({
   ad,
@@ -49,6 +104,7 @@ export const CustomAdBanner: React.FC<CustomAdBannerProps> = ({
         return 'from-amber-950 via-orange-900 to-slate-900 border-amber-700/60 text-white';
       case 'rose':
         return 'from-rose-950 via-pink-900 to-slate-900 border-rose-700/60 text-white';
+      case 'dark':
       case 'slate':
         return 'from-slate-900 via-slate-800 to-slate-950 border-slate-700 text-white';
       case 'blue':
@@ -67,6 +123,7 @@ export const CustomAdBanner: React.FC<CustomAdBannerProps> = ({
         return 'bg-amber-400 hover:bg-amber-300 text-slate-950 font-black shadow-amber-950/40';
       case 'rose':
         return 'bg-rose-500 hover:bg-rose-400 text-white shadow-rose-900/40';
+      case 'dark':
       case 'slate':
         return 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/40';
       case 'blue':
@@ -75,29 +132,32 @@ export const CustomAdBanner: React.FC<CustomAdBannerProps> = ({
     }
   };
 
-  // Custom Raw HTML Ad
-  if (ad.adType === 'custom_html' && ad.htmlContent) {
+  // 1. CUSTOM RAW HTML / SCRIPT AD TAG
+  if ((ad.adType === 'custom_html' || ad.adType === 'script') && (ad.htmlContent || ad.scriptCode)) {
     return (
-      <div className={`my-4 mx-auto text-center w-full overflow-hidden ${className}`}>
+      <div className={`my-3 mx-auto text-center w-full overflow-hidden ${className}`}>
         {showLabel && (
           <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-500 mb-1 flex items-center justify-center gap-1">
-            <span>Direct Sponsor Advertisement</span>
+            <Code className="w-2.5 h-2.5 text-blue-500" />
+            <span>Sponsor • {ad.sponsorName || 'Custom Partner Script'}</span>
             <Info className="w-2.5 h-2.5" />
           </div>
         )}
-        <div
-          onClick={handleClick}
-          dangerouslySetInnerHTML={{ __html: ad.htmlContent }}
-          className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm"
-        />
+        <div className="rounded-2xl overflow-hidden border border-slate-200/80 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 p-2 shadow-xs">
+          <CustomHtmlScriptContainer
+            htmlContent={ad.htmlContent}
+            scriptCode={ad.scriptCode}
+            onClick={handleClick}
+          />
+        </div>
       </div>
     );
   }
 
-  // Pure Image Banner Ad
+  // 2. PURE IMAGE BANNER AD + AFFILIATE LINK
   if (ad.adType === 'image' && ad.imageUrl) {
     return (
-      <div className={`my-4 mx-auto text-center w-full overflow-hidden ${className}`}>
+      <div className={`my-3 mx-auto text-center w-full overflow-hidden ${className}`}>
         {showLabel && (
           <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-500 mb-1 flex items-center justify-center gap-1">
             <span>Sponsored Banner • {ad.sponsorName || 'Direct Partner'}</span>
@@ -105,7 +165,7 @@ export const CustomAdBanner: React.FC<CustomAdBannerProps> = ({
           </div>
         )}
         <a
-          href={ad.targetUrl}
+          href={ad.targetUrl || '#'}
           target="_blank"
           rel="sponsored noopener noreferrer"
           onClick={handleClick}
@@ -113,15 +173,15 @@ export const CustomAdBanner: React.FC<CustomAdBannerProps> = ({
         >
           <img
             src={ad.imageUrl}
-            alt={ad.title}
-            className="w-full h-auto object-cover max-h-[140px] rounded-2xl"
+            alt={ad.title || 'Advertisement'}
+            className="w-full h-auto object-cover max-h-[160px] rounded-2xl mx-auto"
           />
         </a>
       </div>
     );
   }
 
-  // SIDEBAR AD CARD STYLE
+  // 3. SIDEBAR AD CARD STYLE
   if (slotType === 'sidebar') {
     return (
       <div className={`text-center w-full overflow-hidden ${className}`}>
@@ -136,7 +196,7 @@ export const CustomAdBanner: React.FC<CustomAdBannerProps> = ({
         )}
 
         <a
-          href={ad.targetUrl}
+          href={ad.targetUrl || '#'}
           target="_blank"
           rel="sponsored noopener noreferrer"
           onClick={handleClick}
@@ -182,9 +242,9 @@ export const CustomAdBanner: React.FC<CustomAdBannerProps> = ({
     );
   }
 
-  // LEADERBOARD & INLINE BANNER STYLE (Horizontal Responsive)
+  // 4. LEADERBOARD & INLINE BANNER STYLE (Horizontal Responsive)
   return (
-    <div className={`my-4 mx-auto text-center w-full overflow-hidden ${className}`}>
+    <div className={`my-3 mx-auto text-center w-full overflow-hidden ${className}`}>
       {showLabel && (
         <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-500 mb-1.5 flex items-center justify-between px-2 max-w-4xl mx-auto">
           <span className="flex items-center gap-1">
@@ -196,7 +256,7 @@ export const CustomAdBanner: React.FC<CustomAdBannerProps> = ({
       )}
 
       <a
-        href={ad.targetUrl}
+        href={ad.targetUrl || '#'}
         target="_blank"
         rel="sponsored noopener noreferrer"
         onClick={handleClick}

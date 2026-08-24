@@ -5,6 +5,7 @@ import { Hero } from './components/Hero';
 import { ToolGrid } from './components/ToolGrid';
 import { Footer } from './components/Footer';
 import { AdSenseBanner } from './components/AdSenseBanner';
+import { AdPlacement } from './components/AdPlacement';
 import { CookieBanner } from './components/CookieBanner';
 import { AdminLoginModal } from './components/admin/AdminLoginModal';
 import { ToolPageLayout } from './components/tools/ToolPageLayout';
@@ -16,6 +17,7 @@ const PDFCompressTool = lazy(() => import('./components/tools/PDFCompressTool').
 const WordTool = lazy(() => import('./components/tools/WordTool').then(m => ({ default: m.WordTool })));
 const ExcelTool = lazy(() => import('./components/tools/ExcelTool').then(m => ({ default: m.ExcelTool })));
 const ImageEditorTool = lazy(() => import('./components/tools/ImageEditorTool').then(m => ({ default: m.ImageEditorTool })));
+const ImageToUrlTool = lazy(() => import('./components/tools/ImageToUrlTool').then(m => ({ default: m.ImageToUrlTool })));
 const OCRTool = lazy(() => import('./components/tools/OCRTool').then(m => ({ default: m.OCRTool })));
 const UniversalConvertTool = lazy(() => import('./components/tools/UniversalConvertTool').then(m => ({ default: m.UniversalConvertTool })));
 
@@ -548,7 +550,16 @@ export default function App() {
                 onQuickSelect={handleSelectTool}
               />
 
-              {adminConfig.adsEnabled && <AdSenseBanner slotType="leaderboard" />}
+              {adminConfig.adsEnabled && (
+                <AdPlacement
+                  slotType="homepage_top"
+                  adsEnabled={adminConfig.adsEnabled}
+                  adServingMode={adminConfig.adServingMode}
+                  customAds={adminConfig.customAds}
+                  adsensePublisherId={adminConfig.adsensePublisherId}
+                  adsenseSlot={adminConfig.adsenseCustomSlots?.leaderboard}
+                />
+              )}
 
               <ToolGrid
                 tools={TOOLS}
@@ -560,7 +571,16 @@ export default function App() {
                 customBadges={adminConfig.customBadges}
               />
 
-              {adminConfig.adsEnabled && <AdSenseBanner slotType="leaderboard" />}
+              {adminConfig.adsEnabled && (
+                <AdPlacement
+                  slotType="homepage_bottom"
+                  adsEnabled={adminConfig.adsEnabled}
+                  adServingMode={adminConfig.adServingMode}
+                  customAds={adminConfig.customAds}
+                  adsensePublisherId={adminConfig.adsensePublisherId}
+                  adsenseSlot={adminConfig.adsenseCustomSlots?.leaderboard}
+                />
+              )}
             </>
           )}
 
@@ -582,6 +602,8 @@ export default function App() {
                 adsEnabled={adminConfig.adsEnabled}
                 adSlotPlacement={adminConfig.toolAdSlotType || 'banner'}
                 adSlotsConfig={adminConfig.toolAdSlots}
+                adServingMode={adminConfig.adServingMode}
+                customAds={adminConfig.customAds}
                 adsensePublisherId={adminConfig.adsensePublisherId}
                 adsenseCustomSlots={adminConfig.adsenseCustomSlots}
               >
@@ -606,6 +628,10 @@ export default function App() {
 
                 {(activeToolId === 'image-converter' || activeToolId === 'image-compressor' || activeToolId === 'image-resizer' || activeToolId === 'image-to-pdf' || activeToolId === 'pdf-to-image') && (
                   <ImageEditorTool toolId={activeToolId} onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />
+                )}
+
+                {activeToolId === 'image-to-url' && (
+                  <ImageToUrlTool onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />
                 )}
 
                 {activeToolId === 'ocr-reader' && <OCRTool onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}

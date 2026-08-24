@@ -18,6 +18,7 @@ import { TOOL_SEO_DETAILS } from '../../data/toolSeoData';
 import { TOOLS } from '../../data/toolsData';
 import { ToolItem, CustomAdItem } from '../../types';
 import { AdPlacement } from '../AdPlacement';
+import { AdSenseBanner } from '../AdSenseBanner';
 
 interface ToolPageLayoutProps {
   toolId: string;
@@ -101,10 +102,14 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
       {/* Top Leaderboard Ad Slot (if Leaderboard mode active) */}
       {showTopLeaderboard && (
         <div className="mb-6">
-          <AdSenseBanner
+          <AdPlacement
             slotType="leaderboard"
-            client={adsensePublisherId}
-            slot={adsenseCustomSlots?.leaderboard}
+            toolId={toolId}
+            adsEnabled={adsEnabled}
+            adServingMode={adServingMode}
+            customAds={customAds}
+            adsensePublisherId={adsensePublisherId}
+            adsenseSlot={adsenseCustomSlots?.leaderboard}
             className="my-0"
           />
         </div>
@@ -166,11 +171,15 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
 
           {/* Inline Banner Ad Slot (if Banner mode active) */}
           {showInlineBanner && (
-            <div className="my-2">
-              <AdSenseBanner
+            <div className="my-4">
+              <AdPlacement
                 slotType="banner"
-                client={adsensePublisherId}
-                slot={adsenseCustomSlots?.banner}
+                toolId={toolId}
+                adsEnabled={adsEnabled}
+                adServingMode={adServingMode}
+                customAds={customAds}
+                adsensePublisherId={adsensePublisherId}
+                adsenseSlot={adsenseCustomSlots?.banner}
                 className="my-0"
               />
             </div>
@@ -308,10 +317,14 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
           {/* Bottom Leaderboard Ad Slot (if Leaderboard mode active) */}
           {showBottomLeaderboard && (
             <div className="my-6">
-              <AdSenseBanner
+              <AdPlacement
                 slotType="leaderboard"
-                client={adsensePublisherId}
-                slot={adsenseCustomSlots?.leaderboard}
+                toolId={toolId}
+                adsEnabled={adsEnabled}
+                adServingMode={adServingMode}
+                customAds={customAds}
+                adsensePublisherId={adsensePublisherId}
+                adsenseSlot={adsenseCustomSlots?.leaderboard}
                 className="my-0"
               />
             </div>
@@ -363,12 +376,16 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
         {showSidebar && (
           <aside className="w-full lg:w-[320px] shrink-0 space-y-5 lg:sticky lg:top-6 self-start">
             
-            {/* Sticky AdSense Sidebar Banner */}
+            {/* Sticky Desktop Sidebar Ad Column (Custom script/HTML/card or AdSense) */}
             <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
-              <AdSenseBanner
+              <AdPlacement
                 slotType="sidebar"
-                client={adsensePublisherId}
-                slot={adsenseCustomSlots?.sidebar}
+                toolId={toolId}
+                adsEnabled={adsEnabled}
+                adServingMode={adServingMode}
+                customAds={customAds}
+                adsensePublisherId={adsensePublisherId}
+                adsenseSlot={adsenseCustomSlots?.sidebar}
                 className="my-0"
               />
             </div>

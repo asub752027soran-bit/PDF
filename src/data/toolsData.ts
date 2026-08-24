@@ -274,6 +274,18 @@ export const TOOLS: ToolItem[] = [
     seoTitle: 'Resize & Crop Images Online Free',
     seoDescription: 'Resize photos by pixels or percentage, crop exact aspect ratios, and mirror/rotate images.'
   },
+  {
+    id: 'image-to-url',
+    name: 'Image to URL Converter',
+    category: 'Image Tools',
+    description: 'Convert any image to Data URL, Base64 URI, Blob URL, HTML/CSS embed tags, and shareable web link.',
+    iconName: 'Link',
+    badge: 'Popular',
+    supportedFormats: ['JPG', 'JPEG', 'PNG', 'WEBP', 'SVG', 'GIF', 'BMP', 'ICO', 'AVIF'],
+    tags: ['image to url', 'image to base64', 'data url', 'base64 converter', 'image link', 'img to url', 'embed image', 'html img tag'],
+    seoTitle: 'Image to URL Converter - Convert Images to Data URL & Base64 Online',
+    seoDescription: 'Convert images to Data URL, Base64 string, HTML img tags, CSS background URLs, and shareable links for free with instant copy and QR code generation.'
+  },
 
   // --- OCR & ADVANCED TOOLS ---
   {

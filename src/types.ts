@@ -170,10 +170,11 @@ export interface CustomAdItem {
   sponsorName?: string;
   targetUrl: string;
   imageUrl?: string;
-  adType: 'card' | 'image' | 'custom_html';
+  adType: 'card' | 'image' | 'custom_html' | 'script';
   htmlContent?: string;
+  scriptCode?: string;
   ctaText?: string;
-  badgeText?: string; // e.g. "Sponsored", "Special Deal", "Featured Partner"
+  badgeText?: string; // e.g. "Sponsored", "Special Deal", "Featured Partner", "Affiliate"
   slots: AdSlotType[];
   targetTools?: string[]; // 'all' or list of tool IDs
   enabled: boolean;
