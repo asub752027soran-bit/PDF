@@ -16,8 +16,8 @@ import {
 } from 'lucide-react';
 import { TOOL_SEO_DETAILS } from '../../data/toolSeoData';
 import { TOOLS } from '../../data/toolsData';
-import { ToolItem } from '../../types';
-import { AdSenseBanner } from '../AdSenseBanner';
+import { ToolItem, CustomAdItem } from '../../types';
+import { AdPlacement } from '../AdPlacement';
 
 interface ToolPageLayoutProps {
   toolId: string;
@@ -32,6 +32,8 @@ interface ToolPageLayoutProps {
     banner: boolean;
     sidebar: boolean;
   };
+  adServingMode?: 'hybrid' | 'adsense_only' | 'custom_only' | 'fallback';
+  customAds?: CustomAdItem[];
   adsensePublisherId?: string;
   adsenseCustomSlots?: {
     leaderboard?: string;
@@ -49,6 +51,8 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
   adsEnabled = true,
   adSlotPlacement = 'banner',
   adSlotsConfig = { leaderboard: true, banner: true, sidebar: true },
+  adServingMode = 'hybrid',
+  customAds,
   adsensePublisherId,
   adsenseCustomSlots,
 }) => {

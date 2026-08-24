@@ -156,6 +156,31 @@ export interface AdminConfig {
   canonicalBaseUrl?: string;
   ogImage?: string;
   toolSeoOverrides?: Record<string, ToolSeoConfig>;
+  // Custom Self-Served Advertisements & Direct Sponsors
+  adServingMode?: 'hybrid' | 'adsense_only' | 'custom_only' | 'fallback';
+  customAds?: CustomAdItem[];
+}
+
+export type AdSlotType = 'leaderboard' | 'banner' | 'sidebar' | 'homepage_top' | 'homepage_bottom' | 'rectangle';
+
+export interface CustomAdItem {
+  id: string;
+  title: string;
+  description?: string;
+  sponsorName?: string;
+  targetUrl: string;
+  imageUrl?: string;
+  adType: 'card' | 'image' | 'custom_html';
+  htmlContent?: string;
+  ctaText?: string;
+  badgeText?: string; // e.g. "Sponsored", "Special Deal", "Featured Partner"
+  slots: AdSlotType[];
+  targetTools?: string[]; // 'all' or list of tool IDs
+  enabled: boolean;
+  impressions: number;
+  clicks: number;
+  bgGradient?: 'blue' | 'purple' | 'emerald' | 'amber' | 'dark' | 'rose' | 'slate';
+  createdAt: string;
 }
 
 export interface ContactInquiry {

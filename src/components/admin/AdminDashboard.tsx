@@ -53,6 +53,7 @@ import {
 } from '../../utils/activityTracker';
 import { ActionLogView } from './ActionLogView';
 import { SeoAuditPanel } from './SeoAuditPanel';
+import { CustomAdsPanel } from './CustomAdsPanel';
 
 interface AdminDashboardProps {
   onBack: () => void;
@@ -70,6 +71,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   initialTab = 'overview',
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'action-log' | 'tools' | 'monetization' | 'inquiries' | 'seo' | 'security'>(initialTab);
+  const [monetizationSubTab, setMonetizationSubTab] = useState<'custom_ads' | 'adsense'>('custom_ads');
   const [seoSubTab, setSeoSubTab] = useState<'audit' | 'settings' | 'overrides'>('audit');
   const [toolSearch, setToolSearch] = useState('');
   const [inquiries, setInquiries] = useState<ContactInquiry[]>([]);
@@ -994,457 +996,501 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* TAB 3: MONETIZATION & ADSENSE */}
       {activeTab === 'monetization' && (
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-6">
-          <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
-            <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-emerald-500" />
-              Google AdSense &amp; Ad Placement Control
-            </h3>
-            <p className="text-xs text-slate-500">
-              Configure publisher IDs, custom slot IDs, and toggle leaderboard, banner, or sidebar placement relative to ToolPageLayout
-            </p>
-          </div>
-
-          {/* Master AdSense & Publisher ID Settings */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
-            <div className="space-y-4">
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  AdSense Publisher ID (ca-pub-...)
-                </label>
-                <input
-                  type="text"
-                  value={config.adsensePublisherId}
-                  onChange={(e) =>
-                    onUpdateConfig({ ...config, adsensePublisherId: e.target.value })
-                  }
-                  placeholder="ca-pub-9806760868514523"
-                  className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-                />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Your Google AdSense account publisher identifier
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
-                <p className="font-bold text-slate-800 dark:text-slate-200">
-                  Global Ad Placements Active:
-                </p>
-                <ul className="space-y-1 text-[11px] text-slate-600 dark:text-slate-400">
-                  <li className="flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
-                    Homepage Top Leaderboard Banner
-                  </li>
-                  <li className="flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
-                    Tool Grid In-feed Banners (Every 8th card)
-                  </li>
-                  <li className="flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
-                    Footer Responsive Native Ad Slot
-                  </li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <label className="block font-bold text-slate-700 dark:text-slate-300">
-                AdSense Script Auto-Inject Preview
-              </label>
-              <div className="p-3 rounded-xl bg-slate-950 text-slate-300 font-mono text-[11px] leading-relaxed overflow-x-auto border border-slate-800">
-                {`<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${config.adsensePublisherId || 'ca-pub-XXXXXXXXXXXXXXXX'}" crossorigin="anonymous"></script>`}
-              </div>
-              <p className="text-[11px] text-slate-400">
-                This script is dynamically rendered on client pages when Master Ads is enabled.
-              </p>
-            </div>
-          </div>
-
-          {/* TOOL PAGE AD PLACEMENT & SLOT CONTROLS */}
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                  <Layout className="w-4 h-4 text-blue-600" />
-                  Tool Page Ad Slot Placement (ToolPageLayout Integration)
-                </h4>
-                <p className="text-xs text-slate-500">
-                  Select primary layout style and toggle specific AdSense slots (Leaderboard, Banner, Sidebar)
-                </p>
-              </div>
-
-              {/* Slot preset badge */}
-              <span className="text-[10px] font-extrabold px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 self-start sm:self-auto uppercase tracking-wider">
-                Mode: {config.toolAdSlotType || 'banner'}
+        <div className="space-y-6">
+          {/* Sub-tab Navigation */}
+          <div className="bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex items-center gap-2">
+            <button
+              onClick={() => setMonetizationSubTab('custom_ads')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                monetizationSubTab === 'custom_ads'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Megaphone className="w-4 h-4" />
+              <span>Self-Served Ads &amp; Direct Sponsorships</span>
+              <span className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-extrabold">
+                {config.customAds?.length || 3} Active
               </span>
-            </div>
+            </button>
 
-            {/* 3 Slot Architecture Cards (Leaderboard vs Banner vs Sidebar) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-              {/* Leaderboard Slot Card */}
-              <div
-                onClick={() => {
-                  const currentSlots = config.toolAdSlots || { leaderboard: true, banner: true, sidebar: true };
-                  onUpdateConfig({
-                    ...config,
-                    toolAdSlotType: 'leaderboard',
-                    toolAdSlots: { ...currentSlots, leaderboard: true },
-                  });
-                  showToast('Tool page ad mode set to Leaderboard');
-                }}
-                className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-3 relative ${
-                  (config.toolAdSlotType || 'banner') === 'leaderboard'
-                    ? 'bg-blue-50/70 dark:bg-blue-950/30 border-blue-500 ring-2 ring-blue-500/20'
-                    : 'bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-400'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold">
-                    <Maximize2 className="w-4 h-4" />
-                  </span>
-                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                    (config.toolAdSlotType || 'banner') === 'leaderboard'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                  }`}>
-                    {(config.toolAdSlotType || 'banner') === 'leaderboard' ? 'Active Mode' : 'Select'}
-                  </span>
-                </div>
+            <button
+              onClick={() => setMonetizationSubTab('adsense')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                monetizationSubTab === 'adsense'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <DollarSign className="w-4 h-4 text-emerald-500" />
+              <span>Google AdSense Master Config</span>
+            </button>
+          </div>
 
-                <div>
-                  <h5 className="font-bold text-xs text-slate-900 dark:text-white">
-                    Leaderboard Slot (728×90)
-                  </h5>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                    Full-width responsive leaderboard banner positioned prominently at the top &amp; bottom of the tool page layout.
-                  </p>
-                </div>
+          {/* Sub Tab 1: Custom Self-Served Ads */}
+          {monetizationSubTab === 'custom_ads' && (
+            <CustomAdsPanel
+              config={config}
+              onUpdateConfig={onUpdateConfig}
+              showToast={showToast}
+            />
+          )}
 
-                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-[10px] text-slate-500">
-                  <span>Width: Full max-w-5xl</span>
-                  <span className="font-mono text-blue-600 dark:text-blue-400 font-bold">min-h-[90px]</span>
-                </div>
+          {/* Sub Tab 2: Google AdSense Master Configuration */}
+          {monetizationSubTab === 'adsense' && (
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-6">
+              <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-emerald-500" />
+                  Google AdSense &amp; Ad Placement Control
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Configure publisher IDs, custom slot IDs, and toggle leaderboard, banner, or sidebar placement relative to ToolPageLayout
+                </p>
               </div>
 
-              {/* Banner Slot Card */}
-              <div
-                onClick={() => {
-                  const currentSlots = config.toolAdSlots || { leaderboard: true, banner: true, sidebar: true };
-                  onUpdateConfig({
-                    ...config,
-                    toolAdSlotType: 'banner',
-                    toolAdSlots: { ...currentSlots, banner: true },
-                  });
-                  showToast('Tool page ad mode set to Banner');
-                }}
-                className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-3 relative ${
-                  (config.toolAdSlotType || 'banner') === 'banner'
-                    ? 'bg-blue-50/70 dark:bg-blue-950/30 border-blue-500 ring-2 ring-blue-500/20'
-                    : 'bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-400'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="p-2 rounded-xl bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 font-bold">
-                    <Layout className="w-4 h-4" />
-                  </span>
-                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                    (config.toolAdSlotType || 'banner') === 'banner'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                  }`}>
-                    {(config.toolAdSlotType || 'banner') === 'banner' ? 'Active Mode' : 'Select'}
-                  </span>
-                </div>
-
-                <div>
-                  <h5 className="font-bold text-xs text-slate-900 dark:text-white">
-                    Banner Slot (468×60)
-                  </h5>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                    Compact, centered horizontal ad banner rendered directly inline above the interactive tool conversion workspace.
-                  </p>
-                </div>
-
-                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-[10px] text-slate-500">
-                  <span>Width: max-w-3xl</span>
-                  <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold">min-h-[60px]</span>
-                </div>
-              </div>
-
-              {/* Sidebar Slot Card */}
-              <div
-                onClick={() => {
-                  const currentSlots = config.toolAdSlots || { leaderboard: true, banner: true, sidebar: true };
-                  onUpdateConfig({
-                    ...config,
-                    toolAdSlotType: 'sidebar',
-                    toolAdSlots: { ...currentSlots, sidebar: true },
-                  });
-                  showToast('Tool page ad mode set to Sidebar');
-                }}
-                className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-3 relative ${
-                  (config.toolAdSlotType || 'banner') === 'sidebar'
-                    ? 'bg-blue-50/70 dark:bg-blue-950/30 border-blue-500 ring-2 ring-blue-500/20'
-                    : 'bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-400'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 font-bold">
-                    <PanelRight className="w-4 h-4" />
-                  </span>
-                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                    (config.toolAdSlotType || 'banner') === 'sidebar'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                  }`}>
-                    {(config.toolAdSlotType || 'banner') === 'sidebar' ? 'Active Mode' : 'Select'}
-                  </span>
-                </div>
-
-                <div>
-                  <h5 className="font-bold text-xs text-slate-900 dark:text-white">
-                    Sidebar Slot (300×250 / 300×600)
-                  </h5>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                    Sticky right-hand sidebar ad slot alongside ToolPageLayout on desktop with continuous in-view visibility.
-                  </p>
-                </div>
-
-                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-[10px] text-slate-500">
-                  <span>Desktop: Sticky 320px</span>
-                  <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">min-h-[280px]</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Granular Slot Toggles & Custom Ad Unit IDs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-              
-              {/* Individual Slot Toggles */}
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-3">
-                <h5 className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-2">
-                  <Sliders className="w-3.5 h-3.5 text-blue-600" />
-                  Individual Slot Enable/Disable Toggles
-                </h5>
-
-                <div className="space-y-2 text-xs">
-                  {/* Leaderboard Slot Toggle */}
-                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60">
-                    <div>
-                      <p className="font-bold text-slate-800 dark:text-slate-200">Leaderboard Slot</p>
-                      <p className="text-[10px] text-slate-400">Wide header &amp; bottom placement</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        const slots = config.toolAdSlots || { leaderboard: true, banner: true, sidebar: true };
-                        const nextSlots = { ...slots, leaderboard: !slots.leaderboard };
-                        onUpdateConfig({ ...config, toolAdSlots: nextSlots });
-                        showToast(`Leaderboard slot ${nextSlots.leaderboard ? 'enabled' : 'disabled'}`);
-                      }}
-                      className={`w-10 h-5 rounded-full p-0.5 transition-colors ${
-                        (config.toolAdSlots?.leaderboard ?? true) ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
-                      }`}
-                    >
-                      <div
-                        className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                          (config.toolAdSlots?.leaderboard ?? true) ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                  </div>
-
-                  {/* Banner Slot Toggle */}
-                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60">
-                    <div>
-                      <p className="font-bold text-slate-800 dark:text-slate-200">Banner Slot</p>
-                      <p className="text-[10px] text-slate-400">Inline compact banner above tool</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        const slots = config.toolAdSlots || { leaderboard: true, banner: true, sidebar: true };
-                        const nextSlots = { ...slots, banner: !slots.banner };
-                        onUpdateConfig({ ...config, toolAdSlots: nextSlots });
-                        showToast(`Banner slot ${nextSlots.banner ? 'enabled' : 'disabled'}`);
-                      }}
-                      className={`w-10 h-5 rounded-full p-0.5 transition-colors ${
-                        (config.toolAdSlots?.banner ?? true) ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
-                      }`}
-                    >
-                      <div
-                        className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                          (config.toolAdSlots?.banner ?? true) ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                  </div>
-
-                  {/* Sidebar Slot Toggle */}
-                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60">
-                    <div>
-                      <p className="font-bold text-slate-800 dark:text-slate-200">Sidebar Slot</p>
-                      <p className="text-[10px] text-slate-400">Sticky right column on desktop</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        const slots = config.toolAdSlots || { leaderboard: true, banner: true, sidebar: true };
-                        const nextSlots = { ...slots, sidebar: !slots.sidebar };
-                        onUpdateConfig({ ...config, toolAdSlots: nextSlots });
-                        showToast(`Sidebar slot ${nextSlots.sidebar ? 'enabled' : 'disabled'}`);
-                      }}
-                      className={`w-10 h-5 rounded-full p-0.5 transition-colors ${
-                        (config.toolAdSlots?.sidebar ?? true) ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
-                      }`}
-                    >
-                      <div
-                        className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                          (config.toolAdSlots?.sidebar ?? true) ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Custom AdSense Slot IDs (Optional per placement) */}
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-3">
-                <h5 className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-2">
-                  <Key className="w-3.5 h-3.5 text-emerald-600" />
-                  Custom AdSense Unit Slot IDs (Optional)
-                </h5>
-
-                <div className="space-y-2.5 text-xs">
+              {/* Master AdSense & Publisher ID Settings */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
-                      Leaderboard Slot ID (data-ad-slot)
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      AdSense Publisher ID (ca-pub-...)
                     </label>
                     <input
                       type="text"
-                      value={config.adsenseCustomSlots?.leaderboard || ''}
+                      value={config.adsensePublisherId}
                       onChange={(e) =>
-                        onUpdateConfig({
-                          ...config,
-                          adsenseCustomSlots: {
-                            ...config.adsenseCustomSlots,
-                            leaderboard: e.target.value,
-                          },
-                        })
+                        onUpdateConfig({ ...config, adsensePublisherId: e.target.value })
                       }
-                      placeholder="e.g. 1029384756"
-                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="ca-pub-9806760868514523"
+                      className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
                     />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Your Google AdSense account publisher identifier
+                    </p>
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
-                      Banner Slot ID (data-ad-slot)
-                    </label>
-                    <input
-                      type="text"
-                      value={config.adsenseCustomSlots?.banner || ''}
-                      onChange={(e) =>
-                        onUpdateConfig({
-                          ...config,
-                          adsenseCustomSlots: {
-                            ...config.adsenseCustomSlots,
-                            banner: e.target.value,
-                          },
-                        })
-                      }
-                      placeholder="e.g. 2938475610"
-                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+                    <p className="font-bold text-slate-800 dark:text-slate-200">
+                      Global Ad Placements Active:
+                    </p>
+                    <ul className="space-y-1 text-[11px] text-slate-600 dark:text-slate-400">
+                      <li className="flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        Homepage Top Leaderboard Banner
+                      </li>
+                      <li className="flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        Tool Grid In-feed Banners (Every 8th card)
+                      </li>
+                      <li className="flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        Footer Responsive Native Ad Slot
+                      </li>
+                    </ul>
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
-                      Sidebar Slot ID (data-ad-slot)
-                    </label>
-                    <input
-                      type="text"
-                      value={config.adsenseCustomSlots?.sidebar || ''}
-                      onChange={(e) =>
-                        onUpdateConfig({
-                          ...config,
-                          adsenseCustomSlots: {
-                            ...config.adsenseCustomSlots,
-                            sidebar: e.target.value,
-                          },
-                        })
-                      }
-                      placeholder="e.g. 3847561029"
-                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                <div className="space-y-3">
+                  <label className="block font-bold text-slate-700 dark:text-slate-300">
+                    AdSense Script Auto-Inject Preview
+                  </label>
+                  <div className="p-3 rounded-xl bg-slate-950 text-slate-300 font-mono text-[11px] leading-relaxed overflow-x-auto border border-slate-800">
+                    {`<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${config.adsensePublisherId || 'ca-pub-XXXXXXXXXXXXXXXX'}" crossorigin="anonymous"></script>`}
                   </div>
+                  <p className="text-[11px] text-slate-400">
+                    This script is dynamically rendered on client pages when Master Ads is enabled.
+                  </p>
                 </div>
               </div>
 
-            </div>
-
-            {/* Live Interactive Schematic / Wireframe of ToolPageLayout */}
-            <div className="p-4 rounded-2xl bg-slate-950 text-white border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <Eye className="w-3.5 h-3.5 text-blue-400" />
-                  Live ToolPageLayout Placement Schematic
-                </span>
-                <span className="text-[11px] font-mono text-emerald-400">
-                  {config.adsEnabled ? 'Ads Active in Live Preview' : 'Ads Disabled Globally'}
-                </span>
-              </div>
-
-              {/* Wireframe Diagram */}
-              <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2 text-[10px]">
-                {/* Top Leaderboard slot schematic */}
-                {(config.toolAdSlots?.leaderboard ?? true) && (config.toolAdSlotType === 'leaderboard' || !config.toolAdSlotType) && (
-                  <div className="w-full py-1.5 bg-blue-950/80 border border-dashed border-blue-500/80 rounded-lg text-center font-bold text-blue-300 animate-pulse">
-                    [ AdSense Leaderboard Slot • 728×90 Top ]
+              {/* TOOL PAGE AD PLACEMENT & SLOT CONTROLS */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                      <Layout className="w-4 h-4 text-blue-600" />
+                      Tool Page Ad Slot Placement (ToolPageLayout Integration)
+                    </h4>
+                    <p className="text-xs text-slate-500">
+                      Select primary layout style and toggle specific AdSense slots (Leaderboard, Banner, Sidebar)
+                    </p>
                   </div>
-                )}
 
-                <div className="flex gap-2">
-                  {/* Left Column Workspace */}
-                  <div className="flex-1 bg-slate-800/90 rounded-lg p-2.5 space-y-1.5 border border-slate-700/60">
-                    <div className="w-1/3 h-2.5 bg-slate-700 rounded" />
-                    <div className="w-2/3 h-3.5 bg-slate-600 rounded font-bold text-[9px] text-slate-300 flex items-center px-1">
-                      Tool Header &amp; SEO Breadcrumbs
+                  {/* Slot preset badge */}
+                  <span className="text-[10px] font-extrabold px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 self-start sm:self-auto uppercase tracking-wider">
+                    Mode: {config.toolAdSlotType || 'banner'}
+                  </span>
+                </div>
+
+                {/* 3 Slot Architecture Cards (Leaderboard vs Banner vs Sidebar) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                  {/* Leaderboard Slot Card */}
+                  <div
+                    onClick={() => {
+                      const currentSlots = config.toolAdSlots || { leaderboard: true, banner: true, sidebar: true };
+                      onUpdateConfig({
+                        ...config,
+                        toolAdSlotType: 'leaderboard',
+                        toolAdSlots: { ...currentSlots, leaderboard: true },
+                      });
+                      showToast('Tool page ad mode set to Leaderboard');
+                    }}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-3 relative ${
+                      (config.toolAdSlotType || 'banner') === 'leaderboard'
+                        ? 'bg-blue-50/70 dark:bg-blue-950/30 border-blue-500 ring-2 ring-blue-500/20'
+                        : 'bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-400'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold">
+                        <Maximize2 className="w-4 h-4" />
+                      </span>
+                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                        (config.toolAdSlotType || 'banner') === 'leaderboard'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                        {(config.toolAdSlotType || 'banner') === 'leaderboard' ? 'Active Mode' : 'Select'}
+                      </span>
                     </div>
 
-                    {/* Inline Banner slot schematic */}
-                    {(config.toolAdSlots?.banner ?? true) && (config.toolAdSlotType === 'banner' || config.toolAdSlotType === 'leaderboard') && (
-                      <div className="w-full py-1 bg-indigo-950/80 border border-dashed border-indigo-500/80 rounded text-center font-bold text-indigo-300 text-[9px]">
-                        [ AdSense Banner Slot • Inline ]
+                    <div>
+                      <h5 className="font-bold text-xs text-slate-900 dark:text-white">
+                        Leaderboard Slot (728×90)
+                      </h5>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                        Full-width responsive leaderboard banner positioned prominently at the top &amp; bottom of the tool page layout.
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-[10px] text-slate-500">
+                      <span>Width: Full max-w-5xl</span>
+                      <span className="font-mono text-blue-600 dark:text-blue-400 font-bold">min-h-[90px]</span>
+                    </div>
+                  </div>
+
+                  {/* Banner Slot Card */}
+                  <div
+                    onClick={() => {
+                      const currentSlots = config.toolAdSlots || { leaderboard: true, banner: true, sidebar: true };
+                      onUpdateConfig({
+                        ...config,
+                        toolAdSlotType: 'banner',
+                        toolAdSlots: { ...currentSlots, banner: true },
+                      });
+                      showToast('Tool page ad mode set to Banner');
+                    }}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-3 relative ${
+                      (config.toolAdSlotType || 'banner') === 'banner'
+                        ? 'bg-blue-50/70 dark:bg-blue-950/30 border-blue-500 ring-2 ring-blue-500/20'
+                        : 'bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-400'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="p-2 rounded-xl bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 font-bold">
+                        <Layout className="w-4 h-4" />
+                      </span>
+                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                        (config.toolAdSlotType || 'banner') === 'banner'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                        {(config.toolAdSlotType || 'banner') === 'banner' ? 'Active Mode' : 'Select'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h5 className="font-bold text-xs text-slate-900 dark:text-white">
+                        Banner Slot (468×60)
+                      </h5>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                        Compact, centered horizontal ad banner rendered directly inline above the interactive tool conversion workspace.
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-[10px] text-slate-500">
+                      <span>Width: max-w-3xl</span>
+                      <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold">min-h-[60px]</span>
+                    </div>
+                  </div>
+
+                  {/* Sidebar Slot Card */}
+                  <div
+                    onClick={() => {
+                      const currentSlots = config.toolAdSlots || { leaderboard: true, banner: true, sidebar: true };
+                      onUpdateConfig({
+                        ...config,
+                        toolAdSlotType: 'sidebar',
+                        toolAdSlots: { ...currentSlots, sidebar: true },
+                      });
+                      showToast('Tool page ad mode set to Sidebar');
+                    }}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-3 relative ${
+                      (config.toolAdSlotType || 'banner') === 'sidebar'
+                        ? 'bg-blue-50/70 dark:bg-blue-950/30 border-blue-500 ring-2 ring-blue-500/20'
+                        : 'bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-400'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 font-bold">
+                        <PanelRight className="w-4 h-4" />
+                      </span>
+                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                        (config.toolAdSlotType || 'banner') === 'sidebar'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                        {(config.toolAdSlotType || 'banner') === 'sidebar' ? 'Active Mode' : 'Select'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h5 className="font-bold text-xs text-slate-900 dark:text-white">
+                        Sidebar Slot (300×250 / 300×600)
+                      </h5>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                        Sticky right-hand sidebar ad slot alongside ToolPageLayout on desktop with continuous in-view visibility.
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-[10px] text-slate-500">
+                      <span>Desktop: Sticky 320px</span>
+                      <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">min-h-[280px]</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Granular Slot Toggles & Custom Ad Unit IDs */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  
+                  {/* Individual Slot Toggles */}
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-3">
+                    <h5 className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-2">
+                      <Sliders className="w-3.5 h-3.5 text-blue-600" />
+                      Individual Slot Enable/Disable Toggles
+                    </h5>
+
+                    <div className="space-y-2 text-xs">
+                      {/* Leaderboard Slot Toggle */}
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60">
+                        <div>
+                          <p className="font-bold text-slate-800 dark:text-slate-200">Leaderboard Slot</p>
+                          <p className="text-[10px] text-slate-400">Wide header &amp; bottom placement</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const slots = config.toolAdSlots || { leaderboard: true, banner: true, sidebar: true };
+                            const nextSlots = { ...slots, leaderboard: !slots.leaderboard };
+                            onUpdateConfig({ ...config, toolAdSlots: nextSlots });
+                            showToast(`Leaderboard slot ${nextSlots.leaderboard ? 'enabled' : 'disabled'}`);
+                          }}
+                          className={`w-10 h-5 rounded-full p-0.5 transition-colors ${
+                            (config.toolAdSlots?.leaderboard ?? true) ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
+                          }`}
+                        >
+                          <div
+                            className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                              (config.toolAdSlots?.leaderboard ?? true) ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {/* Banner Slot Toggle */}
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60">
+                        <div>
+                          <p className="font-bold text-slate-800 dark:text-slate-200">Banner Slot</p>
+                          <p className="text-[10px] text-slate-400">Inline compact banner above tool</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const slots = config.toolAdSlots || { leaderboard: true, banner: true, sidebar: true };
+                            const nextSlots = { ...slots, banner: !slots.banner };
+                            onUpdateConfig({ ...config, toolAdSlots: nextSlots });
+                            showToast(`Banner slot ${nextSlots.banner ? 'enabled' : 'disabled'}`);
+                          }}
+                          className={`w-10 h-5 rounded-full p-0.5 transition-colors ${
+                            (config.toolAdSlots?.banner ?? true) ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
+                          }`}
+                        >
+                          <div
+                            className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                              (config.toolAdSlots?.banner ?? true) ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {/* Sidebar Slot Toggle */}
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60">
+                        <div>
+                          <p className="font-bold text-slate-800 dark:text-slate-200">Sidebar Slot</p>
+                          <p className="text-[10px] text-slate-400">Sticky right column on desktop</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const slots = config.toolAdSlots || { leaderboard: true, banner: true, sidebar: true };
+                            const nextSlots = { ...slots, sidebar: !slots.sidebar };
+                            onUpdateConfig({ ...config, toolAdSlots: nextSlots });
+                            showToast(`Sidebar slot ${nextSlots.sidebar ? 'enabled' : 'disabled'}`);
+                          }}
+                          className={`w-10 h-5 rounded-full p-0.5 transition-colors ${
+                            (config.toolAdSlots?.sidebar ?? true) ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+                          }`}
+                        >
+                          <div
+                            className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                              (config.toolAdSlots?.sidebar ?? true) ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Custom AdSense Slot IDs (Optional per placement) */}
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-3">
+                    <h5 className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-2">
+                      <Key className="w-3.5 h-3.5 text-emerald-600" />
+                      Custom AdSense Unit Slot IDs (Optional)
+                    </h5>
+
+                    <div className="space-y-2.5 text-xs">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                          Leaderboard Slot ID (data-ad-slot)
+                        </label>
+                        <input
+                          type="text"
+                          value={config.adsenseCustomSlots?.leaderboard || ''}
+                          onChange={(e) =>
+                            onUpdateConfig({
+                              ...config,
+                              adsenseCustomSlots: {
+                                ...config.adsenseCustomSlots,
+                                leaderboard: e.target.value,
+                              },
+                            })
+                          }
+                          placeholder="e.g. 1029384756"
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                          Banner Slot ID (data-ad-slot)
+                        </label>
+                        <input
+                          type="text"
+                          value={config.adsenseCustomSlots?.banner || ''}
+                          onChange={(e) =>
+                            onUpdateConfig({
+                              ...config,
+                              adsenseCustomSlots: {
+                                ...config.adsenseCustomSlots,
+                                banner: e.target.value,
+                              },
+                            })
+                          }
+                          placeholder="e.g. 2938475610"
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                          Sidebar Slot ID (data-ad-slot)
+                        </label>
+                        <input
+                          type="text"
+                          value={config.adsenseCustomSlots?.sidebar || ''}
+                          onChange={(e) =>
+                            onUpdateConfig({
+                              ...config,
+                              adsenseCustomSlots: {
+                                ...config.adsenseCustomSlots,
+                                sidebar: e.target.value,
+                              },
+                            })
+                          }
+                          placeholder="e.g. 3847561029"
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Live Interactive Schematic / Wireframe of ToolPageLayout */}
+                <div className="p-4 rounded-2xl bg-slate-950 text-white border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                      <Eye className="w-3.5 h-3.5 text-blue-400" />
+                      Live ToolPageLayout Placement Schematic
+                    </span>
+                    <span className="text-[11px] font-mono text-emerald-400">
+                      {config.adsEnabled ? 'Ads Active in Live Preview' : 'Ads Disabled Globally'}
+                    </span>
+                  </div>
+
+                  {/* Wireframe Diagram */}
+                  <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2 text-[10px]">
+                    {/* Top Leaderboard slot schematic */}
+                    {(config.toolAdSlots?.leaderboard ?? true) && (config.toolAdSlotType === 'leaderboard' || !config.toolAdSlotType) && (
+                      <div className="w-full py-1.5 bg-blue-950/80 border border-dashed border-blue-500/80 rounded-lg text-center font-bold text-blue-300 animate-pulse">
+                        [ AdSense Leaderboard Slot • 728×90 Top ]
                       </div>
                     )}
 
-                    <div className="w-full h-12 bg-slate-900/90 rounded border border-slate-700/80 flex items-center justify-center font-semibold text-slate-400 text-[9px]">
-                      ⚡ Active Interactive Tool Workspace
+                    <div className="flex gap-2">
+                      {/* Left Column Workspace */}
+                      <div className="flex-1 bg-slate-800/90 rounded-lg p-2.5 space-y-1.5 border border-slate-700/60">
+                        <div className="w-1/3 h-2.5 bg-slate-700 rounded" />
+                        <div className="w-2/3 h-3.5 bg-slate-600 rounded font-bold text-[9px] text-slate-300 flex items-center px-1">
+                          Tool Header &amp; SEO Breadcrumbs
+                        </div>
+
+                        {/* Inline Banner slot schematic */}
+                        {(config.toolAdSlots?.banner ?? true) && (config.toolAdSlotType === 'banner' || config.toolAdSlotType === 'leaderboard') && (
+                          <div className="w-full py-1 bg-indigo-950/80 border border-dashed border-indigo-500/80 rounded text-center font-bold text-indigo-300 text-[9px]">
+                            [ AdSense Banner Slot • Inline ]
+                          </div>
+                        )}
+
+                        <div className="w-full h-12 bg-slate-900/90 rounded border border-slate-700/80 flex items-center justify-center font-semibold text-slate-400 text-[9px]">
+                          ⚡ Active Interactive Tool Workspace
+                        </div>
+
+                        <div className="w-full h-4 bg-slate-700/50 rounded text-[8px] text-slate-400 flex items-center px-1">
+                          Step-by-Step Instructions &amp; FAQ
+                        </div>
+                      </div>
+
+                      {/* Right Sidebar slot schematic */}
+                      {((config.toolAdSlots?.sidebar ?? true) || config.toolAdSlotType === 'sidebar') && (
+                        <div className="w-28 bg-emerald-950/60 border border-dashed border-emerald-500 rounded-lg p-2 flex flex-col items-center justify-center text-center text-emerald-300 font-bold text-[8px] gap-1">
+                          <PanelRight className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>[ AdSense Sidebar Slot ]</span>
+                          <span className="text-[7px] text-slate-400 font-normal">Sticky 300×250 / 300×600</span>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="w-full h-4 bg-slate-700/50 rounded text-[8px] text-slate-400 flex items-center px-1">
-                      Step-by-Step Instructions &amp; FAQ
-                    </div>
+                    {/* Bottom Leaderboard slot schematic */}
+                    {(config.toolAdSlots?.leaderboard ?? true) && config.toolAdSlotType === 'leaderboard' && (
+                      <div className="w-full py-1.5 bg-blue-950/80 border border-dashed border-blue-500/80 rounded-lg text-center font-bold text-blue-300">
+                        [ AdSense Leaderboard Slot • 728×90 Bottom ]
+                      </div>
+                    )}
                   </div>
-
-                  {/* Right Sidebar slot schematic */}
-                  {((config.toolAdSlots?.sidebar ?? true) || config.toolAdSlotType === 'sidebar') && (
-                    <div className="w-28 bg-emerald-950/60 border border-dashed border-emerald-500 rounded-lg p-2 flex flex-col items-center justify-center text-center text-emerald-300 font-bold text-[8px] gap-1">
-                      <PanelRight className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>[ AdSense Sidebar Slot ]</span>
-                      <span className="text-[7px] text-slate-400 font-normal">Sticky 300×250 / 300×600</span>
-                    </div>
-                  )}
                 </div>
 
-                {/* Bottom Leaderboard slot schematic */}
-                {(config.toolAdSlots?.leaderboard ?? true) && config.toolAdSlotType === 'leaderboard' && (
-                  <div className="w-full py-1.5 bg-blue-950/80 border border-dashed border-blue-500/80 rounded-lg text-center font-bold text-blue-300">
-                    [ AdSense Leaderboard Slot • 728×90 Bottom ]
-                  </div>
-                )}
               </div>
             </div>
-
-          </div>
+          )}
         </div>
       )}
 
