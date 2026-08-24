@@ -3,4 +3,18 @@ Allow: /
 Disallow: /admin
 Disallow: /api/
 
+User-agent: Googlebot
+Allow: /
+Allow: /favicon.ico
+Allow: /favicon*
+Allow: /icon-*
+Allow: /apple-touch-icon.png
+
+User-agent: Googlebot-Image
+Allow: /
+Allow: /favicon.ico
+Allow: /favicon*
+Allow: /icon-*
+Allow: /apple-touch-icon.png
+
 Sitemap: https://pdfeditfy.com/sitemap.xml

@@ -276,15 +276,27 @@ export const TOOLS: ToolItem[] = [
   },
   {
     id: 'image-to-url',
-    name: 'Image to URL Converter',
+    name: 'Image to URL & Short Link',
     category: 'Image Tools',
-    description: 'Convert any image to Data URL, Base64 URI, Blob URL, HTML/CSS embed tags, and shareable web link.',
+    description: 'Convert any image into an ultra-compact Short URL, shareable link, Base64 URI, Data URL, and HTML embed code.',
     iconName: 'Link',
     badge: 'Popular',
     supportedFormats: ['JPG', 'JPEG', 'PNG', 'WEBP', 'SVG', 'GIF', 'BMP', 'ICO', 'AVIF'],
-    tags: ['image to url', 'image to base64', 'data url', 'base64 converter', 'image link', 'img to url', 'embed image', 'html img tag'],
-    seoTitle: 'Image to URL Converter - Convert Images to Data URL & Base64 Online',
-    seoDescription: 'Convert images to Data URL, Base64 string, HTML img tags, CSS background URLs, and shareable links for free with instant copy and QR code generation.'
+    tags: ['image to url', 'short url', 'image short link', 'image to base64', 'data url', 'base64 converter', 'image link', 'img to url', 'embed image', 'html img tag', 'short link'],
+    seoTitle: 'Image to Short URL & Base64 Converter – Free Online Link Generator',
+    seoDescription: 'Convert images to compact Short URLs, shareable links, Data URLs, Base64 strings, and HTML img tags with instant copy and QR code generation.'
+  },
+  {
+    id: 'favicon-generator',
+    name: 'Favicon & App Icon Generator',
+    category: 'Image Tools',
+    description: 'Generate multi-size favicons (ICO, PNG, SVG), Apple Touch, PWA manifests, and Google Search optimized icons.',
+    iconName: 'Sparkles',
+    badge: 'New',
+    supportedFormats: ['PNG', 'JPG', 'JPEG', 'SVG', 'WEBP', 'GIF', 'ICO'],
+    tags: ['favicon generator', 'icon generator', 'ico converter', 'apple touch icon', 'google search favicon', 'favicon optimizer', 'pwa icon generator', 'manifest generator'],
+    seoTitle: 'Free Favicon & App Icon Generator – Google Search & SEO Ready',
+    seoDescription: 'Generate Google Search compliant favicons, multi-size .ICO files, Apple Touch icons, Web App Manifests, and SVG favicons with live SERP preview and 1-click ZIP export.'
   },
 
   // --- OCR & ADVANCED TOOLS ---

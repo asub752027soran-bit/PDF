@@ -18,6 +18,7 @@ const WordTool = lazy(() => import('./components/tools/WordTool').then(m => ({ d
 const ExcelTool = lazy(() => import('./components/tools/ExcelTool').then(m => ({ default: m.ExcelTool })));
 const ImageEditorTool = lazy(() => import('./components/tools/ImageEditorTool').then(m => ({ default: m.ImageEditorTool })));
 const ImageToUrlTool = lazy(() => import('./components/tools/ImageToUrlTool').then(m => ({ default: m.ImageToUrlTool })));
+const FaviconGeneratorTool = lazy(() => import('./components/tools/FaviconGeneratorTool').then(m => ({ default: m.FaviconGeneratorTool })));
 const OCRTool = lazy(() => import('./components/tools/OCRTool').then(m => ({ default: m.OCRTool })));
 const UniversalConvertTool = lazy(() => import('./components/tools/UniversalConvertTool').then(m => ({ default: m.UniversalConvertTool })));
 
@@ -632,6 +633,10 @@ export default function App() {
 
                 {activeToolId === 'image-to-url' && (
                   <ImageToUrlTool onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />
+                )}
+
+                {activeToolId === 'favicon-generator' && (
+                  <FaviconGeneratorTool onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />
                 )}
 
                 {activeToolId === 'ocr-reader' && <OCRTool onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}

@@ -600,34 +600,68 @@ export const TOOL_SEO_DETAILS: Record<string, ToolSeoDetail> = {
   },
 
   'image-to-url': {
-    h1: 'Image to URL Converter - Convert Images to Data URL & Base64 Online',
-    shortIntro: 'Convert any image into Data URL, Base64 URI, Blob URL, HTML <img> embed tags, CSS backgrounds, and shareable preview links.',
-    fullDescription: 'Convert photos and graphics into inline Base64 Data URLs and local URLs with PDF Editfy. Generate ready-to-copy HTML <img> tags, CSS background-image rules, React JSX snippets, and QR codes instantly without server uploads.',
+    h1: 'Image to Short URL & Base64 Converter Online',
+    shortIntro: 'Convert any image into ultra-compact Short URLs, shareable links, Data URLs, Base64 strings, HTML <img> embed tags, and mobile QR codes.',
+    fullDescription: 'Convert photos and graphics into compact Short URLs and inline Base64 Data URLs with PDF Editfy. Generate ready-to-copy short share links, HTML <img> tags, CSS background-image rules, React JSX snippets, BBCode, and QR codes instantly with one click.',
     howToSteps: [
       { title: 'Upload Image or Paste from Clipboard', description: 'Drag and drop your image file, browse your device, or press Ctrl+V to paste directly from your clipboard.' },
-      { title: 'Choose Format & Compression (Optional)', description: 'Select encoding format (PNG, JPEG, WEBP) and adjust quality or resize settings to optimize URL payload length.' },
-      { title: 'Select Code Snippet Format', description: 'Switch between Data URL, Clean Base64 String, HTML <img> tag, CSS background, React JSX, Markdown, or Blob URL tabs.' },
-      { title: 'Copy with 1-Click or Download HTML Demo', description: 'Click "Copy" to put the code on your clipboard or download a standalone HTML demo file.' }
+      { title: 'Generate Instant Short URL', description: 'Get a clean, compact Short URL link or 1-click cloud link to share on WhatsApp, Telegram, Discord, and social media.' },
+      { title: 'Select Code Snippet Format', description: 'Switch between Short URL, Data URL, Base64 String, HTML <img> tag, Markdown, React JSX, BBCode, or QR Code tabs.' },
+      { title: 'Copy with 1-Click or Scan QR Code', description: 'Click "Copy Short Link" to share anywhere or scan the generated QR code directly with your smartphone.' }
     ],
     features: [
-      'Data URL (RFC 2397) & Pure Base64 String Generation',
-      'One-Click Code Snippets for HTML <img>, CSS, React JSX, and Markdown',
-      'Built-in QR Code Generator for Mobile Link Testing',
+      'Ultra-Compact Short URL Generation (99.9% Shorter than Base64)',
+      '1-Click Public Cloud URL Hosting for Universal Sharing',
+      'One-Click Code Snippets for HTML <img>, Markdown, CSS, and React JSX',
+      'Instant Mobile QR Code Generation for Direct Phone Scanning',
       'Format Re-encoding (WEBP, PNG, JPEG) to Minimize URL Payload Size',
       'Batch Image Processing & JSON Bulk Export',
       '100% Private Client-Side In-Memory Processing'
     ],
     supportedInput: 'JPG, JPEG, PNG, WEBP, SVG, GIF, BMP, ICO, AVIF',
-    supportedOutput: 'Data URL, Base64 URI, HTML embed snippet, CSS snippet, Blob URL, QR Code',
+    supportedOutput: 'Short URLs, Data URLs, Base64, HTML/CSS Snippets, QR Code',
     faqs: [
-      { question: 'What is a Data URL and how does it work?', answer: 'A Data URL (RFC 2397) is a URI scheme that allows images to be embedded directly inline inside HTML, CSS, or JSON documents as Base64-encoded strings without requiring external image hosting.' },
-      { question: 'Why should I convert images to Data URLs?', answer: 'Data URLs eliminate external HTTP requests for small icons and logos, prevent broken image links in HTML emails, and enable self-contained single-file HTML reports and dashboards.' },
-      { question: 'Are my images uploaded to any server?', answer: 'No. The image to URL conversion runs 100% locally inside your web browser using HTML5 Canvas and FileReader APIs. Your images are completely private.' },
-      { question: 'How can I reduce the length of a Base64 Data URL?', answer: 'Use our built-in optimization controls: select "WEBP" format, reduce compression quality (e.g. to 80%), or choose a maximum dimension like 400px or 800px before generating the URL.' }
+      { question: 'What is a Short Image URL and why should I use it?', answer: 'A Short Image URL is a compact web link pointing directly to your image. Unlike Base64 strings which can take up hundreds of thousands of characters, Short URLs are only ~30 characters, making them easy to share via WhatsApp, Twitter, SMS, or emails.' },
+      { question: 'Can I make a public cloud short link for my image?', answer: 'Yes. Simply click "Make Public Cloud URL" inside the tool to get a universal public web link that can be opened anywhere across the globe.' },
+      { question: 'Can I scan the QR code to open the image on my mobile phone?', answer: 'Yes! The tool automatically generates a high-resolution QR code for every Short URL so you can scan it with your phone camera and open the image instantly.' },
+      { question: 'Are my images uploaded to any server?', answer: 'The initial Short URL conversion runs 100% locally inside your browser memory. If you choose to generate a public cloud link, it uploads to free public image hosting.' }
     ],
     relatedToolIds: ['image-converter', 'image-compressor', 'image-resizer', 'image-to-pdf'],
     canonicalSlug: 'image-to-url',
-    alternateSlugs: ['image-to-base64', 'image-url-converter', 'img-to-url', 'base64-image']
+    alternateSlugs: ['image-to-short-url', 'short-image-url', 'img-to-url', 'image-to-base64', 'image-url-generator']
+  },
+
+  'favicon-generator': {
+    h1: 'Favicon & App Icon Generator – Google Search & SEO Compliant',
+    shortIntro: 'Generate multi-size favicons (ICO, PNG, SVG), Apple Touch icons, Web App Manifests, and Google Search SERP compliant icons with live preview.',
+    fullDescription: 'Create Google Search compliant favicons, multi-layer binary .ICO files, Apple Touch icons for iOS Safari, Android PWA manifests, and modern responsive SVG favicons with PDF Editfy. Test your favicon against Google SERP display rules and export a complete ready-to-deploy ZIP package with one click.',
+    howToSteps: [
+      { title: 'Upload Image, Type Text, or Pick a Preset', description: 'Upload your company logo, enter letters/emojis with custom typography, or select from ready-made presets.' },
+      { title: 'Customize Mask Shape, Inset & Theme Color', description: 'Choose between Rounded, Squircle, Circle, or Square masks and adjust background padding so icons never clip.' },
+      { title: 'Test in Live Google SERP & Tab Simulators', description: 'Preview your favicon inside Google Search results and browser tabs in both Light and Dark modes.' },
+      { title: 'Download All-in-One ZIP Package & Copy HTML', description: 'Download all 8 multi-size PNGs, binary favicon.ico, favicon.svg, and manifest.webmanifest with pre-built HTML embed code.' }
+    ],
+    features: [
+      'Multi-Size Binary favicon.ico Generation (16x16, 32x32, 48x48)',
+      'Google Search SERP Standard Compliance (Multiples of 48px: 48x48, 96x96, 144x144)',
+      'Apple Touch Icon (180x180) & Android Chrome PWA (192x192, 512x512)',
+      'Modern Responsive SVG Favicon with Dark Mode Adaptation',
+      'Text & Emoji to Favicon Generator with 10+ Font Styles',
+      'Live Google Search Result & Browser Tab Simulation',
+      'Pre-Configured manifest.webmanifest & browserconfig.xml Export',
+      '1-Click Complete ZIP Archive Download with Step-by-Step Installation Guide'
+    ],
+    supportedInput: 'PNG, JPG, JPEG, SVG, WEBP, GIF, BMP, ICO',
+    supportedOutput: 'Multi-size .ICO, 48x48 PNG, 96x96 PNG, 180x180 PNG, 192x192 PNG, 512x512 PNG, SVG, manifest.webmanifest, ZIP Package',
+    faqs: [
+      { question: 'Why is my favicon not showing in Google search results?', answer: 'Google requires your favicon to follow specific guidelines: it must be a square image with dimensions that are a multiple of 48px (e.g. 48x48, 96x96, 144x144, 192x192), crawlable by Googlebot-Image in robots.txt, and linked via a <link rel="icon"> tag in your <head>.' },
+      { question: 'What sizes are included in the generated favicon package?', answer: 'The package generates: favicon.ico (16/32/48 multi-size), favicon-16x16.png, favicon-32x32.png, favicon-48x48.png (Google Search SERP), favicon-96x96.png, favicon-144x144.png, apple-touch-icon.png (180x180), icon-192x192.png, icon-512x512.png, and modern favicon.svg.' },
+      { question: 'How do I force Google to update my website favicon in search?', answer: 'After uploading the generated favicon files and HTML code to your website, open Google Search Console, enter your homepage URL into the URL Inspection bar, and click "Request Indexing". Google will re-fetch the favicon during its next crawl cycle.' },
+      { question: 'What is the advantage of using a multi-size binary .ico file?', answer: 'A multi-size .ico file bundles 16x16, 32x32, and 48x48 resolutions into a single file so older browsers, Windows taskbars, and browser address bars automatically display the sharpest resolution without extra HTTP requests.' }
+    ],
+    relatedToolIds: ['image-converter', 'image-resizer', 'image-compressor', 'image-to-url'],
+    canonicalSlug: 'favicon-generator',
+    alternateSlugs: ['icon-generator', 'favicon-converter', 'app-icon-generator', 'ico-generator', 'google-favicon-generator', 'pwa-icon-generator']
   },
 
   'ocr-reader': {

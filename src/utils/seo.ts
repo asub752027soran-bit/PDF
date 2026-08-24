@@ -33,7 +33,7 @@ export function updateSEOMeta(options: SeoOptions) {
     description,
     canonicalUrl,
     ogType = 'website',
-    ogImage = 'https://pdfeditfy.com/favicon.svg',
+    ogImage = 'https://pdfeditfy.com/icon-512x512.png',
     noindex = false,
     breadcrumbs,
     faqs,
@@ -103,9 +103,12 @@ export function updateSEOMeta(options: SeoOptions) {
       'logo': {
         '@type': 'ImageObject',
         '@id': 'https://pdfeditfy.com/#logo',
-        'url': 'https://pdfeditfy.com/favicon.svg',
+        'url': 'https://pdfeditfy.com/icon-512x512.png',
+        'width': 512,
+        'height': 512,
         'caption': 'PDF Editfy – Free Online PDF Tools'
       },
+      'image': 'https://pdfeditfy.com/icon-512x512.png',
       'description': 'Fast, private, and free online PDF editor, converter, compressor, and document processing tools with zero signup required.'
     },
     {

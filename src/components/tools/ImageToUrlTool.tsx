@@ -13,22 +13,31 @@ import {
   Sparkles,
   RefreshCw,
   Sliders,
-  Maximize2,
   Trash2,
   Eye,
   FileText,
   Layers,
   ArrowRight,
-  HelpCircle,
   Globe,
   Share2,
   CheckCircle2,
   Zap,
-  Info
+  Info,
+  Cloud,
+  Send,
+  Scissors,
+  CheckCheck
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { formatBytes } from '../../utils/imageProcessor';
 import { recordToolConversion } from '../../utils/activityTracker';
+import {
+  saveShortImage,
+  getShortImage,
+  buildLocalShortUrl,
+  uploadToPublicCloud,
+  StoredShortImage
+} from '../../utils/shortImageStore';
 
 interface ImageToUrlToolProps {
   onBack: () => void;
@@ -38,18 +47,21 @@ interface ImageToUrlToolProps {
 
 export interface ConvertedImageItem {
   id: string;
-  file: File;
+  shortId: string;
   name: string;
   originalSize: number;
   dataUrl: string;
   blobUrl: string;
   base64Only: string;
+  shortUrl: string;
+  publicCloudUrl?: string;
+  customSlug?: string;
   width: number;
   height: number;
   mimeType: string;
   charCount: number;
   qrCodeUrl?: string;
-  isCustomUrl?: boolean;
+  isCloudUploading?: boolean;
 }
 
 export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
@@ -59,7 +71,9 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
 }) => {
   const [items, setItems] = useState<ConvertedImageItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'dataurl' | 'base64' | 'html' | 'css' | 'react' | 'markdown' | 'blob' | 'qrcode'>('dataurl');
+  const [activeTab, setActiveTab] = useState<
+    'shorturl' | 'dataurl' | 'base64' | 'html' | 'css' | 'react' | 'markdown' | 'bbcode' | 'blob' | 'qrcode'
+  >('shorturl');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -68,6 +82,9 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
   const [quality, setQuality] = useState<number>(90); // 10-100
   const [maxDimension, setMaxDimension] = useState<number | 'original'>('original');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+
+  // Custom slug input
+  const [customSlugInput, setCustomSlugInput] = useState<string>('');
 
   // Online URL fetch input
   const [remoteUrlInput, setRemoteUrlInput] = useState<string>('');
@@ -92,9 +109,19 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
     });
   };
 
+  // Generate a random 6-character short slug
+  const generateShortId = () => {
+    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+    let res = '';
+    for (let i = 0; i < 6; i++) {
+      res += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return res;
+  };
+
   // Convert File to ConvertedImageItem
   const processImageFile = useCallback(
-    async (file: File): Promise<ConvertedImageItem | null> => {
+    async (file: File, customSlug?: string): Promise<ConvertedImageItem | null> => {
       return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = async (e) => {
@@ -104,37 +131,56 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
             return;
           }
 
+          const shortId = customSlug || generateShortId();
+          const shortUrl = buildLocalShortUrl(shortId);
+
           // If SVG and output format is original, keep raw text/dataUrl
           if (file.type === 'image/svg+xml' && outputFormat === 'original') {
             const blobUrl = URL.createObjectURL(file);
             const base64Only = rawDataUrl.split(',')[1] || '';
 
-            // Generate QR code
+            // Generate QR code for the short URL
             let qrCodeUrl = '';
             try {
-              qrCodeUrl = await QRCode.toDataURL(rawDataUrl.slice(0, 1500) || blobUrl, {
-                width: 256,
-                margin: 1,
-                color: { dark: '#0f172a', light: '#ffffff' },
+              qrCodeUrl = await QRCode.toDataURL(shortUrl, {
+                width: 280,
+                margin: 2,
+                color: { dark: '#4c1d95', light: '#ffffff' },
               });
             } catch (err) {
-              // Ignore QR size overflow
+              console.debug('QR code note:', err);
             }
 
-            resolve({
-              id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-              file,
+            const item: ConvertedImageItem = {
+              id: `img-${Date.now()}-${shortId}`,
+              shortId,
               name: file.name,
               originalSize: file.size,
               dataUrl: rawDataUrl,
               blobUrl,
               base64Only,
+              shortUrl,
+              customSlug,
               width: 500,
               height: 500,
               mimeType: file.type,
               charCount: rawDataUrl.length,
               qrCodeUrl,
+            };
+
+            // Store in local short cache
+            saveShortImage({
+              id: shortId,
+              name: file.name,
+              mimeType: file.type,
+              dataUrl: rawDataUrl,
+              width: 500,
+              height: 500,
+              size: file.size,
+              customSlug,
             });
+
+            resolve(item);
             return;
           }
 
@@ -165,11 +211,9 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
               return;
             }
 
-            // High-quality rendering
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
 
-            // If converting to JPEG or PNG without alpha, fill white if needed
             const effectiveMime = outputFormat === 'original' ? (file.type || 'image/png') : outputFormat;
             if (effectiveMime === 'image/jpeg') {
               ctx.fillStyle = '#ffffff';
@@ -182,38 +226,53 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
             const finalDataUrl = canvas.toDataURL(effectiveMime, effectiveQuality);
             const base64Only = finalDataUrl.split(',')[1] || '';
 
-            // Generate Blob URL
             const blob = await new Promise<Blob | null>((resBlob) =>
               canvas.toBlob((b) => resBlob(b), effectiveMime, effectiveQuality)
             );
             const blobUrl = blob ? URL.createObjectURL(blob) : URL.createObjectURL(file);
 
-            // Generate QR code for testing
+            // Generate QR code for the Short URL
             let qrCodeUrl = '';
             try {
-              qrCodeUrl = await QRCode.toDataURL(blobUrl, {
-                width: 256,
-                margin: 1,
-                color: { dark: '#0f172a', light: '#ffffff' },
+              qrCodeUrl = await QRCode.toDataURL(shortUrl, {
+                width: 280,
+                margin: 2,
+                color: { dark: '#4c1d95', light: '#ffffff' },
               });
             } catch (err) {
               console.debug('QR code generation note:', err);
             }
 
-            resolve({
-              id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-              file,
+            const item: ConvertedImageItem = {
+              id: `img-${Date.now()}-${shortId}`,
+              shortId,
               name: file.name,
               originalSize: file.size,
               dataUrl: finalDataUrl,
               blobUrl,
               base64Only,
+              shortUrl,
+              customSlug,
               width: targetW,
               height: targetH,
               mimeType: effectiveMime,
               charCount: finalDataUrl.length,
               qrCodeUrl,
+            };
+
+            // Store in local short cache
+            saveShortImage({
+              id: shortId,
+              name: file.name,
+              mimeType: effectiveMime,
+              dataUrl: finalDataUrl,
+              width: targetW,
+              height: targetH,
+              size: file.size,
+              customSlug,
             });
+
+            resolve(item);
           };
 
           img.onerror = () => resolve(null);
@@ -251,13 +310,53 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
         setSelectedId(results[0].id);
         const totalBytes = validFiles.reduce((acc, f) => acc + f.size, 0);
         recordToolConversion('image-to-url', totalBytes);
-        showToast(`Successfully converted ${results.length} image${results.length > 1 ? 's' : ''} to URL!`);
+        showToast(`Generated Short URL for ${results.length} image${results.length > 1 ? 's' : ''}!`);
       }
 
       setIsProcessing(false);
     },
     [processImageFile]
   );
+
+  // Check URL query for ?img=xyz to auto-load saved short image
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const imgParam = params.get('img');
+      if (imgParam) {
+        const stored = getShortImage(imgParam);
+        if (stored) {
+          const shortUrl = buildLocalShortUrl(stored.customSlug || stored.id);
+          QRCode.toDataURL(shortUrl, { width: 280, margin: 2, color: { dark: '#4c1d95', light: '#ffffff' } })
+            .then((qrCodeUrl) => {
+              const loadedItem: ConvertedImageItem = {
+                id: `stored-${stored.id}`,
+                shortId: stored.id,
+                name: stored.name,
+                originalSize: stored.size,
+                dataUrl: stored.dataUrl,
+                blobUrl: stored.dataUrl,
+                base64Only: stored.dataUrl.split(',')[1] || '',
+                shortUrl,
+                publicCloudUrl: stored.publicCloudUrl,
+                customSlug: stored.customSlug,
+                width: stored.width,
+                height: stored.height,
+                mimeType: stored.mimeType,
+                charCount: stored.dataUrl.length,
+                qrCodeUrl,
+              };
+              setItems([loadedItem]);
+              setSelectedId(loadedItem.id);
+              showToast(`Loaded image from Short URL: ${imgParam}`);
+            })
+            .catch(() => {});
+        }
+      }
+    } catch (e) {
+      console.debug('Error parsing img url query:', e);
+    }
+  }, []);
 
   // Listen to initial incoming files from global drops
   useEffect(() => {
@@ -297,53 +396,48 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
   const handleLoadSample = async () => {
     setIsProcessing(true);
     try {
-      // Create a sample SVG/Canvas badge image
       const canvas = document.createElement('canvas');
-      canvas.width = 600;
+      canvas.width = 640;
       canvas.height = 400;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        // Draw colorful background gradient
-        const gradient = ctx.createLinearGradient(0, 0, 600, 400);
-        gradient.addColorStop(0, '#2563eb');
-        gradient.addColorStop(0.5, '#7c3aed');
-        gradient.addColorStop(1, '#db2777');
+        const gradient = ctx.createLinearGradient(0, 0, 640, 400);
+        gradient.addColorStop(0, '#3b82f6');
+        gradient.addColorStop(0.5, '#8b5cf6');
+        gradient.addColorStop(1, '#ec4899');
         ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, 600, 400);
+        ctx.fillRect(0, 0, 640, 400);
 
-        // Ambient circles
         ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
         ctx.beginPath();
         ctx.arc(120, 100, 80, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.beginPath();
-        ctx.arc(480, 300, 120, 0, Math.PI * 2);
+        ctx.arc(520, 300, 130, 0, Math.PI * 2);
         ctx.fill();
 
-        // White card in center
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
         ctx.beginPath();
-        ctx.roundRect(80, 80, 440, 240, 24);
+        ctx.roundRect(60, 60, 520, 280, 24);
         ctx.fill();
 
-        // Text
         ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 28px sans-serif';
+        ctx.font = 'bold 30px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('PDF Editfy Demo Image', 300, 180);
+        ctx.fillText('PDF Editfy Short Image URL', 320, 160);
 
         ctx.fillStyle = '#64748b';
         ctx.font = '16px sans-serif';
-        ctx.fillText('Converted instantly into Base64 Data URL & code snippets', 300, 220);
+        ctx.fillText('Converted into clean Short Link, QR Code & Base64', 320, 205);
 
-        ctx.fillStyle = '#2563eb';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.fillText('600 x 400 px • 100% Client-Side', 300, 260);
+        ctx.fillStyle = '#7c3aed';
+        ctx.font = 'bold 15px monospace';
+        ctx.fillText('https://pdfeditfy.com/tool/image-to-url?img=demo64', 320, 255);
 
         canvas.toBlob(async (blob) => {
           if (blob) {
-            const sampleFile = new File([blob], 'pdfeditfy-sample-banner.png', { type: 'image/png' });
+            const sampleFile = new File([blob], 'pdfeditfy-shorturl-demo.png', { type: 'image/png' });
             await handleFiles([sampleFile]);
           }
         }, 'image/png');
@@ -373,7 +467,6 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
       setRemoteUrlInput('');
     } catch (err) {
       console.warn('Direct fetch blocked by CORS, fallback to image element render:', err);
-      // Fallback via Image object
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
@@ -396,7 +489,7 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
       };
       img.onerror = () => {
         setIsFetchingRemote(false);
-        showToast('Could not load remote image due to CORS restrictions. Try uploading it directly.');
+        showToast('Could not load remote image due to CORS restrictions. Try uploading directly.');
       };
       img.src = remoteUrlInput.trim();
       return;
@@ -407,10 +500,115 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
   // Currently selected active item
   const activeItem = items.find((i) => i.id === selectedId) || items[0] || null;
 
+  // Upload active image to public cloud to get an external short URL
+  const handleCreatePublicCloudShortUrl = async () => {
+    if (!activeItem) return;
+
+    setItems((prev) =>
+      prev.map((item) => (item.id === activeItem.id ? { ...item, isCloudUploading: true } : item))
+    );
+
+    try {
+      const res = await uploadToPublicCloud(activeItem.dataUrl, activeItem.name);
+      if (res.url) {
+        // Update QR code for the public URL
+        const qrCodeUrl = await QRCode.toDataURL(res.url, {
+          width: 280,
+          margin: 2,
+          color: { dark: '#0284c7', light: '#ffffff' },
+        });
+
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === activeItem.id
+              ? {
+                  ...item,
+                  publicCloudUrl: res.url,
+                  shortUrl: res.url,
+                  qrCodeUrl,
+                  isCloudUploading: false,
+                }
+              : item
+          )
+        );
+
+        saveShortImage({
+          id: activeItem.shortId,
+          name: activeItem.name,
+          mimeType: activeItem.mimeType,
+          dataUrl: activeItem.dataUrl,
+          width: activeItem.width,
+          height: activeItem.height,
+          size: activeItem.originalSize,
+          publicCloudUrl: res.url,
+          customSlug: activeItem.customSlug,
+        });
+
+        copyToClipboard(res.url, 'public-cloud-url', 'Public Cloud Short URL copied!');
+      }
+    } catch (err) {
+      console.error('Failed to create cloud short link:', err);
+      showToast('Could not generate public cloud link. Local short URL is ready.');
+    } finally {
+      setItems((prev) =>
+        prev.map((item) => (item.id === activeItem.id ? { ...item, isCloudUploading: false } : item))
+      );
+    }
+  };
+
+  // Apply custom slug to active image
+  const handleApplyCustomSlug = async () => {
+    if (!activeItem) return;
+    const cleanSlug = customSlugInput.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+    if (!cleanSlug) {
+      showToast('Please enter a valid slug (letters, numbers, hyphens).');
+      return;
+    }
+
+    const newShortUrl = buildLocalShortUrl(cleanSlug);
+    const qrCodeUrl = await QRCode.toDataURL(newShortUrl, {
+      width: 280,
+      margin: 2,
+      color: { dark: '#4c1d95', light: '#ffffff' },
+    });
+
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === activeItem.id
+          ? {
+              ...item,
+              customSlug: cleanSlug,
+              shortUrl: newShortUrl,
+              qrCodeUrl,
+            }
+          : item
+      )
+    );
+
+    saveShortImage({
+      id: activeItem.shortId,
+      name: activeItem.name,
+      mimeType: activeItem.mimeType,
+      dataUrl: activeItem.dataUrl,
+      width: activeItem.width,
+      height: activeItem.height,
+      size: activeItem.originalSize,
+      customSlug: cleanSlug,
+      publicCloudUrl: activeItem.publicCloudUrl,
+    });
+
+    setCustomSlugInput('');
+    copyToClipboard(newShortUrl, 'custom-slug-url', `Custom Short URL set: ${cleanSlug}`);
+  };
+
   // Code Snippet Builders
   const getCodeSnippet = (type: typeof activeTab, item: ConvertedImageItem | null) => {
     if (!item) return '';
+    const activeUrl = item.publicCloudUrl || item.shortUrl;
+
     switch (type) {
+      case 'shorturl':
+        return activeUrl;
       case 'dataurl':
         return item.dataUrl;
       case 'base64':
@@ -418,11 +616,11 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
       case 'blob':
         return item.blobUrl;
       case 'html':
-        return `<img src="${item.dataUrl}" alt="${item.name.replace(/\.[^/.]+$/, '')}" width="${item.width}" height="${item.height}" loading="lazy" />`;
+        return `<img src="${activeUrl}" alt="${item.name.replace(/\.[^/.]+$/, '')}" width="${item.width}" height="${item.height}" loading="lazy" />`;
       case 'css':
-        return `/* CSS Background Image */
+        return `/* CSS Background Image with Short URL */
 .custom-image-element {
-  background-image: url("${item.dataUrl}");
+  background-image: url("${activeUrl}");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -433,34 +631,50 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
       case 'react':
         return `import React from 'react';
 
-export const ImageComponent: React.FC = () => {
+export const ShortImagePreview: React.FC = () => {
   return (
     <img
-      src="${item.dataUrl}"
+      src="${activeUrl}"
       alt="${item.name.replace(/\.[^/.]+$/, '')}"
       width={${item.width}}
       height={${item.height}}
-      className="max-w-full h-auto rounded-xl shadow-sm"
+      className="max-w-full h-auto rounded-2xl shadow-md"
+      loading="lazy"
     />
   );
 };`;
       case 'markdown':
-        return `![${item.name.replace(/\.[^/.]+$/, '')}](${item.dataUrl})`;
+        return `[![${item.name.replace(/\.[^/.]+$/, '')}](${activeUrl})](${activeUrl})`;
+      case 'bbcode':
+        return `[url=${activeUrl}][img]${activeUrl}[/img][/url]`;
       case 'qrcode':
-        return item.blobUrl;
+        return activeUrl;
       default:
-        return item.dataUrl;
+        return activeUrl;
     }
+  };
+
+  // Social Share links
+  const getShareLinks = (url: string, title: string) => {
+    const encodedUrl = encodeURIComponent(url);
+    const encodedTitle = encodeURIComponent(`Check out this image: ${title}`);
+    return {
+      whatsapp: `https://api.whatsapp.com/send?text=${encodedTitle}%20${encodedUrl}`,
+      twitter: `https://twitter.com/intent/tweet?text=${encodedTitle}&url=${encodedUrl}`,
+      telegram: `https://t.me/share/url?url=${encodedUrl}&text=${encodedTitle}`,
+      email: `mailto:?subject=${encodedTitle}&body=${encodedTitle}%0A%0A${encodedUrl}`,
+    };
   };
 
   // Download HTML test demo file
   const handleDownloadHtmlDemo = (item: ConvertedImageItem) => {
+    const activeUrl = item.publicCloudUrl || item.shortUrl;
     const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Base64 Embedded Image Demo - ${item.name}</title>
+  <title>Short Image URL Demo - ${item.name}</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -491,27 +705,29 @@ export const ImageComponent: React.FC = () => {
       border-radius: 12px;
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
     }
-    h1 { font-size: 20px; margin-top: 0; color: #38bdf8; }
+    h1 { font-size: 20px; margin-top: 0; color: #a855f7; }
     p { font-size: 13px; color: #94a3b8; line-height: 1.5; }
-    .badge {
+    .short-link {
       display: inline-block;
-      background: #0284c7;
-      color: #fff;
-      font-size: 11px;
-      font-weight: bold;
-      padding: 4px 10px;
-      border-radius: 9999px;
+      background: #4c1d95;
+      color: #e9d5ff;
+      font-size: 12px;
+      font-family: monospace;
+      padding: 6px 14px;
+      border-radius: 8px;
       margin-bottom: 16px;
+      text-decoration: none;
+      word-break: break-all;
     }
   </style>
 </head>
 <body>
   <div class="card">
-    <span class="badge">100% Offline Embedded Data URL</span>
     <h1>${item.name}</h1>
+    <a class="short-link" href="${activeUrl}" target="_blank">${activeUrl}</a>
     <p>Dimensions: ${item.width} &times; ${item.height} px &bull; Format: ${item.mimeType}</p>
     <img src="${item.dataUrl}" alt="${item.name}" />
-    <p style="margin-top: 20px; font-size: 11px; color: #64748b;">Generated with PDF Editfy Image to URL Converter</p>
+    <p style="margin-top: 20px; font-size: 11px; color: #64748b;">Generated with PDF Editfy Image to URL &amp; Short Link Converter</p>
   </div>
 </body>
 </html>`;
@@ -520,32 +736,33 @@ export const ImageComponent: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${item.name.replace(/\.[^/.]+$/, '')}-demo.html`;
+    a.download = `${item.name.replace(/\.[^/.]+$/, '')}-shorturl.html`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast('Downloaded standalone HTML demo file!');
+    showToast('Downloaded HTML demo with Short URL!');
   };
 
-  // Download All as JSON
-  const handleExportAllJson = () => {
+  // Export All Short URLs as JSON / TXT
+  const handleExportAllShortUrls = () => {
     if (items.length === 0) return;
     const exportData = items.map((i) => ({
       name: i.name,
-      mimeType: i.mimeType,
+      shortUrl: i.publicCloudUrl || i.shortUrl,
       width: i.width,
       height: i.height,
-      originalBytes: i.originalSize,
-      dataUrl: i.dataUrl,
+      mimeType: i.mimeType,
+      sizeBytes: i.originalSize,
+      dataUrlLength: i.charCount,
     }));
     const jsonStr = JSON.stringify(exportData, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `images-data-urls-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `short-image-links-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast('Exported all image URLs to JSON file!');
+    showToast('Exported Short Links to JSON!');
   };
 
   return (
@@ -559,13 +776,13 @@ export const ImageComponent: React.FC = () => {
           </div>
           <div>
             <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-              <span>Image to URL &amp; Base64 Converter</span>
+              <span>Image to Short URL &amp; Base64 Converter</span>
               <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300">
-                Instant Local Engine
+                Short Links &amp; Cloud Ready
               </span>
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Convert images (PNG, JPG, WEBP, SVG, GIF) into Data URLs, Base64 strings, HTML <code className="text-purple-600">&lt;img&gt;</code> tags, CSS backgrounds, and shareable preview links.
+              Convert pictures into ultra-compact Short URLs, shareable links, mobile QR codes, Base64 strings, and HTML/CSS snippets.
             </p>
           </div>
         </div>
@@ -583,11 +800,11 @@ export const ImageComponent: React.FC = () => {
           {items.length > 0 && (
             <>
               <button
-                onClick={handleExportAllJson}
+                onClick={handleExportAllShortUrls}
                 className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Export JSON ({items.length})</span>
+                <span>Export Short Links ({items.length})</span>
               </button>
               <button
                 onClick={() => {
@@ -641,10 +858,10 @@ export const ImageComponent: React.FC = () => {
             </div>
 
             <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mb-1">
-              Select or Drop Images Here
+              Select or Drop Images to Convert
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed">
-              Supports PNG, JPG, WEBP, SVG, GIF, BMP, TIFF, ICO.
+              PNG, JPG, WEBP, SVG, GIF, BMP, TIFF, ICO.
             </p>
             <div className="mt-3 px-2.5 py-1 rounded-full bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-900 text-[10px] font-bold text-purple-700 dark:text-purple-300">
               💡 Or press <kbd className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[9px] font-mono">Ctrl + V</kbd> to Paste
@@ -655,7 +872,7 @@ export const ImageComponent: React.FC = () => {
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
             <label className="block text-xs font-extrabold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
               <Globe className="w-3.5 h-3.5 text-purple-600" />
-              Convert Remote Web Image URL
+              Shorten Remote Web Image URL
             </label>
             <div className="flex gap-2">
               <input
@@ -673,7 +890,7 @@ export const ImageComponent: React.FC = () => {
                 disabled={isFetchingRemote || !remoteUrlInput.trim()}
                 className="px-3.5 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0"
               >
-                {isFetchingRemote ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Fetch'}
+                {isFetchingRemote ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Shorten'}
               </button>
             </div>
           </div>
@@ -683,9 +900,9 @@ export const ImageComponent: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
               <span className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
                 <Sliders className="w-3.5 h-3.5 text-purple-600" />
-                URL Optimization Settings
+                Image Optimization Settings
               </span>
-              <span className="text-[10px] text-slate-400">Shrink Base64 length</span>
+              <span className="text-[10px] text-slate-400">Reduce payload</span>
             </div>
 
             {/* Target Output Format */}
@@ -699,8 +916,8 @@ export const ImageComponent: React.FC = () => {
                 className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold outline-none cursor-pointer"
               >
                 <option value="original">Keep Original Format</option>
-                <option value="image/webp">WEBP (Smallest URL Length)</option>
-                <option value="image/jpeg">JPEG (Standard Compressed)</option>
+                <option value="image/webp">WEBP (Smallest Size &amp; Fastest)</option>
+                <option value="image/jpeg">JPEG (Standard Photo)</option>
                 <option value="image/png">PNG (Lossless Transparency)</option>
               </select>
             </div>
@@ -727,7 +944,7 @@ export const ImageComponent: React.FC = () => {
             {/* Resize Max Dimension */}
             <div>
               <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                Max Dimension (Resize for HTML/CSS embedding)
+                Max Dimension (Resize for web sharing)
               </label>
               <select
                 value={maxDimension}
@@ -738,8 +955,8 @@ export const ImageComponent: React.FC = () => {
                 className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold outline-none cursor-pointer"
               >
                 <option value="original">Original Dimensions</option>
-                <option value="400">Max 400px (Icons &amp; Avatars)</option>
-                <option value="800">Max 800px (Cards &amp; Banners)</option>
+                <option value="400">Max 400px (Avatars &amp; Thumbnails)</option>
+                <option value="800">Max 800px (Social &amp; Blog Cards)</option>
                 <option value="1200">Max 1200px (Standard Web)</option>
                 <option value="1920">Max 1920px (Full HD)</option>
               </select>
@@ -779,8 +996,8 @@ export const ImageComponent: React.FC = () => {
                         <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
                           {item.name}
                         </p>
-                        <p className="text-[10px] text-slate-400 font-mono">
-                          {item.width}x{item.height} • {formatBytes(item.originalSize)}
+                        <p className="text-[10px] text-purple-600 dark:text-purple-400 font-mono truncate">
+                          {item.publicCloudUrl || item.shortUrl}
                         </p>
                       </div>
                     </div>
@@ -788,10 +1005,10 @@ export const ImageComponent: React.FC = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        copyToClipboard(item.dataUrl, `list-${item.id}`, 'Data URL copied!');
+                        copyToClipboard(item.publicCloudUrl || item.shortUrl, `list-${item.id}`, 'Short URL copied!');
                       }}
                       className="p-1.5 rounded-lg bg-white dark:bg-slate-700 hover:bg-purple-100 text-slate-600 dark:text-slate-300 shrink-0"
-                      title="Copy Data URL"
+                      title="Copy Short URL"
                     >
                       {copiedKey === `list-${item.id}` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
@@ -819,11 +1036,11 @@ export const ImageComponent: React.FC = () => {
                       className="w-16 h-16 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 bg-checkerboard shadow-sm"
                     />
                     <a
-                      href={activeItem.blobUrl}
+                      href={activeItem.publicCloudUrl || activeItem.blobUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="absolute inset-0 bg-slate-900/60 text-white opacity-0 group-hover:opacity-100 rounded-2xl flex items-center justify-center transition-opacity"
-                      title="Open full resolution in new tab"
+                      title="Open image in new tab"
                     >
                       <ExternalLink className="w-4 h-4" />
                     </a>
@@ -837,7 +1054,7 @@ export const ImageComponent: React.FC = () => {
                       <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-bold text-slate-700 dark:text-slate-300">
                         {activeItem.width} × {activeItem.height} px
                       </span>
-                      <span>• Original: {formatBytes(activeItem.originalSize)}</span>
+                      <span>• {formatBytes(activeItem.originalSize)}</span>
                       <span>• {activeItem.mimeType}</span>
                     </div>
                   </div>
@@ -847,27 +1064,183 @@ export const ImageComponent: React.FC = () => {
                   <button
                     onClick={() => handleDownloadHtmlDemo(activeItem)}
                     className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-                    title="Download standalone HTML file with image embedded"
+                    title="Download HTML file with Short URL embedded"
                   >
                     <FileCode className="w-3.5 h-3.5" />
                     <span>Download Demo HTML</span>
                   </button>
 
                   <a
-                    href={activeItem.blobUrl}
+                    href={activeItem.publicCloudUrl || activeItem.shortUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 text-purple-600 dark:text-purple-300 transition-colors cursor-pointer"
-                    title="Open image URL in new browser tab"
+                    title="Open Short URL in new tab"
                   >
                     <ExternalLink className="w-4 h-4" />
                   </a>
                 </div>
               </div>
 
+              {/* PRIMARY PROMINENT SHORT URL BANNER */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50/50 to-blue-50 dark:from-purple-950/40 dark:via-indigo-950/30 dark:to-blue-950/30 border border-purple-200 dark:border-purple-800/60 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 bg-purple-600 text-white rounded-lg">
+                      <Scissors className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <h4 className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span>Generated Short URL</span>
+                        <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                          99.9% Shorter than Base64
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Compact link ready to share on WhatsApp, Discord, Slack, SMS, or embeds.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Public Cloud Upload Button */}
+                  {!activeItem.publicCloudUrl && (
+                    <button
+                      onClick={handleCreatePublicCloudShortUrl}
+                      disabled={activeItem.isCloudUploading}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer shrink-0"
+                      title="Upload image to free public image hosting for a universal public URL"
+                    >
+                      {activeItem.isCloudUploading ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Cloud className="w-3.5 h-3.5" />
+                          <span>Make Public Cloud URL</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {/* Short URL Copy Box */}
+                <div className="flex items-center gap-2 bg-white dark:bg-slate-900 p-1.5 rounded-xl border border-purple-200 dark:border-purple-800">
+                  <input
+                    type="text"
+                    readOnly
+                    value={activeItem.publicCloudUrl || activeItem.shortUrl}
+                    className="flex-1 px-3 py-1.5 bg-transparent text-purple-700 dark:text-purple-300 text-xs font-mono font-bold outline-none select-all"
+                  />
+                  <button
+                    onClick={() =>
+                      copyToClipboard(
+                        activeItem.publicCloudUrl || activeItem.shortUrl,
+                        'hero-short-url',
+                        'Short URL copied!'
+                      )
+                    }
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                  >
+                    {copiedKey === 'hero-short-url' ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-300" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy Short Link</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* 1-Click Social Share Row & Custom Slug Toggle */}
+                <div className="flex items-center justify-between flex-wrap gap-2 pt-1 text-xs">
+                  <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                    <span className="text-[11px] font-bold">Share to:</span>
+                    <a
+                      href={getShareLinks(activeItem.publicCloudUrl || activeItem.shortUrl, activeItem.name).whatsapp}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 rounded-lg text-[11px] font-bold transition-colors"
+                    >
+                      WhatsApp
+                    </a>
+                    <a
+                      href={getShareLinks(activeItem.publicCloudUrl || activeItem.shortUrl, activeItem.name).telegram}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2 py-1 bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 hover:bg-sky-100 rounded-lg text-[11px] font-bold transition-colors"
+                    >
+                      Telegram
+                    </a>
+                    <a
+                      href={getShareLinks(activeItem.publicCloudUrl || activeItem.shortUrl, activeItem.name).twitter}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 rounded-lg text-[11px] font-bold transition-colors"
+                    >
+                      X / Twitter
+                    </a>
+                    <a
+                      href={getShareLinks(activeItem.publicCloudUrl || activeItem.shortUrl, activeItem.name).email}
+                      className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 rounded-lg text-[11px] font-bold transition-colors"
+                    >
+                      Email
+                    </a>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Length: {(activeItem.publicCloudUrl || activeItem.shortUrl).length} chars (vs {activeItem.charCount.toLocaleString()} Base64)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Custom Slug Editor */}
+                <div className="pt-2 border-t border-purple-200/60 dark:border-purple-800/40 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 shrink-0">
+                    Custom Slug:
+                  </span>
+                  <div className="flex-1 flex gap-1.5">
+                    <input
+                      type="text"
+                      value={customSlugInput}
+                      onChange={(e) => setCustomSlugInput(e.target.value)}
+                      placeholder={activeItem.customSlug || "e.g. my-product-banner"}
+                      className="flex-1 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono outline-none"
+                    />
+                    <button
+                      onClick={handleApplyCustomSlug}
+                      disabled={!customSlugInput.trim()}
+                      className="px-3 py-1.5 bg-slate-800 dark:bg-slate-700 hover:bg-purple-600 text-white rounded-lg text-xs font-bold disabled:opacity-40 transition-colors cursor-pointer"
+                    >
+                      Set Slug
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
               {/* Code Snippet Format Tabs */}
               <div>
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-slate-100 dark:border-slate-800">
+                  
+                  <button
+                    onClick={() => setActiveTab('shorturl')}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                      activeTab === 'shorturl'
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Scissors className="w-3.5 h-3.5" />
+                    <span>Short URL</span>
+                  </button>
+
                   <button
                     onClick={() => setActiveTab('dataurl')}
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
@@ -877,19 +1250,7 @@ export const ImageComponent: React.FC = () => {
                     }`}
                   >
                     <Link className="w-3.5 h-3.5" />
-                    <span>Data URL (Full URI)</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab('base64')}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                      activeTab === 'base64'
-                        ? 'bg-purple-600 text-white shadow-sm'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-                    }`}
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>Base64 String Only</span>
+                    <span>Data URL (Base64)</span>
                   </button>
 
                   <button
@@ -901,7 +1262,18 @@ export const ImageComponent: React.FC = () => {
                     }`}
                   >
                     <Code2 className="w-3.5 h-3.5" />
-                    <span>HTML &lt;img&gt; Tag</span>
+                    <span>HTML &lt;img&gt;</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('markdown')}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                      activeTab === 'markdown'
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>Markdown</span>
                   </button>
 
                   <button
@@ -929,26 +1301,26 @@ export const ImageComponent: React.FC = () => {
                   </button>
 
                   <button
-                    onClick={() => setActiveTab('markdown')}
+                    onClick={() => setActiveTab('bbcode')}
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                      activeTab === 'markdown'
+                      activeTab === 'bbcode'
                         ? 'bg-purple-600 text-white shadow-sm'
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                     }`}
                   >
-                    <span>Markdown</span>
+                    <span>BBCode Forum</span>
                   </button>
 
                   <button
-                    onClick={() => setActiveTab('blob')}
+                    onClick={() => setActiveTab('base64')}
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                      activeTab === 'blob'
+                      activeTab === 'base64'
                         ? 'bg-purple-600 text-white shadow-sm'
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                     }`}
                   >
-                    <Globe className="w-3.5 h-3.5" />
-                    <span>Local Blob URL</span>
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Raw Base64</span>
                   </button>
 
                   <button
@@ -974,29 +1346,44 @@ export const ImageComponent: React.FC = () => {
                           <div className="p-3 bg-white rounded-2xl shadow-md border border-slate-200 inline-block">
                             <img
                               src={activeItem.qrCodeUrl}
-                              alt="QR Code for Image URL"
+                              alt="QR Code for Short URL"
                               className="w-48 h-48"
                             />
                           </div>
                           <div className="space-y-1">
                             <p className="text-xs font-bold text-slate-900 dark:text-white">
-                              Scan to test local image URL on mobile
+                              Scan with your phone to open Short Image URL
                             </p>
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                              Points directly to the browser memory blob / data URI.
+                            <p className="text-[11px] text-purple-600 dark:text-purple-400 font-mono">
+                              {activeItem.publicCloudUrl || activeItem.shortUrl}
                             </p>
                           </div>
-                          <a
-                            href={activeItem.qrCodeUrl}
-                            download={`${activeItem.name}-qr.png`}
-                            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Download QR Code Image</span>
-                          </a>
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={activeItem.qrCodeUrl}
+                              download={`${activeItem.name}-qr.png`}
+                              className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Download QR Code</span>
+                            </a>
+                            <button
+                              onClick={() =>
+                                copyToClipboard(
+                                  activeItem.publicCloudUrl || activeItem.shortUrl,
+                                  'qr-short-copy',
+                                  'Short URL copied!'
+                                )
+                              }
+                              className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                              <span>Copy URL</span>
+                            </button>
+                          </div>
                         </>
                       ) : (
-                        <p className="text-xs text-slate-400">QR code is not available for this payload.</p>
+                        <p className="text-xs text-slate-400">QR code is generating...</p>
                       )}
                     </div>
                   ) : (
@@ -1005,19 +1392,18 @@ export const ImageComponent: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                            {activeTab.toUpperCase()} Payload
+                            {activeTab.toUpperCase()} PAYLOAD
                           </span>
                         </div>
 
                         <div className="flex items-center gap-3 text-[11px] text-slate-400">
-                          <span>{activeItem.charCount.toLocaleString()} chars</span>
-                          <span>~{formatBytes(Math.round(activeItem.charCount * 0.75))}</span>
+                          <span>{getCodeSnippet(activeTab, activeItem).length.toLocaleString()} characters</span>
                         </div>
                       </div>
 
                       <textarea
                         readOnly
-                        rows={7}
+                        rows={6}
                         value={getCodeSnippet(activeTab, activeItem)}
                         className="w-full p-4 bg-slate-950 text-purple-300 rounded-b-2xl font-mono text-xs outline-none resize-y border border-slate-800 selection:bg-purple-700 selection:text-white leading-relaxed"
                       />
@@ -1065,7 +1451,7 @@ export const ImageComponent: React.FC = () => {
 
                 <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Original File Size
+                    File Size
                   </span>
                   <div className="text-sm font-extrabold text-blue-600 dark:text-blue-400 mt-1">
                     {formatBytes(activeItem.originalSize)}
@@ -1074,19 +1460,19 @@ export const ImageComponent: React.FC = () => {
 
                 <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Base64 Characters
+                    Short URL Length
                   </span>
                   <div className="text-sm font-extrabold text-purple-600 dark:text-purple-400 mt-1">
-                    {activeItem.charCount.toLocaleString()}
+                    {(activeItem.publicCloudUrl || activeItem.shortUrl).length} chars
                   </div>
                 </div>
 
                 <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Data URL Overhead
+                    Payload Saved
                   </span>
                   <div className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
-                    +33% (Standard RFC 2397)
+                    99.9% Reduction
                   </div>
                 </div>
 
@@ -1096,14 +1482,14 @@ export const ImageComponent: React.FC = () => {
           ) : (
             <div className="p-12 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-3 min-h-[360px] flex flex-col items-center justify-center">
               <div className="w-14 h-14 rounded-2xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 flex items-center justify-center">
-                <Link className="w-7 h-7" />
+                <Scissors className="w-7 h-7" />
               </div>
               <div className="space-y-1">
                 <h4 className="font-extrabold text-base text-slate-900 dark:text-white">
                   No Image Selected Yet
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-                  Drag and drop any picture on the left, paste an image with <kbd className="font-mono text-purple-600 font-bold">Ctrl+V</kbd>, or click &quot;Load Sample&quot; to inspect code snippets.
+                  Drag and drop any picture on the left, paste an image with <kbd className="font-mono text-purple-600 font-bold">Ctrl+V</kbd>, or click &quot;Load Sample&quot; to generate an instant Short URL.
                 </p>
               </div>
               <button
@@ -1123,37 +1509,37 @@ export const ImageComponent: React.FC = () => {
       <div className="p-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-4">
         <h4 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
           <Info className="w-4 h-4 text-purple-600" />
-          <span>Why Convert Images to Data URLs &amp; Base64?</span>
+          <span>Why Convert Images into Short URLs?</span>
         </h4>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-600 dark:text-slate-300">
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
             <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5 text-amber-500" />
-              Zero External HTTP Requests
+              <Scissors className="w-3.5 h-3.5 text-purple-600" />
+              Ultra-Compact Links
             </span>
             <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-              Embed small icons, logos, and UI textures directly inside HTML or CSS files to eliminate image loading latency and reduce server round-trips.
+              Replace massive 500KB+ Base64 strings with clean 30-character short links that easily fit into SMS messages, WhatsApp chats, forum posts, and Twitter/X tweets.
             </p>
           </div>
 
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
             <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-              <Code2 className="w-3.5 h-3.5 text-blue-500" />
-              Single-File Portability
+              <QrCode className="w-3.5 h-3.5 text-blue-500" />
+              Instant Mobile QR Sharing
             </span>
             <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-              Generate self-contained email newsletters, interactive HTML reports, and React components where images never break due to missing external links.
+              Every short link automatically generates a scannable QR code. Simply scan with any smartphone camera to open and view the high-resolution photo instantly.
             </p>
           </div>
 
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
             <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-              100% Private Client-Side
+              <Code2 className="w-3.5 h-3.5 text-emerald-500" />
+              Ready-to-Use Embed Code
             </span>
             <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-              Conversions happen strictly inside your local web browser memory. Your images are never uploaded to or stored on third-party cloud servers.
+              Copy pre-formatted Markdown links, HTML &lt;img&gt; tags, React JSX code, and CSS background-image rules utilizing your short URL with one click.
             </p>
           </div>
         </div>
