@@ -1,8 +1,10 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// Initialize pdfjs worker
+// Initialize pdfjs worker safely
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version || '4.10.38'}/build/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    pdfWorker || `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version || '4.10.38'}/build/pdf.worker.min.mjs`;
 }
 
 export interface PDFPageText {
@@ -81,7 +83,7 @@ export async function renderPDFToImages(
 
     if (!ctx) continue;
 
-    await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+    await page.render({ canvasContext: ctx, viewport } as any).promise;
 
     const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
     const blob = await new Promise<Blob>((resolve) => {
