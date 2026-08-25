@@ -109,7 +109,6 @@ export async function convertWordToPDF(
       doc.line(marginLeft, pageHeight - 38, pageWidth - marginRight, pageHeight - 38);
       const pageStr = `Page ${pgNum}`;
       doc.text(pageStr, pageWidth - marginRight - doc.getTextWidth(pageStr), pageHeight - 24);
-      doc.text('Generated via PDFEditfy Engine', marginLeft, pageHeight - 24);
     }
   };
 
@@ -348,9 +347,7 @@ export async function exportTextToDocxBlob(
   }
 
   const doc = new Document({
-    title: options.title || 'Converted Document',
-    creator: 'pdfeditfy.com Engine',
-    description: 'Document generated with exact layout and order preservation.',
+    title: options.title || 'Document',
     sections: [
       {
         properties: {

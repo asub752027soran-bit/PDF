@@ -33,7 +33,9 @@ import { formatBytes } from '../../utils/imageProcessor';
 import { recordToolConversion } from '../../utils/activityTracker';
 import {
   saveShortImage,
+  saveShortImageAsync,
   getShortImage,
+  getShortImageAsync,
   buildLocalShortUrl,
   uploadToPublicCloud,
   StoredShortImage
@@ -320,42 +322,51 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
 
   // Check URL query for ?img=xyz to auto-load saved short image
   useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const imgParam = params.get('img');
-      if (imgParam) {
-        const stored = getShortImage(imgParam);
-        if (stored) {
-          const shortUrl = buildLocalShortUrl(stored.customSlug || stored.id);
-          QRCode.toDataURL(shortUrl, { width: 280, margin: 2, color: { dark: '#4c1d95', light: '#ffffff' } })
-            .then((qrCodeUrl) => {
-              const loadedItem: ConvertedImageItem = {
-                id: `stored-${stored.id}`,
-                shortId: stored.id,
-                name: stored.name,
-                originalSize: stored.size,
-                dataUrl: stored.dataUrl,
-                blobUrl: stored.dataUrl,
-                base64Only: stored.dataUrl.split(',')[1] || '',
-                shortUrl,
-                publicCloudUrl: stored.publicCloudUrl,
-                customSlug: stored.customSlug,
-                width: stored.width,
-                height: stored.height,
-                mimeType: stored.mimeType,
-                charCount: stored.dataUrl.length,
-                qrCodeUrl,
-              };
-              setItems([loadedItem]);
-              setSelectedId(loadedItem.id);
-              showToast(`Loaded image from Short URL: ${imgParam}`);
-            })
-            .catch(() => {});
+    let isMounted = true;
+    const loadFromQuery = async () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const imgParam = params.get('img');
+        if (imgParam) {
+          const stored = (await getShortImageAsync(imgParam)) || getShortImage(imgParam);
+          if (stored && isMounted) {
+            const shortUrl = buildLocalShortUrl(stored.customSlug || stored.id);
+            let qrCodeUrl = '';
+            try {
+              qrCodeUrl = await QRCode.toDataURL(shortUrl, { width: 280, margin: 2, color: { dark: '#4c1d95', light: '#ffffff' } });
+            } catch (err) {
+              console.debug('QR code error:', err);
+            }
+            const loadedItem: ConvertedImageItem = {
+              id: `stored-${stored.id}`,
+              shortId: stored.id,
+              name: stored.name,
+              originalSize: stored.size,
+              dataUrl: stored.dataUrl,
+              blobUrl: stored.dataUrl,
+              base64Only: stored.dataUrl.split(',')[1] || '',
+              shortUrl,
+              publicCloudUrl: stored.publicCloudUrl,
+              customSlug: stored.customSlug,
+              width: stored.width,
+              height: stored.height,
+              mimeType: stored.mimeType,
+              charCount: stored.dataUrl.length,
+              qrCodeUrl,
+            };
+            setItems([loadedItem]);
+            setSelectedId(loadedItem.id);
+            showToast(`Loaded image from Short URL: ${imgParam}`);
+          }
         }
+      } catch (e) {
+        console.debug('Error parsing img url query:', e);
       }
-    } catch (e) {
-      console.debug('Error parsing img url query:', e);
-    }
+    };
+    loadFromQuery();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Listen to initial incoming files from global drops

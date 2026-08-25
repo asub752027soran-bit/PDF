@@ -1,5 +1,6 @@
 /**
  * Short Image URL Storage & Public Link Generator
+ * Powered by IndexedDB + LocalStorage with Multi-Provider Public Cloud Upload Fallback
  */
 
 export interface StoredShortImage {
@@ -16,6 +17,77 @@ export interface StoredShortImage {
 }
 
 const STORAGE_KEY = 'pdfeditfy_short_images';
+const DB_NAME = 'pdfeditfy_images_v2';
+const STORE_NAME = 'images';
+
+// Open IndexedDB safely
+function openImageDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      reject(new Error('IndexedDB not supported'));
+      return;
+    }
+    const req = window.indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = (e: any) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        store.createIndex('customSlug', 'customSlug', { unique: false });
+      }
+    };
+    req.onsuccess = (e: any) => resolve(e.target.result);
+    req.onerror = (e: any) => reject(e.target.error);
+  });
+}
+
+/**
+ * Save short image into both IndexedDB and LocalStorage
+ */
+export async function saveShortImageAsync(item: Omit<StoredShortImage, 'createdAt'>): Promise<StoredShortImage> {
+  const fullItem: StoredShortImage = {
+    ...item,
+    createdAt: Date.now(),
+  };
+
+  // 1. Save to IndexedDB (No 5MB storage limit)
+  try {
+    const db = await openImageDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.put(fullItem);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.debug('IndexedDB save note:', err);
+  }
+
+  // 2. Try saving metadata + small image to localStorage
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY) || '[]';
+    const list: StoredShortImage[] = JSON.parse(raw);
+    const filtered = list.filter((i) => i.id !== item.id && (!item.customSlug || i.customSlug !== item.customSlug));
+    filtered.unshift(fullItem);
+    // Limit to 20 items to prevent LocalStorage QuotaExceededError
+    const trimmed = filtered.slice(0, 20);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+  } catch (err) {
+    // If quota exceeded, save without dataUrl in localStorage (full dataUrl resides in IndexedDB)
+    try {
+      const miniItem = { ...fullItem, dataUrl: fullItem.dataUrl.length > 50000 ? '' : fullItem.dataUrl };
+      const raw = localStorage.getItem(STORAGE_KEY) || '[]';
+      const list: StoredShortImage[] = JSON.parse(raw);
+      const filtered = list.filter((i) => i.id !== item.id);
+      filtered.unshift(miniItem);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered.slice(0, 10)));
+    } catch {
+      // ignore
+    }
+  }
+
+  return fullItem;
+}
 
 export function saveShortImage(item: Omit<StoredShortImage, 'createdAt'>): StoredShortImage {
   const fullItem: StoredShortImage = {
@@ -23,19 +95,61 @@ export function saveShortImage(item: Omit<StoredShortImage, 'createdAt'>): Store
     createdAt: Date.now(),
   };
 
+  // Fire async IndexedDB save in background
+  saveShortImageAsync(item).catch(() => {});
+
+  return fullItem;
+}
+
+/**
+ * Retrieve short image by ID or custom Slug
+ */
+export async function getShortImageAsync(idOrSlug: string): Promise<StoredShortImage | null> {
+  const cleanKey = decodeURIComponent(idOrSlug).trim();
+
+  // 1. Try IndexedDB first
+  try {
+    const db = await openImageDB();
+    const result = await new Promise<StoredShortImage | null>((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const getReq = store.get(cleanKey);
+      getReq.onsuccess = () => {
+        if (getReq.result) {
+          resolve(getReq.result);
+          return;
+        }
+        // Try query by customSlug index
+        try {
+          const index = store.index('customSlug');
+          const slugReq = index.get(cleanKey);
+          slugReq.onsuccess = () => resolve(slugReq.result || null);
+          slugReq.onerror = () => resolve(null);
+        } catch {
+          resolve(null);
+        }
+      };
+      getReq.onerror = () => resolve(null);
+    });
+
+    if (result && result.dataUrl) {
+      return result;
+    }
+  } catch (err) {
+    console.debug('IndexedDB lookup note:', err);
+  }
+
+  // 2. Try LocalStorage fallback
   try {
     const raw = localStorage.getItem(STORAGE_KEY) || '[]';
     const list: StoredShortImage[] = JSON.parse(raw);
-    // Keep max 30 recent short images to prevent quota overflow
-    const filtered = list.filter((i) => i.id !== item.id && (!item.customSlug || i.customSlug !== item.customSlug));
-    filtered.unshift(fullItem);
-    const trimmed = filtered.slice(0, 30);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-  } catch (err) {
-    console.debug('LocalStorage error in saveShortImage:', err);
+    const found = list.find((i) => i.id === cleanKey || i.customSlug === cleanKey);
+    if (found) return found;
+  } catch {
+    // ignore
   }
 
-  return fullItem;
+  return null;
 }
 
 export function getShortImage(idOrSlug: string): StoredShortImage | null {
@@ -50,24 +164,65 @@ export function getShortImage(idOrSlug: string): StoredShortImage | null {
 }
 
 /**
- * Generate clean short URL string for local app
+ * Generate clean short URL string for the web application
  */
 export function buildLocalShortUrl(idOrSlug: string): string {
-  const origin = window.location.origin || 'https://pdfeditfy.com';
+  if (typeof window === 'undefined') return `https://pdfeditfy.com/tool/image-to-url?img=${encodeURIComponent(idOrSlug)}`;
+  const origin = window.location.origin;
   return `${origin}/tool/image-to-url?img=${encodeURIComponent(idOrSlug)}`;
 }
 
 /**
- * Upload image to Free Public Web Hosting API (freeimage.host / imgbb / fallback)
+ * Convert Data URL to Blob
  */
-export async function uploadToPublicCloud(dataUrl: string, filename: string): Promise<{ url: string; deleteUrl?: string }> {
-  // Extract base64 without header
+function dataUrlToBlob(dataUrl: string): Blob {
+  const parts = dataUrl.split(';base64,');
+  const contentType = parts[0].split(':')[1] || 'image/png';
+  const raw = window.atob(parts[1] || '');
+  const rawLength = raw.length;
+  const uInt8Array = new Uint8Array(rawLength);
+  for (let i = 0; i < rawLength; ++i) {
+    uInt8Array[i] = raw.charCodeAt(i);
+  }
+  return new Blob([uInt8Array], { type: contentType });
+}
+
+/**
+ * Upload image to Free Public Web Hosting APIs with multiple failover providers
+ */
+export async function uploadToPublicCloud(
+  dataUrl: string,
+  filename: string = 'image.png'
+): Promise<{ url: string; deleteUrl?: string }> {
+  const blob = dataUrlToBlob(dataUrl);
   const base64Data = dataUrl.split(',')[1] || dataUrl;
 
+  // Provider 1: ImgBB Public Upload API
   try {
-    // 1. Try FreeImage.host client API
     const formData = new FormData();
-    formData.append('key', '6d207e02198a847aa98d0a2a901485a5'); // Public community API key
+    formData.append('image', base64Data);
+    const res = await fetch('https://api.imgbb.com/1/upload?key=8cf5bafe1d6a0a030095810bbfad4720', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.data && (json.data.url || json.data.display_url)) {
+        return {
+          url: json.data.display_url || json.data.url,
+          deleteUrl: json.data.delete_url,
+        };
+      }
+    }
+  } catch (e) {
+    console.debug('ImgBB upload attempt:', e);
+  }
+
+  // Provider 2: FreeImage.host API
+  try {
+    const formData = new FormData();
+    formData.append('key', '6d207e02198a847aa98d0a2a901485a5');
     formData.append('action', 'upload');
     formData.append('source', base64Data);
     formData.append('format', 'json');
@@ -87,34 +242,34 @@ export async function uploadToPublicCloud(dataUrl: string, filename: string): Pr
       }
     }
   } catch (e) {
-    console.debug('FreeImage.host attempt skipped, trying fallback:', e);
+    console.debug('FreeImage.host upload attempt:', e);
   }
 
+  // Provider 3: Litterbox / Catbox temporary 72-hour fast cloud host
   try {
-    // 2. Try ImgBB free upload API fallback
     const formData = new FormData();
-    formData.append('image', base64Data);
-    const res = await fetch('https://api.imgbb.com/1/upload?key=8cf5bafe1d6a0a030095810bbfad4720', {
+    formData.append('reqtype', 'fileupload');
+    formData.append('time', '72h');
+    formData.append('fileToUpload', blob, filename);
+
+    const res = await fetch('https://litterbox.catbox.moe/resources/internals/api.php', {
       method: 'POST',
       body: formData,
     });
 
     if (res.ok) {
-      const data = await res.json();
-      if (data && data.data && data.data.url) {
-        return {
-          url: data.data.url,
-          deleteUrl: data.data.delete_url,
-        };
+      const textUrl = (await res.text()).trim();
+      if (textUrl.startsWith('http://') || textUrl.startsWith('https://')) {
+        return { url: textUrl };
       }
     }
   } catch (e) {
-    console.debug('ImgBB attempt skipped:', e);
+    console.debug('Litterbox upload attempt:', e);
   }
 
-  // 3. If remote API is offline or blocked by CORS, return the local app short viewer link
-  const cleanId = `img_${Math.random().toString(36).substring(2, 8)}`;
+  // Fallback: Local short URL
+  const slug = `img_${Math.random().toString(36).substring(2, 8)}`;
   return {
-    url: buildLocalShortUrl(cleanId),
+    url: buildLocalShortUrl(slug),
   };
 }

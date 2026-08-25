@@ -562,8 +562,7 @@ export async function applyPDFAnnotations(
 export async function lockPDF(file: File, userPassword?: string): Promise<Uint8Array> {
   const arrayBuffer = await readFileAsArrayBuffer(file);
   const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-  pdfDoc.setTitle(`Protected - ${file.name}`);
-  pdfDoc.setProducer('PDFEditfy Secure Engine');
+  pdfDoc.setTitle(file.name);
   return await pdfDoc.save({ useObjectStreams: true });
 }
 

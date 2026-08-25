@@ -167,7 +167,7 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
         ctx.save();
         ctx.scale(dpr, dpr);
 
-        await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
+        await page.render({ canvasContext: ctx, viewport: scaledViewport, canvas: canvas } as any).promise;
 
         // Draw Watermark on top of preview canvas
         ctx.save();
@@ -225,11 +225,12 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
       await new Promise((r) => setTimeout(r, 100));
 
       updateProgress(60, 'Stamping watermark layers to each PDF page...', 'Page Stamping');
-      const watermarkedBytes = await watermarkPDF(file, watermarkText, {
+      const watermarkedBytes = await watermarkPDF(file, {
+        text: watermarkText,
         opacity: opacity / 100,
-        size: fontSize,
-        rotation: rotation,
-        color: watermarkColor
+        fontSize: fontSize,
+        rotationAngle: rotation,
+        colorHex: watermarkColor
       });
 
       updateProgress(90, 'Packaging finalized document...', 'Finalizing PDF');
