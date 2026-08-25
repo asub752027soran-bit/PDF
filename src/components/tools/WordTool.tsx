@@ -45,6 +45,7 @@ import {
 import { extractTextFromPDF } from '../../utils/pdfExtractor';
 import { downloadBlob } from '../../utils/batchProcessor';
 import { recordToolConversion } from '../../utils/activityTracker';
+import { useProgress } from '../../context/ProgressContext';
 
 interface WordToolProps {
   toolId?: string;
@@ -60,6 +61,8 @@ export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBa
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [copied, setCopied] = useState(false);
+  const { startProgress, updateProgress, completeProgress, failProgress } = useProgress();
+
 
   // Search & Erase / Replace tool
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -290,13 +293,24 @@ export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBa
   const handleExportDocx = async () => {
     if (!extractedText.trim()) return;
     setIsProcessing(true);
+    startProgress({
+      title: 'Generating Word (.DOCX) Document',
+      status: 'Parsing document paragraphs and styling...',
+      stage: 'Building OpenXML Structures'
+    });
+
     try {
+      updateProgress(45, 'Compiling styles, tables, and page breaks...', 'DOCX Serialization');
       const cleanName = file?.name ? file.name.replace(/\.[^/.]+$/, '') : 'document';
       const blob = await exportTextToDocxBlob(extractedText, { title: cleanName });
+      updateProgress(90, 'Packaging .docx file...', 'Finalizing Archive');
+
       recordToolConversion(toolId, file?.size || blob.size);
       downloadBlob(blob, `${cleanName}_edited.docx`);
-    } catch (err) {
+      completeProgress('Exported .DOCX document successfully!');
+    } catch (err: any) {
       console.error('Docx export failed:', err);
+      failProgress(err?.message || 'Failed to export DOCX file.');
       alert('Failed to export DOCX file.');
     } finally {
       setIsProcessing(false);
@@ -306,17 +320,28 @@ export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBa
   const handleConvertToPDF = async () => {
     if (!extractedText.trim()) return;
     setIsProcessing(true);
+    startProgress({
+      title: 'Converting Document to PDF',
+      status: 'Calculating page metrics and typography margins...',
+      stage: 'Layout Engine'
+    });
+
     try {
+      updateProgress(35, 'Formatting headers, paragraphs, and tables...', 'Rasterizing Typography');
       const cleanName = file?.name ? file.name.replace(/\.[^/.]+$/, '') : 'document';
       const pdfBytes = await convertWordToPDF(extractedText, {
         title: cleanName,
         showPageNumbers: true,
       });
+      updateProgress(85, 'Assembling multi-page PDF document...', 'Writing PDF Stream');
+
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       recordToolConversion(toolId, file?.size || blob.size);
       downloadBlob(blob, `${cleanName}_converted.pdf`);
-    } catch (err) {
+      completeProgress('Converted to high-resolution PDF document!');
+    } catch (err: any) {
       console.error('PDF conversion failed:', err);
+      failProgress(err?.message || 'Failed to convert document to PDF.');
       alert('Failed to convert document to PDF.');
     } finally {
       setIsProcessing(false);

@@ -4,6 +4,7 @@ import { readExcelFile, exportSheetToXLSX, exportSheetToCSV, convertExcelToPDF, 
 import { extractTablesFromPDF } from '../../utils/pdfExtractor';
 import { downloadBlob } from '../../utils/batchProcessor';
 import { recordToolConversion } from '../../utils/activityTracker';
+import { useProgress } from '../../context/ProgressContext';
 
 interface ExcelToolProps {
   toolId?: string;
@@ -17,6 +18,8 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
   const [activeSheetIndex, setActiveSheetIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const { startProgress, updateProgress, completeProgress, failProgress } = useProgress();
+
 
   const isPdfToExcel = toolId === 'pdf-to-excel';
   const isExcelToPdf = toolId === 'excel-to-pdf';
@@ -93,14 +96,25 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
   const handleExportXLSX = async () => {
     if (sheets.length === 0) return;
     setIsProcessing(true);
+    startProgress({
+      title: 'Compiling Excel (.XLSX) Workbook',
+      status: `Formatting ${sheets.length} worksheet${sheets.length > 1 ? 's' : ''}...`,
+      stage: 'Building OpenXML Worksheets'
+    });
+
     try {
+      updateProgress(40, 'Writing rows, cells, and formula references...', 'ExcelJS Encoding');
       const bytes = await exportSheetToXLSX(sheets);
+      updateProgress(90, 'Packaging workbook into zip package...', 'Finalizing XLSX');
+
       const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const cleanName = file?.name ? file.name.replace(/\.[^/.]+$/, '') : 'spreadsheet';
       recordToolConversion(toolId, file?.size || blob.size);
       downloadBlob(blob, `${cleanName}_exported.xlsx`);
-    } catch (err) {
+      completeProgress('Exported .XLSX workbook successfully!');
+    } catch (err: any) {
       console.error('XLSX export failed:', err);
+      failProgress(err?.message || 'Failed to export Excel file.');
       alert('Failed to export Excel file.');
     } finally {
       setIsProcessing(false);
@@ -119,14 +133,25 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
   const handleExportPDF = async () => {
     if (!file) return;
     setIsProcessing(true);
+    startProgress({
+      title: 'Converting Spreadsheet to PDF',
+      status: `Generating printable table grid for "${file.name}"...`,
+      stage: 'Vector Table Rendering'
+    });
+
     try {
+      updateProgress(45, 'Calculating column widths and grid layout...', 'PDF Layout Processing');
       const pdfBytes = await convertExcelToPDF(file);
+      updateProgress(90, 'Generating printable PDF document...', 'Writing PDF Stream');
+
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const cleanName = file.name.replace(/\.[^/.]+$/, '');
       recordToolConversion(toolId, file.size);
       downloadBlob(blob, `${cleanName}_converted.pdf`);
-    } catch (err) {
+      completeProgress('Converted spreadsheet to PDF document!');
+    } catch (err: any) {
       console.error('Excel to PDF failed:', err);
+      failProgress(err?.message || 'Failed to generate PDF from spreadsheet.');
       alert('Failed to generate PDF from spreadsheet.');
     } finally {
       setIsProcessing(false);

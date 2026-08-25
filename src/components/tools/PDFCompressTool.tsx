@@ -5,6 +5,7 @@ import { downloadBlob } from '../../utils/batchProcessor';
 import { formatBytes } from '../../utils/imageProcessor';
 import { recordToolConversion } from '../../utils/activityTracker';
 import { FilePreviewCard } from '../common/FilePreviewCard';
+import { useProgress } from '../../context/ProgressContext';
 
 interface PDFCompressToolProps {
   onBack: () => void;
@@ -16,6 +17,7 @@ export const PDFCompressTool: React.FC<PDFCompressToolProps> = ({ onBack, initia
   const [compressionLevel, setCompressionLevel] = useState<'extreme' | 'recommended' | 'light'>('recommended');
   const [isProcessing, setIsProcessing] = useState(false);
   const [resultInfo, setResultInfo] = useState<{ origSize: number; newSize: number; savedPercent: number } | null>(null);
+  const { startProgress, updateProgress, completeProgress, failProgress } = useProgress();
 
   useEffect(() => {
     if (initialFile) {
@@ -34,9 +36,23 @@ export const PDFCompressTool: React.FC<PDFCompressToolProps> = ({ onBack, initia
   const handleCompress = async () => {
     if (!file) return;
     setIsProcessing(true);
+    startProgress({
+      title: 'Compressing PDF Document',
+      status: `Analyzing "${file.name}" structure...`,
+      stage: 'Object Stream Analysis',
+      indeterminate: false
+    });
+
     try {
+      updateProgress(25, 'Stripping unreferenced data & metadata...', 'Stream Deduplication');
+      await new Promise((r) => setTimeout(r, 120));
+
+      updateProgress(55, `Applying ${compressionLevel} compression factor...`, 'Compressing Streams');
       const factor = compressionLevel === 'extreme' ? 0.3 : compressionLevel === 'recommended' ? 0.7 : 0.9;
       const compressedBytes = await compressPDF(file, factor);
+
+      updateProgress(85, 'Rebuilding cross-reference tables...', 'Finalizing PDF');
+      await new Promise((r) => setTimeout(r, 100));
       
       const origSize = file.size;
       const newSize = compressedBytes.byteLength;
@@ -51,8 +67,11 @@ export const PDFCompressTool: React.FC<PDFCompressToolProps> = ({ onBack, initia
       const blob = new Blob([compressedBytes], { type: 'application/pdf' });
       recordToolConversion('compress-pdf', origSize);
       downloadBlob(blob, `${file.name.replace(/\.pdf$/i, '')}_compressed.pdf`);
-    } catch (err) {
+
+      completeProgress(`Compressed PDF by ${saved}% (${formatBytes(origSize)} → ${formatBytes(newSize)})`);
+    } catch (err: any) {
       console.error('Compression failed:', err);
+      failProgress(err?.message || 'Failed to compress PDF.');
       alert('Failed to compress PDF.');
     } finally {
       setIsProcessing(false);

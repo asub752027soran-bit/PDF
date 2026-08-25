@@ -24,6 +24,7 @@ import { recordToolConversion } from '../../utils/activityTracker';
 import { PDFDocument } from 'pdf-lib';
 import { FilePreviewCard } from '../common/FilePreviewCard';
 import { MultiFilePreviewList } from '../common/MultiFilePreviewList';
+import { useProgress } from '../../context/ProgressContext';
 
 interface PDFMergeSplitToolProps {
   mode: 'merge' | 'split' | 'organize';
@@ -37,6 +38,8 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
   const [splitRange, setSplitRange] = useState('1-3, 4-6');
   const [pagesList, setPagesList] = useState<{ origIndex: number; rotation: number }[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const { startProgress, updateProgress, setItemsProgress, completeProgress, failProgress } = useProgress();
+
 
   const addFiles = async (incomingFiles: File[]) => {
     setFiles((prev) => [...prev, ...incomingFiles]);
@@ -127,17 +130,30 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
   const handleOrganize = async () => {
     if (files.length === 0 || pagesList.length === 0) return;
     setIsProcessing(true);
+    startProgress({
+      title: 'Organizing & Rotating PDF Pages',
+      status: `Re-sequencing ${pagesList.length} pages in "${files[0].name}"...`,
+      stage: 'Re-arranging Structure',
+      totalItems: pagesList.length,
+      itemsProcessed: 0
+    });
+
     try {
+      updateProgress(35, 'Applying page angle rotations and reorders...', 'Transforming Pages');
       const pagesInfo = pagesList.map((p) => ({
         pageIndex: p.origIndex,
         rotation: p.rotation,
       }));
       const resBytes = await manipulatePDFPages(files[0], pagesInfo);
+      updateProgress(85, 'Compacting PDF streams & metadata...', 'Generating PDF');
+
       const blob = new Blob([resBytes], { type: 'application/pdf' });
       recordToolConversion('organize-pdf', files[0].size);
       downloadBlob(blob, `${files[0].name.replace(/\.pdf$/i, '')}_organized.pdf`);
-    } catch (err) {
+      completeProgress(`Successfully organized ${pagesList.length} pages!`);
+    } catch (err: any) {
       console.error('Organize failed:', err);
+      failProgress(err?.message || 'Failed to organize PDF pages.');
       alert('Failed to organize PDF pages.');
     } finally {
       setIsProcessing(false);
@@ -150,14 +166,27 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
       return;
     }
     setIsProcessing(true);
+    startProgress({
+      title: 'Merging PDF Documents',
+      status: `Combining ${files.length} documents into one...`,
+      stage: 'Initialization',
+      totalItems: files.length,
+      itemsProcessed: 0
+    });
+
     try {
       const totalBytes = files.reduce((acc, f) => acc + f.size, 0);
+      updateProgress(40, `Merging ${files.length} PDF documents in sequence...`, 'Merging Pages');
       const mergedBytes = await mergePDFs(files);
+      updateProgress(90, 'Generating combined document...', 'Finalizing PDF');
+
       const blob = new Blob([mergedBytes], { type: 'application/pdf' });
       recordToolConversion('merge-pdf', totalBytes);
       downloadBlob(blob, 'merged_document.pdf');
-    } catch (err) {
+      completeProgress(`Merged ${files.length} PDF documents into one!`);
+    } catch (err: any) {
       console.error('Merge failed:', err);
+      failProgress(err?.message || 'Failed to merge PDFs.');
       alert('Failed to merge PDFs. Please check file validity.');
     } finally {
       setIsProcessing(false);
@@ -167,6 +196,12 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
   const handleSplit = async () => {
     if (files.length === 0) return;
     setIsProcessing(true);
+    startProgress({
+      title: 'Splitting PDF Pages',
+      status: `Extracting ranges (${splitRange}) from "${files[0].name}"...`,
+      stage: 'Parsing Ranges'
+    });
+
     try {
       const ranges = splitRange
         .split(',')
@@ -180,9 +215,11 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
           };
         });
 
+      updateProgress(45, `Extracting ${ranges.length} page segment${ranges.length > 1 ? 's' : ''}...`, 'Extracting Pages');
       const splitResults = await splitPDF(files[0], ranges);
       recordToolConversion('split-pdf', files[0].size);
 
+      updateProgress(85, 'Packaging split files...', 'Packaging Output');
       if (splitResults.length === 1) {
         const blob = new Blob([splitResults[0].data], { type: 'application/pdf' });
         downloadBlob(blob, splitResults[0].name);
@@ -190,8 +227,11 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
         const zipBlob = await createZipArchive(splitResults);
         downloadBlob(zipBlob, `${files[0].name.replace(/\.pdf$/i, '')}_split.zip`);
       }
-    } catch (err) {
+
+      completeProgress(`Successfully split PDF into ${splitResults.length} file${splitResults.length > 1 ? 's' : ''}!`);
+    } catch (err: any) {
       console.error('Split failed:', err);
+      failProgress(err?.message || 'Failed to split PDF.');
       alert('Failed to split PDF. Check page ranges.');
     } finally {
       setIsProcessing(false);

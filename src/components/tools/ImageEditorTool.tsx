@@ -1,12 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Download, Image as ImageIcon, ArrowLeft, RotateCw, Crop, Minimize2, Sparkles, Layers, FileArchive } from 'lucide-react';
-import { processImage, formatBytes } from '../../utils/imageProcessor';
+import {
+  Upload,
+  Download,
+  Image as ImageIcon,
+  ArrowLeft,
+  RotateCw,
+  Crop,
+  Minimize2,
+  Sparkles,
+  Layers,
+  FileArchive,
+  Maximize2,
+  CheckCircle2,
+  Lock,
+  Unlock,
+  RefreshCw
+} from 'lucide-react';
+import { processImage, formatBytes, ImageResizeOptions } from '../../utils/imageProcessor';
 import { renderPDFToImages, PDFPageImage } from '../../utils/pdfExtractor';
 import { imagesToPDF } from '../../utils/pdfProcessor';
 import { createZipArchive, downloadBlob } from '../../utils/batchProcessor';
 import { recordToolConversion } from '../../utils/activityTracker';
 import { FilePreviewCard } from '../common/FilePreviewCard';
 import { MultiFilePreviewList } from '../common/MultiFilePreviewList';
+import { useProgress } from '../../context/ProgressContext';
 
 interface ImageEditorToolProps {
   toolId?: string;
@@ -15,20 +32,36 @@ interface ImageEditorToolProps {
   initialFile?: File | null;
 }
 
-export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'image-converter', onBack, initialFiles, initialFile }) => {
+export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({
+  toolId = 'image-converter',
+  onBack,
+  initialFiles,
+  initialFile
+}) => {
   const [files, setFiles] = useState<File[]>([]);
   const [targetFormat, setTargetFormat] = useState<'jpeg' | 'png' | 'webp'>('jpeg');
   const [quality, setQuality] = useState(80); // 1-100
   const [rotation, setRotation] = useState<number>(0);
-  const [customWidth, setCustomWidth] = useState<number | undefined>(undefined);
+  const [customWidth, setCustomWidth] = useState<number | ''>('');
+  const [customHeight, setCustomHeight] = useState<number | ''>('');
+  const [maintainAspect, setMaintainAspect] = useState(true);
+  const [origDimensions, setOrigDimensions] = useState<{ width: number; height: number } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const { startProgress, updateProgress, setItemsProgress, completeProgress, failProgress } = useProgress();
 
   // Results for PDF to Images conversion
   const [pdfPageImages, setPdfPageImages] = useState<PDFPageImage[]>([]);
 
   // Single processed result
-  const [processedResult, setProcessedResult] = useState<{ url: string; blob: Blob; origSize: number; newSize: number } | null>(null);
+  const [processedResult, setProcessedResult] = useState<{
+    url: string;
+    blob: Blob;
+    origSize: number;
+    newSize: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
   const isPdfToImage = toolId === 'pdf-to-image';
   const isImageToPdf = toolId === 'image-to-pdf';
@@ -39,18 +72,18 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'imag
 
   const getTitle = () => {
     if (isPdfToImage) return 'Convert PDF Pages to High-Resolution JPG / PNG Images';
-    if (isImageToPdf) return 'Convert JPG & PNG Photos into Single PDF Document';
+    if (isImageToPdf) return 'Convert Photos to PDF Document';
     if (isCompressor) return 'Compress & Optimize Image File Size';
-    if (isResizer) return 'Resize Dimensions & Crop Images';
+    if (isResizer) return 'Resize Dimensions & Scale Images';
     return 'Universal Image Converter';
   };
 
   const getSubtitle = () => {
     if (isPdfToImage) return 'Extract all pages from a PDF document into independent JPG or PNG images instantly.';
-    if (isImageToPdf) return 'Combine multiple photos into a single sleek PDF file.';
-    if (isCompressor) return 'Reduce image size up to 80% without noticeable quality loss.';
-    if (isResizer) return 'Adjust image width, height, aspect ratio, and rotation.';
-    return 'Convert images between JPG, PNG, WEBP, SVG, and BMP formats.';
+    if (isImageToPdf) return 'Combine single or multiple photos into a clean, printable PDF file.';
+    if (isCompressor) return 'Reduce image file size up to 80% with adjustable compression.';
+    if (isResizer) return 'Adjust pixel dimensions, scale resolution presets, and lock aspect ratio.';
+    return 'Convert images between JPG, PNG, and WEBP formats with instant download.';
   };
 
   const processIncomingFiles = async (selected: File[]) => {
@@ -58,15 +91,38 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'imag
     setProcessedResult(null);
     setPdfPageImages([]);
 
+    if (selected.length > 0 && !selected[0].name.toLowerCase().endsWith('.pdf')) {
+      // Read original image dimensions
+      const img = new Image();
+      const objUrl = URL.createObjectURL(selected[0]);
+      img.onload = () => {
+        setOrigDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+        if (isResizer) {
+          setCustomWidth(img.naturalWidth);
+          setCustomHeight(img.naturalHeight);
+        }
+        URL.revokeObjectURL(objUrl);
+      };
+      img.src = objUrl;
+    }
+
     if (isPdfToImage && selected.length > 0 && selected[0].name.toLowerCase().endsWith('.pdf')) {
       setIsProcessing(true);
-      setStatusMsg('Rendering PDF pages as images...');
+      startProgress({
+        title: 'Extracting PDF Pages as Images',
+        status: `Rendering pages in "${selected[0].name}"...`,
+        stage: 'Rasterizing Pages',
+        indeterminate: false
+      });
+
       try {
+        updateProgress(20, 'Reading PDF page tree...', 'PDF Parsing');
         const pageImgs = await renderPDFToImages(selected[0], targetFormat === 'png' ? 'png' : 'jpeg', 2.0);
         setPdfPageImages(pageImgs);
-        setStatusMsg(`Rendered ${pageImgs.length} pages`);
-      } catch (err) {
+        completeProgress(`Extracted ${pageImgs.length} high-resolution page images!`);
+      } catch (err: any) {
         console.error('PDF page rendering failed:', err);
+        failProgress(err?.message || 'Failed to extract images from PDF.');
         alert('Failed to extract images from PDF.');
       } finally {
         setIsProcessing(false);
@@ -89,62 +145,136 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'imag
     }
   };
 
+  // Handle aspect ratio sync when width changes
+  const handleWidthChange = (val: number | '') => {
+    setCustomWidth(val);
+    if (maintainAspect && origDimensions && val !== '' && origDimensions.width > 0) {
+      const calculatedH = Math.round((val / origDimensions.width) * origDimensions.height);
+      setCustomHeight(calculatedH);
+    }
+  };
+
+  // Handle aspect ratio sync when height changes
+  const handleHeightChange = (val: number | '') => {
+    setCustomHeight(val);
+    if (maintainAspect && origDimensions && val !== '' && origDimensions.height > 0) {
+      const calculatedW = Math.round((val / origDimensions.height) * origDimensions.width);
+      setCustomWidth(calculatedW);
+    }
+  };
+
+  // Preset dimension scaling
+  const handleScalePreset = (percent: number) => {
+    if (!origDimensions) return;
+    const newW = Math.round((origDimensions.width * percent) / 100);
+    const newH = Math.round((origDimensions.height * percent) / 100);
+    setCustomWidth(newW);
+    setCustomHeight(newH);
+  };
+
   const handleProcessSingle = async () => {
     if (files.length === 0) return;
     setIsProcessing(true);
-    try {
-      if (isImageToPdf) {
+
+    if (isImageToPdf) {
+      startProgress({
+        title: 'Converting Images to PDF',
+        status: `Packaging ${files.length} photo${files.length > 1 ? 's' : ''} into PDF document...`,
+        stage: 'Vector PDF Compilation'
+      });
+      try {
         const totalSize = files.reduce((acc, f) => acc + f.size, 0);
+        updateProgress(45, 'Embedding images into high-resolution PDF pages...', 'Rendering Pages');
         const pdfBytes = await imagesToPDF(files);
+        updateProgress(90, 'Packaging PDF document...', 'Finalizing PDF');
+
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         recordToolConversion(toolId, totalSize);
         downloadBlob(blob, 'converted_images.pdf');
-      } else {
-        const file = files[0];
-        const res = await processImage(file, {
+        completeProgress(`Combined ${files.length} photos into PDF document!`);
+      } catch (err: any) {
+        console.error('Image to PDF failed:', err);
+        failProgress(err?.message || 'Failed to convert images to PDF.');
+        alert('Failed to convert images to PDF.');
+      } finally {
+        setIsProcessing(false);
+      }
+    } else {
+      const file = files[0];
+      startProgress({
+        title: isResizer ? 'Resizing Image' : isCompressor ? 'Compressing Image' : 'Converting Image',
+        status: `Processing "${file.name}"...`,
+        stage: 'Canvas Transformation'
+      });
+
+      try {
+        updateProgress(40, 'Rendering pixel rasterization...', 'Transforming Bitmaps');
+        const options: ImageResizeOptions = {
           format: targetFormat,
           quality: quality / 100,
           rotationAngle: rotation,
-          width: customWidth,
-          maintainAspectRatio: true,
-        });
+          maintainAspectRatio: maintainAspect
+        };
+
+        if (customWidth && typeof customWidth === 'number') {
+          options.width = customWidth;
+        }
+        if (customHeight && typeof customHeight === 'number') {
+          options.height = customHeight;
+        }
+
+        const res = await processImage(file, options);
 
         setProcessedResult({
           url: res.url,
           blob: res.blob,
           origSize: file.size,
           newSize: res.blob.size,
+          width: res.width,
+          height: res.height
         });
 
         const ext = targetFormat === 'jpeg' ? 'jpg' : targetFormat;
         recordToolConversion(toolId, file.size);
         downloadBlob(res.blob, `${file.name.replace(/\.[^/.]+$/, '')}_processed.${ext}`);
+        completeProgress(
+          `Processed image (${formatBytes(file.size)} → ${formatBytes(res.blob.size)}, ${res.width}x${res.height}px)!`
+        );
+      } catch (err: any) {
+        console.error('Image processing failed:', err);
+        failProgress(err?.message || 'Failed to process image.');
+        alert('Failed to process image.');
+      } finally {
+        setIsProcessing(false);
       }
-    } catch (err) {
-      console.error('Image processing failed:', err);
-      alert('Failed to process image.');
-    } finally {
-      setIsProcessing(false);
     }
   };
 
   const handleDownloadAllPdfImagesZip = async () => {
     if (pdfPageImages.length === 0) return;
     setIsProcessing(true);
+    startProgress({
+      title: 'Creating ZIP Package',
+      status: `Archiving ${pdfPageImages.length} extracted images into ZIP...`,
+      stage: 'Building ZIP Archive'
+    });
+
     try {
       const ext = targetFormat === 'png' ? 'png' : 'jpg';
       const cleanName = files[0]?.name ? files[0].name.replace(/\.[^/.]+$/, '') : 'pdf_pages';
 
       const zipFiles = pdfPageImages.map((page) => ({
         name: `${cleanName}_page_${page.pageNumber}.${ext}`,
-        data: page.blob,
+        data: page.blob
       }));
 
       const zipBlob = await createZipArchive(zipFiles);
       recordToolConversion(toolId, files[0]?.size || zipBlob.size);
       downloadBlob(zipBlob, `${cleanName}_images_all_pages.zip`);
-    } catch (err) {
+      completeProgress(`Downloaded ZIP containing all ${pdfPageImages.length} pages!`);
+    } catch (err: any) {
       console.error('Zip creation failed:', err);
+      failProgress(err?.message || 'Failed to generate ZIP file.');
       alert('Failed to generate ZIP file.');
     } finally {
       setIsProcessing(false);
@@ -196,11 +326,16 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'imag
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Client-Side Visual Preview for Uploaded Images / PDF */}
+          {/* Visual Preview */}
           {files.length === 1 ? (
             <FilePreviewCard
               file={files[0]}
-              onRemove={() => { setFiles([]); setPdfPageImages([]); setProcessedResult(null); }}
+              onRemove={() => {
+                setFiles([]);
+                setPdfPageImages([]);
+                setProcessedResult(null);
+                setOrigDimensions(null);
+              }}
               onReplace={(newF) => processIncomingFiles([newF])}
             />
           ) : (
@@ -216,14 +351,19 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'imag
                 next[target] = temp;
                 setFiles(next);
               }}
-              onClearAll={() => { setFiles([]); setPdfPageImages([]); setProcessedResult(null); }}
-              title="Image Conversion Queue & Visual Previews"
+              onClearAll={() => {
+                setFiles([]);
+                setPdfPageImages([]);
+                setProcessedResult(null);
+                setOrigDimensions(null);
+              }}
+              title="Image Conversion Queue"
             />
           )}
 
           <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
 
-          {/* PDF Page Images Grid (For PDF to Image) */}
+          {/* PDF Page Images Grid */}
           {isPdfToImage && pdfPageImages.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -256,8 +396,75 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'imag
             </div>
           )}
 
-          {/* Image Settings Options (For non-PDF-to-image or image editor) */}
-          {!isPdfToImage && (
+          {/* Resizer Dimension Controls */}
+          {isResizer && origDimensions && (
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <Crop className="w-4 h-4 text-indigo-600" /> Dimension & Aspect Ratio Controls
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  Original: {origDimensions.width} × {origDimensions.height} px
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Width (px)
+                  </label>
+                  <input
+                    type="number"
+                    value={customWidth}
+                    onChange={(e) => handleWidthChange(e.target.value ? Number(e.target.value) : '')}
+                    placeholder="Width in pixels"
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Height (px)
+                  </label>
+                  <input
+                    type="number"
+                    value={customHeight}
+                    onChange={(e) => handleHeightChange(e.target.value ? Number(e.target.value) : '')}
+                    placeholder="Height in pixels"
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-800">
+                <label className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={maintainAspect}
+                    onChange={(e) => setMaintainAspect(e.target.checked)}
+                    className="rounded text-indigo-600 accent-indigo-600"
+                  />
+                  <span>Lock Aspect Ratio</span>
+                </label>
+
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="text-slate-400 text-[11px]">Quick scale:</span>
+                  {[25, 50, 75, 100, 150, 200].map((pct) => (
+                    <button
+                      key={pct}
+                      onClick={() => handleScalePreset(pct)}
+                      className="px-2 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 text-[11px] font-bold text-slate-700 dark:text-slate-300"
+                    >
+                      {pct}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Common Image Settings Options */}
+          {!isPdfToImage && !isImageToPdf && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -306,7 +513,7 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'imag
             </div>
           )}
 
-          {/* Action Processing Button */}
+          {/* Action Button */}
           {!isPdfToImage && (
             <button
               onClick={handleProcessSingle}
@@ -314,14 +521,22 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({ toolId = 'imag
               className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
             >
               <Download className="w-4 h-4" />
-              {isImageToPdf ? 'Convert All Photos to PDF' : 'Process & Download Image'}
+              {isImageToPdf
+                ? `Convert ${files.length} Photo${files.length > 1 ? 's' : ''} to Single PDF`
+                : isResizer
+                ? 'Resize & Download Image'
+                : isCompressor
+                ? 'Compress & Download Image'
+                : 'Convert & Download Image'}
             </button>
           )}
 
           {/* Savings Result Card */}
           {processedResult && (
             <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 text-xs flex items-center justify-between font-bold">
-              <span>Original Size: {formatBytes(processedResult.origSize)} → New Size: {formatBytes(processedResult.newSize)}</span>
+              <span>
+                Original: {formatBytes(processedResult.origSize)} → New: {formatBytes(processedResult.newSize)} ({processedResult.width}×{processedResult.height}px)
+              </span>
               <span className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[10px]">
                 {Math.round(((processedResult.origSize - processedResult.newSize) / processedResult.origSize) * 100)}% Saved
               </span>

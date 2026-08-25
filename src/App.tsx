@@ -12,6 +12,7 @@ import { ToolPageLayout } from './components/tools/ToolPageLayout';
 
 // Lazy Loaded Tool Components
 const PDFEditorTool = lazy(() => import('./components/tools/PDFEditorTool').then(m => ({ default: m.PDFEditorTool })));
+const PDFSecurityTool = lazy(() => import('./components/tools/PDFSecurityTool').then(m => ({ default: m.PDFSecurityTool })));
 const PDFMergeSplitTool = lazy(() => import('./components/tools/PDFMergeSplitTool').then(m => ({ default: m.PDFMergeSplitTool })));
 const PDFCompressTool = lazy(() => import('./components/tools/PDFCompressTool').then(m => ({ default: m.PDFCompressTool })));
 const WordTool = lazy(() => import('./components/tools/WordTool').then(m => ({ default: m.WordTool })));
@@ -47,6 +48,8 @@ import { LanguageCode } from './data/translations';
 import { updateSEOMeta } from './utils/seo';
 import { Megaphone, AlertTriangle } from 'lucide-react';
 import { GlobalDropZone } from './components/common/GlobalDropZone';
+import { GlobalProgressBar } from './components/common/GlobalProgressBar';
+
 
 const DEFAULT_ADMIN_CONFIG: AdminConfig = {
   siteName: 'pdfeditfy.com',
@@ -609,9 +612,9 @@ export default function App() {
                 adsenseCustomSlots={adminConfig.adsenseCustomSlots}
               >
                 {activeToolId === 'edit-pdf' && <PDFEditorTool mode="edit" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
-                {activeToolId === 'watermark-pdf' && <PDFEditorTool mode="watermark" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
-                {activeToolId === 'lock-pdf' && <PDFEditorTool mode="lock" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
-                {activeToolId === 'unlock-pdf' && <PDFEditorTool mode="unlock" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
+                {activeToolId === 'watermark-pdf' && <PDFSecurityTool mode="watermark" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
+                {activeToolId === 'lock-pdf' && <PDFSecurityTool mode="lock" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
+                {activeToolId === 'unlock-pdf' && <PDFSecurityTool mode="unlock" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
 
                 {activeToolId === 'merge-pdf' && <PDFMergeSplitTool mode="merge" onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />}
                 {activeToolId === 'split-pdf' && <PDFMergeSplitTool mode="split" onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />}
@@ -682,6 +685,9 @@ export default function App() {
       />
 
       <CookieBanner />
+
+      {/* Global Progress Indicator for Long Operations */}
+      <GlobalProgressBar />
 
       {/* Global Drag and Drop Zone Overlay */}
       <GlobalDropZone

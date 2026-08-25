@@ -5,6 +5,7 @@ import { renderPDFToImages } from '../../utils/pdfExtractor';
 import { downloadBlob } from '../../utils/batchProcessor';
 import { recordToolConversion } from '../../utils/activityTracker';
 import { FilePreviewCard } from '../common/FilePreviewCard';
+import { useProgress } from '../../context/ProgressContext';
 
 interface OCRToolProps {
   onBack: () => void;
@@ -18,6 +19,7 @@ export const OCRTool: React.FC<OCRToolProps> = ({ onBack, initialFile }) => {
   const [progress, setProgress] = useState(0);
   const [copied, setCopied] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const { startProgress, updateProgress, setItemsProgress, completeProgress, failProgress } = useProgress();
 
   useEffect(() => {
     if (initialFile) {
@@ -43,26 +45,40 @@ export const OCRTool: React.FC<OCRToolProps> = ({ onBack, initialFile }) => {
     setProgress(5);
     setStatusMsg('Initializing OCR engine...');
 
+    startProgress({
+      title: 'Extracting Text via Neural OCR',
+      status: 'Booting Tesseract neural engine...',
+      stage: 'Engine Warmup',
+      indeterminate: false
+    });
+
     try {
       const worker = await createWorker('eng');
       let combinedText = '';
 
       if (file.name.toLowerCase().endsWith('.pdf')) {
         setStatusMsg('Rendering PDF pages to high-res images...');
+        updateProgress(15, 'Rasterizing document pages to high-res bitmaps...', 'Page Rasterization');
         setProgress(20);
         const pageImgs = await renderPDFToImages(file, 'png', 1.5);
 
         for (let i = 0; i < pageImgs.length; i++) {
-          setStatusMsg(`Recognizing text on page ${i + 1} of ${pageImgs.length}...`);
+          const msg = `Recognizing text on page ${i + 1} of ${pageImgs.length}...`;
+          setStatusMsg(msg);
+          const currentPct = Math.round(20 + ((i + 1) / pageImgs.length) * 75);
+          setProgress(currentPct);
+          setItemsProgress(i + 1, pageImgs.length, msg, 'Character Recognition');
+          
           const ret = await worker.recognize(pageImgs[i].dataUrl);
           combinedText += `--- PAGE ${i + 1} ---\n${ret.data.text}\n\n`;
-          setProgress(Math.round(20 + ((i + 1) / pageImgs.length) * 75));
         }
       } else {
         setStatusMsg('Recognizing text on image...');
+        updateProgress(40, 'Analyzing image lines and glyphs...', 'Image Analysis');
         setProgress(40);
         const ret = await worker.recognize(file);
         combinedText = ret.data.text;
+        updateProgress(90, 'Formatting extracted characters...', 'Text Formatting');
         setProgress(90);
       }
 
@@ -70,8 +86,11 @@ export const OCRTool: React.FC<OCRToolProps> = ({ onBack, initialFile }) => {
       setStatusMsg('OCR Recognition Complete!');
       recordToolConversion('ocr-reader', file.size);
       await worker.terminate();
-    } catch (err) {
+
+      completeProgress('Text extracted successfully!');
+    } catch (err: any) {
       console.error('OCR failed:', err);
+      failProgress(err?.message || 'Failed to extract text from document.');
       alert('Failed to extract text from document. Please ensure file is valid.');
     } finally {
       setIsProcessing(false);

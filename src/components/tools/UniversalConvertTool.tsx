@@ -21,8 +21,11 @@ import {
   extractDocxHtml,
   exportTextToDocxBlob
 } from '../../utils/docProcessor';
+import { extractTextFromPDF, renderPDFToImages } from '../../utils/pdfExtractor';
 import { imagesToPDF } from '../../utils/pdfProcessor';
+import { processImage } from '../../utils/imageProcessor';
 import { MultiFilePreviewList } from '../common/MultiFilePreviewList';
+import { useProgress } from '../../context/ProgressContext';
 
 interface UniversalConvertToolProps {
   onBack: () => void;
@@ -35,6 +38,8 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
   const [targetFormat, setTargetFormat] = useState<string>('pdf');
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const { startProgress, updateProgress, setItemsProgress, completeProgress, failProgress } = useProgress();
+
 
   useEffect(() => {
     if (initialFiles && initialFiles.length > 0) {
@@ -80,6 +85,14 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
     setIsProcessing(true);
     setProgress(5);
 
+    startProgress({
+      title: `Batch Converting to ${targetFormat.toUpperCase()}`,
+      status: `Preparing ${files.length} document${files.length > 1 ? 's' : ''}...`,
+      stage: 'Initialization',
+      totalItems: files.length,
+      itemsProcessed: 0
+    });
+
     try {
       const convertedFiles: { name: string; data: Uint8Array | Blob | string }[] = [];
 
@@ -88,23 +101,33 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
         const cleanName = file.name.replace(/\.[^/.]+$/, '');
         const extension = file.name.split('.').pop()?.toLowerCase() || '';
 
+        setItemsProgress(
+          i,
+          files.length,
+          `Converting "${file.name}" to .${targetFormat}...`,
+          `Processing ${i + 1}/${files.length}`
+        );
+
         let convertedData: Uint8Array | Blob | string;
 
         if (targetFormat === 'pdf') {
           if (extension === 'docx' || extension === 'doc') {
             convertedData = await convertWordToPDF(file);
-          } else if (['jpg', 'jpeg', 'png', 'webp'].includes(extension)) {
+          } else if (['jpg', 'jpeg', 'png', 'webp', 'bmp', 'svg'].includes(extension)) {
             convertedData = await imagesToPDF([file]);
           } else if (extension === 'pdf') {
             convertedData = new Uint8Array(await file.arrayBuffer());
           } else {
-            // Text or fallback to PDF conversion
             const text = await file.text();
             convertedData = await convertWordToPDF(new File([text], `${cleanName}.txt`));
           }
         } else if (targetFormat === 'docx') {
           if (extension === 'docx') {
             convertedData = new Uint8Array(await file.arrayBuffer());
+          } else if (extension === 'pdf') {
+            const pages = await extractTextFromPDF(file);
+            const fullText = pages.map((p) => `# Page ${p.pageNumber}\n\n${p.text}`).join('\n\n');
+            convertedData = await exportTextToDocxBlob(fullText, { title: cleanName });
           } else {
             const rawText = await file.text();
             convertedData = await exportTextToDocxBlob(rawText, { title: cleanName });
@@ -113,8 +136,20 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
           if (extension === 'docx' || extension === 'doc') {
             const extracted = await extractDocxHtml(file);
             convertedData = extracted.text;
+          } else if (extension === 'pdf') {
+            const pages = await extractTextFromPDF(file);
+            convertedData = pages.map((p) => `--- PAGE ${p.pageNumber} ---\n${p.text}`).join('\n\n');
           } else {
             convertedData = await file.text();
+          }
+        } else if (targetFormat === 'png' || targetFormat === 'jpg' || targetFormat === 'jpeg') {
+          const imgFmt = targetFormat === 'png' ? 'png' : 'jpeg';
+          if (extension === 'pdf') {
+            const pageImgs = await renderPDFToImages(file, imgFmt, 2.0);
+            convertedData = pageImgs[0]?.blob || new Blob();
+          } else {
+            const res = await processImage(file, { format: imgFmt });
+            convertedData = res.blob;
           }
         } else {
           convertedData = new Uint8Array(await file.arrayBuffer());
@@ -127,15 +162,26 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
           data: convertedData,
         });
 
-        setProgress(Math.round(((i + 1) / files.length) * 100));
+        const currentPct = Math.round(((i + 1) / files.length) * 90);
+        setProgress(currentPct);
+        setItemsProgress(
+          i + 1,
+          files.length,
+          `Converted ${i + 1} of ${files.length} documents`,
+          `Packaging files`
+        );
       }
 
+      updateProgress(95, 'Generating download archive ZIP...', 'Packaging ZIP');
       const zipBlob = await createZipArchive(convertedFiles);
       const totalSize = files.reduce((acc, f) => acc + f.size, 0);
       recordToolConversion('universal-converter', totalSize || zipBlob.size);
       downloadBlob(zipBlob, `converted_batch_${targetFormat}_files.zip`);
-    } catch (err) {
+
+      completeProgress(`Successfully converted ${files.length} document${files.length > 1 ? 's' : ''}!`);
+    } catch (err: any) {
       console.error('Batch conversion failed:', err);
+      failProgress(err?.message || 'Batch conversion error. Please check your files.');
       alert('Batch conversion error. Please verify input files.');
     } finally {
       setIsProcessing(false);

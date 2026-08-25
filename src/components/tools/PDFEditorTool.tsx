@@ -62,6 +62,7 @@ import {
 import { downloadBlob } from '../../utils/batchProcessor';
 import { recordToolConversion } from '../../utils/activityTracker';
 import { PDFAnnotation, EditablePdfText } from '../../types';
+import { useProgress } from '../../context/ProgressContext';
 
 // Set up pdf.js worker URL safely
 if (typeof window !== 'undefined') {
@@ -90,6 +91,8 @@ type MainTool =
 export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onBack, initialFile }) => {
   const [file, setFile] = useState<File | null>(null);
   const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);
+  const { startProgress, updateProgress, completeProgress, failProgress } = useProgress();
+
 
   // Active Tool state (defaults to 'edit_text' so existing PDF text is immediately editable!)
   const [activeTool, setActiveTool] = useState<MainTool>('edit_text');
@@ -990,6 +993,11 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
     if (!file) return;
     setIsProcessing(true);
     setExportMessage('Applying vector text modifications and annotations...');
+    startProgress({
+      title: 'Compiling Edited PDF Document',
+      status: `Applying annotations & font modifications to "${file.name}"...`,
+      stage: 'Vector Text Replacement'
+    });
 
     try {
       // Flatten all edited texts across all pages into an array
@@ -1002,18 +1010,24 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
         });
       });
 
+      updateProgress(40, `Applying ${annotations.length} annotations & ${allEditedTexts.length} in-place text edits...`, 'PDF Canvas Processing');
+
       // Apply annotations and text replacements
       const finalBytes = await applyPDFAnnotations(file, annotations, allEditedTexts);
+
+      updateProgress(90, 'Serializing updated PDF binary...', 'Generating Output');
 
       const cleanName = file.name.replace(/\.pdf$/i, '');
       const outBlob = new Blob([finalBytes], { type: 'application/pdf' });
       downloadBlob(outBlob, `${cleanName}_edited.pdf`);
 
       recordToolConversion('edit-pdf', file.size);
+      completeProgress('Edited PDF exported successfully!');
       setIsProcessing(false);
       setExportMessage(null);
     } catch (err: any) {
       console.error('Error saving PDF:', err);
+      failProgress(err?.message || 'Failed to generate output PDF.');
       alert('Failed to generate output PDF: ' + err.message);
       setIsProcessing(false);
       setExportMessage(null);
