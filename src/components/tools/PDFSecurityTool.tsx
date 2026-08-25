@@ -141,12 +141,17 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
     if (!previewDataUrl || !previewCanvasRef.current || mode !== 'watermark') return;
 
     let isMounted = true;
+    let loadingTask: any = null;
+    let pdf: any = null;
+    let page: any = null;
+
     const renderPreview = async () => {
       try {
-        const loadingTask = pdfjsLib.getDocument({ url: previewDataUrl });
-        const pdf = await loadingTask.promise;
-        const page = await pdf.getPage(currentPage);
+        loadingTask = pdfjsLib.getDocument({ url: previewDataUrl });
+        pdf = await loadingTask.promise;
+        if (!isMounted) return;
 
+        page = await pdf.getPage(currentPage);
         const canvas = previewCanvasRef.current;
         if (!canvas || !isMounted) return;
 
@@ -162,12 +167,14 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
         canvas.style.height = `${scaledViewport.height}px`;
 
         const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        if (!ctx || !isMounted) return;
 
         ctx.save();
         ctx.scale(dpr, dpr);
 
         await page.render({ canvasContext: ctx, viewport: scaledViewport, canvas: canvas } as any).promise;
+
+        if (!isMounted) return;
 
         // Draw Watermark on top of preview canvas
         ctx.save();
@@ -200,6 +207,28 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
         ctx.restore();
       } catch (err) {
         console.debug('Preview render note:', err);
+      } finally {
+        if (page && typeof page.cleanup === 'function') {
+          try {
+            page.cleanup();
+          } catch {
+            // ignore
+          }
+        }
+        if (pdf && typeof pdf.destroy === 'function') {
+          try {
+            await pdf.destroy();
+          } catch {
+            // ignore
+          }
+        }
+        if (loadingTask && typeof loadingTask.destroy === 'function') {
+          try {
+            await loadingTask.destroy();
+          } catch {
+            // ignore
+          }
+        }
       }
     };
 

@@ -183,6 +183,29 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
   const sigCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const pdfDocRef = useRef<any>(null);
+  const renderTaskRef = useRef<any>(null);
+
+  // Cleanup PDF document on unmount
+  useEffect(() => {
+    return () => {
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel();
+        } catch {
+          // ignore
+        }
+      }
+      if (pdfDocRef.current) {
+        try {
+          pdfDocRef.current.destroy();
+        } catch {
+          // ignore
+        }
+        pdfDocRef.current = null;
+      }
+    };
+  }, []);
 
   // Push to history snapshot
   const pushHistory = useCallback((newAnns: PDFAnnotation[], newTexts: Record<number, EditablePdfText[]>) => {
@@ -248,6 +271,24 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
     setIsProcessing(true);
     setFile(uploadedFile);
 
+    if (renderTaskRef.current) {
+      try {
+        renderTaskRef.current.cancel();
+      } catch {
+        // ignore
+      }
+      renderTaskRef.current = null;
+    }
+
+    if (pdfDocRef.current) {
+      try {
+        pdfDocRef.current.destroy();
+      } catch {
+        // ignore
+      }
+      pdfDocRef.current = null;
+    }
+
     try {
       const dataUrl = await readFileAsDataURL(uploadedFile);
       setFileDataUrl(dataUrl);
@@ -255,6 +296,8 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       // Load Document with PDF.js
       const loadingTask = pdfjsLib.getDocument({ url: dataUrl });
       const pdf = await loadingTask.promise;
+      pdfDocRef.current = pdf;
+
       setNumPages(pdf.numPages);
       setCurrentPage(1);
       setAnnotations([]);
@@ -283,19 +326,35 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
   const generateThumbnails = async (pdfDoc: any) => {
     const thumbs: string[] = [];
     for (let i = 1; i <= Math.min(pdfDoc.numPages, 20); i++) {
+      let page: any = null;
+      let canvas: HTMLCanvasElement | null = null;
       try {
-        const page = await pdfDoc.getPage(i);
+        page = await pdfDoc.getPage(i);
         const viewport = page.getViewport({ scale: 0.25 });
-        const canvas = document.createElement('canvas');
+        canvas = document.createElement('canvas');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         const ctx = canvas.getContext('2d');
         if (ctx) {
           await page.render({ canvasContext: ctx, viewport }).promise;
           thumbs.push(canvas.toDataURL());
+        } else {
+          thumbs.push('');
         }
       } catch {
         thumbs.push('');
+      } finally {
+        if (page && typeof page.cleanup === 'function') {
+          try {
+            page.cleanup();
+          } catch {
+            // ignore
+          }
+        }
+        if (canvas) {
+          canvas.width = 0;
+          canvas.height = 0;
+        }
       }
     }
     setThumbnailUrls(thumbs);
@@ -306,10 +365,23 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
     if (!fileDataUrl) return;
     setPdfRendering(true);
 
+    if (renderTaskRef.current) {
+      try {
+        renderTaskRef.current.cancel();
+      } catch {
+        // ignore
+      }
+      renderTaskRef.current = null;
+    }
+
+    let page: any = null;
     try {
-      const loadingTask = pdfjsLib.getDocument({ url: fileDataUrl });
-      const pdf = await loadingTask.promise;
-      const page = await pdf.getPage(pageNo);
+      if (!pdfDocRef.current) {
+        const loadingTask = pdfjsLib.getDocument({ url: fileDataUrl });
+        pdfDocRef.current = await loadingTask.promise;
+      }
+      const pdf = pdfDocRef.current;
+      page = await pdf.getPage(pageNo);
 
       const canvas = pdfCanvasRef.current;
       if (!canvas) return;
@@ -342,7 +414,11 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
         viewport: viewport,
       };
 
-      await page.render(renderContext as any).promise;
+      const renderTask = page.render(renderContext as any);
+      renderTaskRef.current = renderTask;
+      await renderTask.promise;
+      renderTaskRef.current = null;
+
       ctx.restore();
 
       // Extract In-Place Text Items for Word & Line Editing
@@ -352,9 +428,9 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
         }
 
         // Fetch text items asynchronously
-        page.getTextContent().then((textContent) => {
+        page.getTextContent().then((textContent: any) => {
           const rawItems = (textContent.items as any[]).filter(
-            (it) => it.str && it.str.trim().length > 0
+            (it: any) => it.str && it.str.trim().length > 0
           );
 
           // Group nearby text fragments on the same baseline into sentences/phrases
@@ -528,8 +604,20 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       setPdfRendering(false);
       setPdfRenderSuccess(true);
     } catch (err: any) {
+      if (err?.name === 'RenderingCancelledException') {
+        // Expected when user zooms or switches pages quickly
+        return;
+      }
       console.error('Error rendering page:', err);
       setPdfRendering(false);
+    } finally {
+      if (page && typeof page.cleanup === 'function') {
+        try {
+          page.cleanup();
+        } catch {
+          // ignore
+        }
+      }
     }
   }, [fileDataUrl, zoomScale, pageRotation, annotations, history.length, pushHistory]);
 

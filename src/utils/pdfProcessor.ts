@@ -1,39 +1,68 @@
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
-import jsPDF from 'jspdf';
 import { PDFAnnotation, EditablePdfText } from '../types';
 
-// Utility to read File as ArrayBuffer
+// Utility to read File as ArrayBuffer safely
 export function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error('No file provided'));
+    if (typeof file.arrayBuffer === 'function') {
+      file.arrayBuffer().then(resolve).catch(reject);
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as ArrayBuffer);
-    reader.onerror = reject;
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) {
+        resolve(reader.result);
+      } else {
+        reject(new Error('Failed to read file as ArrayBuffer'));
+      }
+    };
+    reader.onerror = () => reject(reader.error || new Error('FileReader encountered an error'));
+    reader.onabort = () => reject(new Error('File reading was aborted'));
     reader.readAsArrayBuffer(file);
   });
 }
 
-// Utility to read File as Data URL (Base64)
+// Utility to read File as Data URL (Base64) safely
 export function readFileAsDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error('No file provided'));
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+      } else {
+        reject(new Error('Failed to read file as DataURL'));
+      }
+    };
+    reader.onerror = () => reject(reader.error || new Error('FileReader encountered an error'));
+    reader.onabort = () => reject(new Error('File reading was aborted'));
     reader.readAsDataURL(file);
   });
 }
 
 // MERGE MULTIPLE PDFs
 export async function mergePDFs(files: File[]): Promise<Uint8Array> {
-  const mergedPdf = await PDFDocument.create();
-
-  for (const file of files) {
-    const arrayBuffer = await readFileAsArrayBuffer(file);
-    const pdf = await PDFDocument.load(arrayBuffer);
-    const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
-    copiedPages.forEach((page) => mergedPdf.addPage(page));
+  if (!files || files.length === 0) {
+    throw new Error('At least one PDF file is required to merge.');
   }
 
-  return await mergedPdf.save();
+  const mergedPdf = await PDFDocument.create();
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    try {
+      const arrayBuffer = await readFileAsArrayBuffer(file);
+      const pdf = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+      const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+      copiedPages.forEach((page) => mergedPdf.addPage(page));
+    } catch (err: any) {
+      console.error(`Failed to merge file "${file.name}":`, err);
+      throw new Error(`Failed to load "${file.name}": ${err?.message || 'Invalid or protected PDF'}`);
+    }
+  }
+
+  return await mergedPdf.save({ useObjectStreams: true });
 }
 
 // SPLIT PDF
@@ -41,8 +70,9 @@ export async function splitPDF(
   file: File,
   pageRanges: { start: number; end: number }[]
 ): Promise<{ name: string; data: Uint8Array }[]> {
+  if (!file) throw new Error('No PDF file provided for splitting.');
   const arrayBuffer = await readFileAsArrayBuffer(file);
-  const srcPdf = await PDFDocument.load(arrayBuffer);
+  const srcPdf = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
   const totalPages = srcPdf.getPageCount();
   const results: { name: string; data: Uint8Array }[] = [];
 
@@ -61,13 +91,17 @@ export async function splitPDF(
     if (pageIndices.length > 0) {
       const copiedPages = await newPdf.copyPages(srcPdf, pageIndices);
       copiedPages.forEach((page) => newPdf.addPage(page));
-      const pdfBytes = await newPdf.save();
+      const pdfBytes = await newPdf.save({ useObjectStreams: true });
       const cleanName = file.name.replace(/\.pdf$/i, '');
       results.push({
         name: `${cleanName}_part_${i + 1}_pages_${range.start}-${range.end}.pdf`,
         data: pdfBytes,
       });
     }
+  }
+
+  if (results.length === 0) {
+    throw new Error('No valid pages found in specified ranges.');
   }
 
   return results;
@@ -78,11 +112,13 @@ export async function manipulatePDFPages(
   file: File,
   pagesInfo: { pageIndex: number; rotation: number }[]
 ): Promise<Uint8Array> {
+  if (!file) throw new Error('No PDF file provided.');
   const arrayBuffer = await readFileAsArrayBuffer(file);
-  const srcPdf = await PDFDocument.load(arrayBuffer);
+  const srcPdf = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
   const newPdf = await PDFDocument.create();
 
   for (const info of pagesInfo) {
+    if (info.pageIndex < 0 || info.pageIndex >= srcPdf.getPageCount()) continue;
     const [copiedPage] = await newPdf.copyPages(srcPdf, [info.pageIndex]);
     if (info.rotation) {
       const currentRotation = copiedPage.getRotation().angle;
@@ -91,7 +127,7 @@ export async function manipulatePDFPages(
     newPdf.addPage(copiedPage);
   }
 
-  return await newPdf.save();
+  return await newPdf.save({ useObjectStreams: true });
 }
 
 // WATERMARK PDF
@@ -106,14 +142,16 @@ export async function watermarkPDF(
     rotationAngle?: number;
   }
 ): Promise<Uint8Array> {
+  if (!file) throw new Error('No PDF file provided.');
   const arrayBuffer = await readFileAsArrayBuffer(file);
-  const pdfDoc = await PDFDocument.load(arrayBuffer);
+  const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
   const pages = pdfDoc.getPages();
   const helveticaFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
   const opacity = options.opacity ?? 0.3;
   const fontSize = options.fontSize ?? 48;
   const rotation = degrees(options.rotationAngle ?? 45);
+  const colorRgb = hexToRgb01(options.colorHex || '#dc2626');
 
   for (const page of pages) {
     const { width, height } = page.getSize();
@@ -127,14 +165,14 @@ export async function watermarkPDF(
         y: (height - textHeight) / 2,
         size: fontSize,
         font: helveticaFont,
-        color: rgb(0.5, 0.5, 0.5),
+        color: rgb(colorRgb.r, colorRgb.g, colorRgb.b),
         opacity: opacity,
         rotate: rotation,
       });
     }
   }
 
-  return await pdfDoc.save();
+  return await pdfDoc.save({ useObjectStreams: true });
 }
 
 async function imageFileToPngArrayBuffer(file: File): Promise<ArrayBuffer> {
@@ -143,18 +181,26 @@ async function imageFileToPngArrayBuffer(file: File): Promise<ArrayBuffer> {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-      const canvas = document.createElement('canvas');
+      let canvas: HTMLCanvasElement | null = document.createElement('canvas');
       canvas.width = img.naturalWidth || img.width || 800;
       canvas.height = img.naturalHeight || img.height || 600;
       const ctx = canvas.getContext('2d');
-      if (!ctx) return reject(new Error('Canvas context unavailable'));
+      if (!ctx) {
+        canvas = null;
+        return reject(new Error('Canvas context unavailable'));
+      }
       ctx.drawImage(img, 0, 0);
       canvas.toBlob((blob) => {
+        if (canvas) {
+          canvas.width = 0;
+          canvas.height = 0;
+          canvas = null;
+        }
         if (!blob) return reject(new Error('Blob generation failed'));
         blob.arrayBuffer().then(resolve).catch(reject);
       }, 'image/png');
     };
-    img.onerror = reject;
+    img.onerror = () => reject(new Error('Failed to load image for conversion'));
     img.src = dataUrl;
   });
 }
@@ -164,6 +210,10 @@ export async function imagesToPDF(
   imageFiles: File[],
   options: { margin?: number; pageOrientation?: 'portrait' | 'landscape' } = {}
 ): Promise<Uint8Array> {
+  if (!imageFiles || imageFiles.length === 0) {
+    throw new Error('Please select at least one image to convert to PDF.');
+  }
+
   const pdfDoc = await PDFDocument.create();
 
   for (const file of imageFiles) {
@@ -194,7 +244,7 @@ export async function imagesToPDF(
     });
   }
 
-  return await pdfDoc.save();
+  return await pdfDoc.save({ useObjectStreams: true });
 }
 
 // COMPRESS PDF
@@ -202,10 +252,11 @@ export async function compressPDF(
   file: File,
   qualityFactor: number = 0.7 // 0.3 extreme, 0.7 recommended, 0.9 light
 ): Promise<Uint8Array> {
+  if (!file) throw new Error('No PDF file provided for compression.');
   const arrayBuffer = await readFileAsArrayBuffer(file);
-  const pdfDoc = await PDFDocument.load(arrayBuffer);
+  const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
   
-  // Re-save with object stream compression
+  // Re-save with object stream compression and clean objects
   return await pdfDoc.save({
     useObjectStreams: true,
   });
@@ -229,10 +280,11 @@ export async function applyPDFAnnotations(
   annotations: PDFAnnotation[],
   editedTexts: EditablePdfText[] = []
 ): Promise<Uint8Array> {
+  if (!file) throw new Error('No PDF file provided.');
   const arrayBuffer = await readFileAsArrayBuffer(file);
-  const pdfDoc = await PDFDocument.load(arrayBuffer);
+  const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
 
-  // Embed standard PDF font families (Regular, Bold, Italic/Oblique, BoldItalic/BoldOblique)
+  // Embed standard PDF font families safely
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const helveticaOblique = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
@@ -382,18 +434,15 @@ export async function applyPDFAnnotations(
   }
 
   // 2. Process all overlays & annotations
-
   for (const ann of annotations) {
     if (ann.pageNumber < 1 || ann.pageNumber > pages.length) continue;
     const page = pages[ann.pageNumber - 1];
     const { width, height } = page.getSize();
 
-    // Map percentage coordinates (0-100) to PDF page points
     const pdfX = (ann.x / 100) * width;
-    const pdfY = height - ((ann.y / 100) * height); // Invert Y axis for PDF coordinate space
+    const pdfY = height - ((ann.y / 100) * height);
 
     if (ann.type === 'text' && ann.content) {
-      // Pick font based on family and weight
       let selectedFont = helvetica;
       const fam = (ann.fontFamily || 'Helvetica').toLowerCase();
 
@@ -417,7 +466,6 @@ export async function applyPDFAnnotations(
       const textWidth = selectedFont.widthOfTextAtSize(ann.content, fSize);
       const textHeight = selectedFont.heightAtSize(fSize);
 
-      // If user enabled whiteout under text, draw a solid white block first to erase existing PDF content
       if (ann.hasWhiteoutBg) {
         page.drawRectangle({
           x: pdfX - 4,
@@ -439,7 +487,6 @@ export async function applyPDFAnnotations(
         opacity: ann.opacity ?? 1,
       });
     } else if (ann.type === 'whiteout') {
-      // Solid white rectangle to erase/cover unwanted text, watermark, or confidential marks
       const w = ann.width ? (ann.width / 100) * width : 120;
       const h = ann.height ? (ann.height / 100) * height : 36;
       page.drawRectangle({
@@ -453,7 +500,6 @@ export async function applyPDFAnnotations(
         opacity: 1,
       });
     } else if (ann.type === 'redact') {
-      // Solid black redaction box to conceal sensitive information
       const w = ann.width ? (ann.width / 100) * width : 120;
       const h = ann.height ? (ann.height / 100) * height : 28;
       page.drawRectangle({
@@ -538,7 +584,6 @@ export async function applyPDFAnnotations(
         opacity: ann.opacity ?? 0.45,
       });
     } else if (ann.type === 'draw' && ann.points && ann.points.length > 1) {
-      // Draw freehand stroke path
       const strokeRgb = hexToRgb01(ann.color || '#1e293b');
       const thickness = ann.strokeWidth || 2;
       for (let i = 0; i < ann.points.length - 1; i++) {
@@ -555,11 +600,12 @@ export async function applyPDFAnnotations(
     }
   }
 
-  return await pdfDoc.save();
+  return await pdfDoc.save({ useObjectStreams: true });
 }
 
 // LOCK / PROTECT PDF
 export async function lockPDF(file: File, userPassword?: string): Promise<Uint8Array> {
+  if (!file) throw new Error('No PDF file provided.');
   const arrayBuffer = await readFileAsArrayBuffer(file);
   const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
   pdfDoc.setTitle(file.name);
@@ -568,6 +614,7 @@ export async function lockPDF(file: File, userPassword?: string): Promise<Uint8A
 
 // UNLOCK PDF
 export async function unlockPDF(file: File, password?: string): Promise<Uint8Array> {
+  if (!file) throw new Error('No PDF file provided.');
   const arrayBuffer = await readFileAsArrayBuffer(file);
   const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
   return await pdfDoc.save({ useObjectStreams: true });

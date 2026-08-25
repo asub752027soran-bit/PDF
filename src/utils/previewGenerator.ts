@@ -1,10 +1,12 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { PDFDocument } from 'pdf-lib';
 import { extractDocxHtml } from './docProcessor';
 
-// Configure pdfjs worker
+// Configure pdfjs worker safely
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version || '4.10.38'}/build/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    pdfWorker || `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version || '4.10.38'}/build/pdf.worker.min.mjs`;
 }
 
 export interface PreviewMetadata {
@@ -27,8 +29,17 @@ export interface PreviewMetadata {
   error?: string;
 }
 
-// In-memory preview cache to avoid redundant expensive canvas operations
+// In-memory preview cache with capacity limit to prevent unbounded memory growth
 const previewCache = new Map<string, PreviewMetadata>();
+const MAX_CACHE_SIZE = 50;
+
+function setCachedPreview(key: string, data: PreviewMetadata) {
+  if (previewCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = previewCache.keys().next().value;
+    if (firstKey) previewCache.delete(firstKey);
+  }
+  previewCache.set(key, data);
+}
 
 /**
  * Generates visual metadata and thumbnail for any uploaded file (Image, PDF, Docx, Text, etc.)
@@ -73,7 +84,7 @@ export async function generateFilePreview(
         aspectRatio: imgDims.width && imgDims.height ? imgDims.width / imgDims.height : 1,
       };
 
-      previewCache.set(cacheKey, result);
+      setCachedPreview(cacheKey, result);
       return result;
     } else if (isPdf) {
       // 2. PDF PREVIEW
@@ -88,7 +99,7 @@ export async function generateFilePreview(
         aspectRatio: pdfMeta.width && pdfMeta.height ? pdfMeta.width / pdfMeta.height : 1,
       };
 
-      previewCache.set(cacheKey, result);
+      setCachedPreview(cacheKey, result);
       return result;
     } else if (isDocx) {
       // 3. DOCX PREVIEW
@@ -100,9 +111,9 @@ export async function generateFilePreview(
           htmlPreview: docxResult.html,
           textSnippet: snippet,
         };
-        previewCache.set(cacheKey, result);
+        setCachedPreview(cacheKey, result);
         return result;
-      } catch (docErr) {
+      } catch {
         return {
           ...baseMeta,
           error: 'DOCX preview limited',
@@ -115,7 +126,7 @@ export async function generateFilePreview(
         ...baseMeta,
         textSnippet: textContent.slice(0, 500),
       };
-      previewCache.set(cacheKey, result);
+      setCachedPreview(cacheKey, result);
       return result;
     }
 
@@ -147,12 +158,18 @@ function getImageDimensionsFromUrl(url: string): Promise<{ width: number; height
 
 /**
  * Renders a specific PDF page to a canvas and returns image DataURL, total page count, and dimensions
+ * with full worker & stream cleanup
  */
 export async function renderPdfPagePreview(
   file: File,
   pageNumber: number = 1,
   targetScale: number = 1.2
 ): Promise<{ dataUrl: string; totalPages: number; width: number; height: number }> {
+  let loadingTask: any = null;
+  let pdf: any = null;
+  let page: any = null;
+  let canvas: HTMLCanvasElement | null = null;
+
   try {
     const arrayBuffer = await file.arrayBuffer();
     
@@ -165,15 +182,15 @@ export async function renderPdfPagePreview(
       // Ignore fallback error
     }
 
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-    const pdf = await loadingTask.promise;
+    loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    pdf = await loadingTask.promise;
     totalPages = pdf.numPages || totalPages;
 
     const clampedPage = Math.min(Math.max(1, pageNumber), totalPages);
-    const page = await pdf.getPage(clampedPage);
+    page = await pdf.getPage(clampedPage);
     const viewport = page.getViewport({ scale: targetScale });
 
-    const canvas = document.createElement('canvas');
+    canvas = document.createElement('canvas');
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     const ctx = canvas.getContext('2d');
@@ -190,7 +207,7 @@ export async function renderPdfPagePreview(
       canvasContext: ctx,
       viewport,
       canvas,
-    }).promise;
+    } as any).promise;
 
     const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
 
@@ -203,6 +220,32 @@ export async function renderPdfPagePreview(
   } catch (pdfErr) {
     console.error('PDF rendering failed in pdfjs-dist:', pdfErr);
     throw pdfErr;
+  } finally {
+    if (page && typeof page.cleanup === 'function') {
+      try {
+        page.cleanup();
+      } catch {
+        // ignore
+      }
+    }
+    if (canvas) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+    if (pdf && typeof pdf.destroy === 'function') {
+      try {
+        await pdf.destroy();
+      } catch {
+        // ignore
+      }
+    }
+    if (loadingTask && typeof loadingTask.destroy === 'function') {
+      try {
+        await loadingTask.destroy();
+      } catch {
+        // ignore
+      }
+    }
   }
 }
 

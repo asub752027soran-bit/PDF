@@ -52,8 +52,9 @@ export const OCRTool: React.FC<OCRToolProps> = ({ onBack, initialFile }) => {
       indeterminate: false
     });
 
+    let worker: any = null;
     try {
-      const worker = await createWorker('eng');
+      worker = await createWorker('eng');
       let combinedText = '';
 
       if (file.name.toLowerCase().endsWith('.pdf')) {
@@ -85,7 +86,6 @@ export const OCRTool: React.FC<OCRToolProps> = ({ onBack, initialFile }) => {
       setExtractedText(combinedText || 'No text could be extracted from this document.');
       setStatusMsg('OCR Recognition Complete!');
       recordToolConversion('ocr-reader', file.size);
-      await worker.terminate();
 
       completeProgress('Text extracted successfully!');
     } catch (err: any) {
@@ -93,6 +93,13 @@ export const OCRTool: React.FC<OCRToolProps> = ({ onBack, initialFile }) => {
       failProgress(err?.message || 'Failed to extract text from document.');
       alert('Failed to extract text from document. Please ensure file is valid.');
     } finally {
+      if (worker && typeof worker.terminate === 'function') {
+        try {
+          await worker.terminate();
+        } catch {
+          // ignore
+        }
+      }
       setIsProcessing(false);
       setProgress(100);
     }
