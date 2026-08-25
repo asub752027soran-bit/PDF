@@ -131,44 +131,180 @@ export async function manipulatePDFPages(
 }
 
 // WATERMARK PDF
+export interface WatermarkOptions {
+  type?: 'text' | 'image';
+  text?: string;
+  imageBuffer?: ArrayBuffer;
+  imageDataUrl?: string;
+  opacity?: number;
+  fontSize?: number;
+  imageScale?: number;
+  colorHex?: string;
+  rotationAngle?: number;
+  layout?: 'center' | 'grid';
+  fontFamily?: 'Helvetica' | 'Times' | 'Courier';
+  isBold?: boolean;
+  targetPages?: 'all' | 'first' | 'custom';
+  customPages?: number[];
+}
+
 export async function watermarkPDF(
   file: File,
-  options: {
-    text?: string;
-    imageBuffer?: ArrayBuffer;
-    opacity?: number;
-    fontSize?: number;
-    colorHex?: string;
-    rotationAngle?: number;
-  }
+  options: WatermarkOptions
 ): Promise<Uint8Array> {
   if (!file) throw new Error('No PDF file provided.');
   const arrayBuffer = await readFileAsArrayBuffer(file);
   const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
   const pages = pdfDoc.getPages();
-  const helveticaFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const totalPages = pages.length;
 
-  const opacity = options.opacity ?? 0.3;
-  const fontSize = options.fontSize ?? 48;
-  const rotation = degrees(options.rotationAngle ?? 45);
-  const colorRgb = hexToRgb01(options.colorHex || '#dc2626');
+  const isImageWatermark = options.type === 'image' || (!options.text && (options.imageDataUrl || options.imageBuffer));
+  const opacity = Math.min(Math.max(options.opacity ?? 0.3, 0.05), 1.0);
+  const rotationDeg = options.rotationAngle ?? 45;
+  const rotation = degrees(rotationDeg);
+  const rad = (rotationDeg * Math.PI) / 180;
+  const layout = options.layout ?? 'center';
 
-  for (const page of pages) {
-    const { width, height } = page.getSize();
+  // Determine pages to stamp
+  const pageIndicesToStamp: number[] = [];
+  if (options.targetPages === 'first') {
+    pageIndicesToStamp.push(0);
+  } else if (options.targetPages === 'custom' && options.customPages && options.customPages.length > 0) {
+    for (const p of options.customPages) {
+      if (p >= 1 && p <= totalPages) {
+        pageIndicesToStamp.push(p - 1);
+      }
+    }
+  } else {
+    for (let i = 0; i < totalPages; i++) {
+      pageIndicesToStamp.push(i);
+    }
+  }
 
-    if (options.text) {
-      const textWidth = helveticaFont.widthOfTextAtSize(options.text, fontSize);
-      const textHeight = helveticaFont.heightAtSize(fontSize);
+  if (isImageWatermark && (options.imageDataUrl || options.imageBuffer)) {
+    // --- 1. IMAGE WATERMARK ---
+    let imageBytes: ArrayBuffer;
+    let isPng = true;
 
-      page.drawText(options.text, {
-        x: (width - textWidth) / 2,
-        y: (height - textHeight) / 2,
-        size: fontSize,
-        font: helveticaFont,
-        color: rgb(colorRgb.r, colorRgb.g, colorRgb.b),
-        opacity: opacity,
-        rotate: rotation,
-      });
+    if (options.imageDataUrl) {
+      isPng = options.imageDataUrl.includes('image/png') || options.imageDataUrl.startsWith('data:image/png');
+      const res = await fetch(options.imageDataUrl);
+      imageBytes = await res.arrayBuffer();
+    } else {
+      imageBytes = options.imageBuffer!;
+    }
+
+    let embeddedImg: any;
+    try {
+      if (isPng) {
+        embeddedImg = await pdfDoc.embedPng(imageBytes);
+      } else {
+        embeddedImg = await pdfDoc.embedJpg(imageBytes);
+      }
+    } catch {
+      try {
+        embeddedImg = await pdfDoc.embedPng(imageBytes);
+      } catch {
+        embeddedImg = await pdfDoc.embedJpg(imageBytes);
+      }
+    }
+
+    const naturalDims = embeddedImg.scale(1.0);
+    const userScale = options.imageScale ?? 1.0;
+
+    for (const pageIdx of pageIndicesToStamp) {
+      const page = pages[pageIdx];
+      const { width, height } = page.getSize();
+
+      // Scaled dimensions proportional to page width
+      const baseMaxDim = Math.min(width * 0.45, 280);
+      const aspect = naturalDims.width / naturalDims.height;
+      let imgWidth = baseMaxDim * userScale;
+      let imgHeight = imgWidth / aspect;
+
+      const stampImageAt = (cx: number, cy: number) => {
+        // Calculate offset so (cx, cy) is the exact center of the rotated image
+        const dx = (imgWidth / 2) * Math.cos(rad) - (imgHeight / 2) * Math.sin(rad);
+        const dy = (imgWidth / 2) * Math.sin(rad) + (imgHeight / 2) * Math.cos(rad);
+
+        page.drawImage(embeddedImg, {
+          x: cx - dx,
+          y: cy - dy,
+          width: imgWidth,
+          height: imgHeight,
+          opacity: opacity,
+          rotate: rotation,
+        });
+      };
+
+      if (layout === 'center') {
+        stampImageAt(width / 2, height / 2);
+      } else {
+        // 2x3 Grid tiling across page
+        const stepX = width / 2;
+        const stepY = height / 3;
+        for (let col = 0; col < 2; col++) {
+          for (let row = 0; row < 3; row++) {
+            stampImageAt((col + 0.5) * stepX, (row + 0.5) * stepY);
+          }
+        }
+      }
+    }
+  } else {
+    // --- 2. TEXT WATERMARK ---
+    const textToStamp = (options.text || 'CONFIDENTIAL').trim();
+    if (!textToStamp) {
+      return await pdfDoc.save({ useObjectStreams: true });
+    }
+
+    const fontSize = options.fontSize ?? 48;
+    const colorRgb = hexToRgb01(options.colorHex || '#dc2626');
+
+    // Font selection
+    let selectedFont: any;
+    if (options.fontFamily === 'Times') {
+      selectedFont = await pdfDoc.embedFont(options.isBold !== false ? StandardFonts.TimesRomanBold : StandardFonts.TimesRoman);
+    } else if (options.fontFamily === 'Courier') {
+      selectedFont = await pdfDoc.embedFont(options.isBold !== false ? StandardFonts.CourierBold : StandardFonts.Courier);
+    } else {
+      selectedFont = await pdfDoc.embedFont(options.isBold !== false ? StandardFonts.HelveticaBold : StandardFonts.Helvetica);
+    }
+
+    const textWidth = selectedFont.widthOfTextAtSize(textToStamp, fontSize);
+    const textHeight = selectedFont.heightAtSize(fontSize) * 0.75; // Optical cap height for precise visual centering
+
+    for (const pageIdx of pageIndicesToStamp) {
+      const page = pages[pageIdx];
+      const { width, height } = page.getSize();
+
+      const stampTextAt = (cx: number, cy: number) => {
+        // Rotate around text box center
+        const dx = (textWidth / 2) * Math.cos(rad) - (textHeight / 2) * Math.sin(rad);
+        const dy = (textWidth / 2) * Math.sin(rad) + (textHeight / 2) * Math.cos(rad);
+
+        page.drawText(textToStamp, {
+          x: cx - dx,
+          y: cy - dy,
+          size: fontSize,
+          font: selectedFont,
+          color: rgb(colorRgb.r, colorRgb.g, colorRgb.b),
+          opacity: opacity,
+          rotate: rotation,
+        });
+      };
+
+      if (layout === 'center') {
+        stampTextAt(width / 2, height / 2);
+      } else {
+        // 2x3 Grid tiling across page
+        const stepX = width / 2;
+        const stepY = height / 3;
+        for (let col = 0; col < 2; col++) {
+          for (let row = 0; row < 3; row++) {
+            stampTextAt((col + 0.5) * stepX, (row + 0.5) * stepY);
+          }
+        }
+      }
     }
   }
 

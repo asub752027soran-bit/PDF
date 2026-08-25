@@ -17,7 +17,11 @@ import {
   ShieldCheck,
   FileCheck,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Image as ImageIcon,
+  Type,
+  Trash2,
+  Layers
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -50,12 +54,21 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
   const { startProgress, updateProgress, completeProgress, failProgress } = useProgress();
 
   // Watermark State
+  const [watermarkType, setWatermarkType] = useState<'text' | 'image'>('text');
   const [watermarkText, setWatermarkText] = useState('CONFIDENTIAL');
+  const [watermarkImage, setWatermarkImage] = useState<string | null>(null);
+  const [watermarkImageName, setWatermarkImageName] = useState<string>('');
   const [fontSize, setFontSize] = useState(48);
+  const [imageScale, setImageScale] = useState(1.0);
   const [opacity, setOpacity] = useState(30); // 10-100%
   const [rotation, setRotation] = useState(45); // 0, 45, -45, 90
   const [watermarkColor, setWatermarkColor] = useState('#dc2626'); // red default
   const [watermarkLayout, setWatermarkLayout] = useState<'center' | 'grid'>('center');
+  const [fontFamily, setFontFamily] = useState<'Helvetica' | 'Times' | 'Courier'>('Helvetica');
+  const [isBold, setIsBold] = useState(true);
+  const [targetPages, setTargetPages] = useState<'all' | 'first' | 'custom'>('all');
+  const [customPagesStr, setCustomPagesStr] = useState('1');
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   // Lock State
   const [password, setPassword] = useState('');
@@ -130,6 +143,20 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
     }
   };
 
+  const handleImageLogoSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const imgFile = e.target.files?.[0];
+    if (!imgFile) return;
+
+    setWatermarkImageName(imgFile.name);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (typeof event.target?.result === 'string') {
+        setWatermarkImage(event.target.result);
+      }
+    };
+    reader.readAsDataURL(imgFile);
+  };
+
   useEffect(() => {
     if (initialFile) {
       handleFileSelected(initialFile);
@@ -178,27 +205,69 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
 
         // Draw Watermark on top of preview canvas
         ctx.save();
-        ctx.fillStyle = watermarkColor;
-        ctx.globalAlpha = opacity / 100;
-        ctx.font = `bold ${Math.round(fontSize * scale)}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
 
-        if (watermarkLayout === 'center') {
-          ctx.translate(scaledViewport.width / 2, scaledViewport.height / 2);
-          ctx.rotate((-rotation * Math.PI) / 180);
-          ctx.fillText(watermarkText || 'WATERMARK', 0, 0);
-        } else {
-          // Grid layout
-          const stepX = scaledViewport.width / 2;
-          const stepY = scaledViewport.height / 3;
-          for (let gx = stepX / 2; gx < scaledViewport.width; gx += stepX) {
-            for (let gy = stepY / 2; gy < scaledViewport.height; gy += stepY) {
+        if (watermarkType === 'image' && watermarkImage) {
+          // --- Image Logo Watermark ---
+          const img = new Image();
+          img.src = watermarkImage;
+          await new Promise<void>((resolve) => {
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+          });
+
+          if (img.naturalWidth > 0 && isMounted) {
+            ctx.globalAlpha = opacity / 100;
+            const baseMaxDim = Math.min(scaledViewport.width * 0.45, 280 * scale);
+            const aspect = img.naturalWidth / img.naturalHeight;
+            const imgWidth = baseMaxDim * imageScale;
+            const imgHeight = imgWidth / aspect;
+
+            const drawImageStamp = (cx: number, cy: number) => {
               ctx.save();
-              ctx.translate(gx, gy);
+              ctx.translate(cx, cy);
               ctx.rotate((-rotation * Math.PI) / 180);
-              ctx.fillText(watermarkText || 'WATERMARK', 0, 0);
+              ctx.drawImage(img, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
               ctx.restore();
+            };
+
+            if (watermarkLayout === 'center') {
+              drawImageStamp(scaledViewport.width / 2, scaledViewport.height / 2);
+            } else {
+              const stepX = scaledViewport.width / 2;
+              const stepY = scaledViewport.height / 3;
+              for (let col = 0; col < 2; col++) {
+                for (let row = 0; row < 3; row++) {
+                  drawImageStamp((col + 0.5) * stepX, (row + 0.5) * stepY);
+                }
+              }
+            }
+          }
+        } else {
+          // --- Text Watermark ---
+          ctx.fillStyle = watermarkColor;
+          ctx.globalAlpha = opacity / 100;
+          const fontName = fontFamily === 'Times' ? 'Georgia, serif' : fontFamily === 'Courier' ? 'Courier New, monospace' : 'sans-serif';
+          ctx.font = `${isBold ? 'bold' : 'normal'} ${Math.round(fontSize * scale)}px ${fontName}`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          const drawTextStamp = (cx: number, cy: number) => {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate((-rotation * Math.PI) / 180);
+            ctx.fillText(watermarkText || 'CONFIDENTIAL', 0, 0);
+            ctx.restore();
+          };
+
+          if (watermarkLayout === 'center') {
+            drawTextStamp(scaledViewport.width / 2, scaledViewport.height / 2);
+          } else {
+            const stepX = scaledViewport.width / 2;
+            const stepY = scaledViewport.height / 3;
+            for (let col = 0; col < 2; col++) {
+              for (let row = 0; row < 3; row++) {
+                drawTextStamp((col + 0.5) * stepX, (row + 0.5) * stepY);
+              }
             }
           }
         }
@@ -236,30 +305,78 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
     return () => {
       isMounted = false;
     };
-  }, [previewDataUrl, currentPage, mode, watermarkText, fontSize, opacity, rotation, watermarkColor, watermarkLayout]);
+  }, [
+    previewDataUrl,
+    currentPage,
+    mode,
+    watermarkType,
+    watermarkText,
+    watermarkImage,
+    fontSize,
+    imageScale,
+    opacity,
+    rotation,
+    watermarkColor,
+    watermarkLayout,
+    fontFamily,
+    isBold
+  ]);
+
+  // Parse custom page list (e.g., "1, 3, 5-8")
+  const parseCustomPages = (input: string, maxPages: number): number[] => {
+    const pages = new Set<number>();
+    const parts = input.split(/[,;\s]+/);
+    for (const part of parts) {
+      if (part.includes('-')) {
+        const [start, end] = part.split('-').map(Number);
+        if (!isNaN(start) && !isNaN(end)) {
+          for (let p = Math.min(start, end); p <= Math.max(start, end); p++) {
+            if (p >= 1 && p <= maxPages) pages.add(p);
+          }
+        }
+      } else {
+        const p = Number(part);
+        if (!isNaN(p) && p >= 1 && p <= maxPages) {
+          pages.add(p);
+        }
+      }
+    }
+    return Array.from(pages).sort((a, b) => a - b);
+  };
 
   // Handle Watermark Processing
   const handleApplyWatermark = async () => {
     if (!file) return;
     setIsProcessing(true);
+    const label = watermarkType === 'image' ? (watermarkImageName || 'Logo Image') : `"${watermarkText}"`;
     startProgress({
       title: 'Applying Watermark to PDF',
-      status: `Stamping "${watermarkText}" across all pages...`,
+      status: `Stamping ${label} across document...`,
       stage: 'Watermark Embedding',
       indeterminate: false
     });
 
     try {
       updateProgress(30, 'Calculating vector typography & opacity matrix...', 'Vector Transform');
-      await new Promise((r) => setTimeout(r, 100));
+      await new Promise((r) => setTimeout(r, 80));
+
+      const parsedPages = targetPages === 'custom' ? parseCustomPages(customPagesStr, numPages) : undefined;
 
       updateProgress(60, 'Stamping watermark layers to each PDF page...', 'Page Stamping');
       const watermarkedBytes = await watermarkPDF(file, {
-        text: watermarkText,
+        type: watermarkType,
+        text: watermarkType === 'text' ? watermarkText : undefined,
+        imageDataUrl: watermarkType === 'image' && watermarkImage ? watermarkImage : undefined,
         opacity: opacity / 100,
         fontSize: fontSize,
+        imageScale: imageScale,
         rotationAngle: rotation,
-        colorHex: watermarkColor
+        colorHex: watermarkColor,
+        layout: watermarkLayout,
+        fontFamily: fontFamily,
+        isBold: isBold,
+        targetPages: targetPages,
+        customPages: parsedPages
       });
 
       updateProgress(90, 'Packaging finalized document...', 'Finalizing PDF');
@@ -273,7 +390,7 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
     } catch (err: any) {
       console.error('Watermark failed:', err);
       failProgress(err?.message || 'Failed to apply watermark.');
-      alert('Failed to apply watermark to PDF.');
+      alert('Failed to apply watermark to PDF: ' + (err?.message || 'Unknown error'));
     } finally {
       setIsProcessing(false);
     }
@@ -421,73 +538,222 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
               
               {/* Controls Column */}
               <div className="lg:col-span-7 bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm space-y-5">
-                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Stamp className="w-4 h-4 text-indigo-600" /> Watermark Configuration
-                </h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Stamp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" /> Watermark Configuration
+                  </h3>
 
-                {/* Text Presets */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                    Watermark Text
-                  </label>
-                  <input
-                    type="text"
-                    value={watermarkText}
-                    onChange={(e) => setWatermarkText(e.target.value)}
-                    placeholder="e.g., CONFIDENTIAL, DRAFT, DO NOT COPY"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500"
-                  />
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {['CONFIDENTIAL', 'DRAFT', 'DO NOT COPY', 'SAMPLE', 'APPROVED', 'COPYRIGHT'].map((preset) => (
-                      <button
-                        key={preset}
-                        onClick={() => setWatermarkText(preset)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                          watermarkText === preset
-                            ? 'bg-indigo-600 text-white shadow-xs'
-                            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-                        }`}
-                      >
-                        {preset}
-                      </button>
-                    ))}
+                  {/* Mode Toggle: Text vs Logo Image */}
+                  <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setWatermarkType('text')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        watermarkType === 'text'
+                          ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      }`}
+                    >
+                      <Type className="w-3.5 h-3.5" /> Text Stamp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWatermarkType('image')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        watermarkType === 'image'
+                          ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      }`}
+                    >
+                      <ImageIcon className="w-3.5 h-3.5" /> Logo / Image
+                    </button>
                   </div>
                 </div>
 
-                {/* Color and Layout */}
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                      Watermark Color
-                    </label>
-                    <div className="flex items-center gap-2">
+                {watermarkType === 'text' ? (
+                  <>
+                    {/* Text Presets */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Watermark Text
+                      </label>
                       <input
-                        type="color"
-                        value={watermarkColor}
-                        onChange={(e) => setWatermarkColor(e.target.value)}
-                        className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer p-0.5 bg-transparent"
+                        type="text"
+                        value={watermarkText}
+                        onChange={(e) => setWatermarkText(e.target.value)}
+                        placeholder="e.g., CONFIDENTIAL, DRAFT, DO NOT COPY"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                       />
-                      <div className="flex gap-1">
-                        {['#dc2626', '#4f46e5', '#059669', '#d97706', '#0f172a'].map((c) => (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {['CONFIDENTIAL', 'DRAFT', 'DO NOT COPY', 'SAMPLE', 'APPROVED', 'COPYRIGHT', 'PRIVATE', 'TOP SECRET'].map((preset) => (
                           <button
-                            key={c}
-                            onClick={() => setWatermarkColor(c)}
-                            style={{ backgroundColor: c }}
-                            className={`w-6 h-6 rounded-full border-2 transition-all ${
-                              watermarkColor === c ? 'border-indigo-600 scale-110' : 'border-white dark:border-slate-800'
+                            key={preset}
+                            type="button"
+                            onClick={() => setWatermarkText(preset)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                              watermarkText === preset
+                                ? 'bg-indigo-600 text-white shadow-xs'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                             }`}
-                          />
+                          >
+                            {preset}
+                          </button>
                         ))}
                       </div>
                     </div>
-                  </div>
 
+                    {/* Font & Color Row */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                          Font Style & Weight
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={fontFamily}
+                            onChange={(e) => setFontFamily(e.target.value as any)}
+                            className="flex-1 px-2.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold text-xs"
+                          >
+                            <option value="Helvetica">Sans-Serif (Helvetica)</option>
+                            <option value="Times">Serif (Times New Roman)</option>
+                            <option value="Courier">Monospace (Courier)</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setIsBold(!isBold)}
+                            className={`px-3 py-2 rounded-xl font-extrabold text-xs border transition-all ${
+                              isBold
+                                ? 'bg-indigo-600 border-indigo-600 text-white'
+                                : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                            }`}
+                          >
+                            B
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                          Watermark Color
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={watermarkColor}
+                            onChange={(e) => setWatermarkColor(e.target.value)}
+                            className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer p-0.5 bg-transparent shrink-0"
+                          />
+                          <div className="flex gap-1.5 flex-wrap">
+                            {['#dc2626', '#4f46e5', '#059669', '#d97706', '#0f172a', '#64748b'].map((c) => (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => setWatermarkColor(c)}
+                                style={{ backgroundColor: c }}
+                                className={`w-6 h-6 rounded-full border-2 transition-all ${
+                                  watermarkColor === c ? 'border-indigo-600 scale-110 shadow-xs' : 'border-white dark:border-slate-800'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  /* Logo / Image Watermark Uploader */
+                  <div className="space-y-4">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Upload Logo or Watermark Image (PNG with transparency recommended)
+                    </label>
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      onChange={handleImageLogoSelected}
+                      className="hidden"
+                    />
+
+                    {watermarkImage ? (
+                      <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
+                        <img
+                          src={watermarkImage}
+                          alt="Watermark preview"
+                          className="w-16 h-16 object-contain rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-1"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                            {watermarkImageName || 'Uploaded Logo'}
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            Transparent PNG / Image
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => imageInputRef.current?.click()}
+                            className="px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold text-xs hover:bg-indigo-100"
+                          >
+                            Replace
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setWatermarkImage(null);
+                              setWatermarkImageName('');
+                            }}
+                            className="p-1.5 rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => imageInputRef.current?.click()}
+                        className="w-full border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-6 text-center hover:border-indigo-500 transition-all flex flex-col items-center justify-center gap-2 bg-slate-50 dark:bg-slate-900/40 cursor-pointer"
+                      >
+                        <ImageIcon className="w-8 h-8 text-indigo-500" />
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          Click to select PNG logo or stamp image
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          Supports PNG, JPG, WebP with custom opacity
+                        </span>
+                      </button>
+                    )}
+
+                    {watermarkImage && (
+                      <div>
+                        <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          <span>Logo Scale</span>
+                          <span>{Math.round(imageScale * 100)}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0.2}
+                          max={2.0}
+                          step={0.05}
+                          value={imageScale}
+                          onChange={(e) => setImageScale(Number(e.target.value))}
+                          className="w-full accent-indigo-600"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Layout & Target Pages */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-2 border-t border-slate-100 dark:border-slate-700/60">
                   <div>
                     <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                      Layout Style
+                      Layout Placement
                     </label>
                     <div className="grid grid-cols-2 gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
                       <button
+                        type="button"
                         onClick={() => setWatermarkLayout('center')}
                         className={`py-1.5 rounded-lg font-bold text-[11px] transition-all ${
                           watermarkLayout === 'center'
@@ -498,6 +764,7 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
                         Single Center
                       </button>
                       <button
+                        type="button"
                         onClick={() => setWatermarkLayout('grid')}
                         className={`py-1.5 rounded-lg font-bold text-[11px] transition-all ${
                           watermarkLayout === 'grid'
@@ -505,13 +772,69 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
                             : 'text-slate-600 dark:text-slate-400'
                         }`}
                       >
-                        Repeat Grid
+                        Repeat Grid (Tile)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                      Target Pages
+                    </label>
+                    <div className="grid grid-cols-3 gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setTargetPages('all')}
+                        className={`py-1.5 rounded-lg font-bold text-[11px] transition-all ${
+                          targetPages === 'all'
+                            ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                            : 'text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        All ({numPages})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTargetPages('first')}
+                        className={`py-1.5 rounded-lg font-bold text-[11px] transition-all ${
+                          targetPages === 'first'
+                            ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                            : 'text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        First Page
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTargetPages('custom')}
+                        className={`py-1.5 rounded-lg font-bold text-[11px] transition-all ${
+                          targetPages === 'custom'
+                            ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                            : 'text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        Custom
                       </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Sliders */}
+                {targetPages === 'custom' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Custom Page Numbers (e.g. 1, 3, 5-{numPages})
+                    </label>
+                    <input
+                      type="text"
+                      value={customPagesStr}
+                      onChange={(e) => setCustomPagesStr(e.target.value)}
+                      placeholder={`1, 2, 3-${numPages}`}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold text-xs"
+                    />
+                  </div>
+                )}
+
+                {/* Opacity, Font Size & Rotation Sliders */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                   <div>
                     <div className="flex justify-between font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -528,20 +851,38 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
                     />
                   </div>
 
-                  <div>
-                    <div className="flex justify-between font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      <span>Font Size</span>
-                      <span>{fontSize}px</span>
+                  {watermarkType === 'text' ? (
+                    <div>
+                      <div className="flex justify-between font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        <span>Font Size</span>
+                        <span>{fontSize}px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={18}
+                        max={96}
+                        value={fontSize}
+                        onChange={(e) => setFontSize(Number(e.target.value))}
+                        className="w-full accent-indigo-600"
+                      />
                     </div>
-                    <input
-                      type="range"
-                      min={20}
-                      max={84}
-                      value={fontSize}
-                      onChange={(e) => setFontSize(Number(e.target.value))}
-                      className="w-full accent-indigo-600"
-                    />
-                  </div>
+                  ) : (
+                    <div>
+                      <div className="flex justify-between font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        <span>Scale</span>
+                        <span>{Math.round(imageScale * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0.2}
+                        max={2.0}
+                        step={0.05}
+                        value={imageScale}
+                        onChange={(e) => setImageScale(Number(e.target.value))}
+                        className="w-full accent-indigo-600"
+                      />
+                    </div>
+                  )}
 
                   <div>
                     <div className="flex justify-between font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -551,7 +892,7 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
                     <select
                       value={rotation}
                       onChange={(e) => setRotation(Number(e.target.value))}
-                      className="w-full px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold"
+                      className="w-full px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold text-xs"
                     >
                       <option value={45}>45° Diagonal</option>
                       <option value={-45}>-45° Reverse Diagonal</option>
@@ -563,9 +904,14 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
 
                 {/* Apply Button */}
                 <button
+                  type="button"
                   onClick={handleApplyWatermark}
-                  disabled={isProcessing || !watermarkText.trim()}
-                  className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  disabled={
+                    isProcessing ||
+                    (watermarkType === 'text' && !watermarkText.trim()) ||
+                    (watermarkType === 'image' && !watermarkImage)
+                  }
+                  className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   <Download className="w-4 h-4" /> Apply Watermark & Download PDF
                 </button>
@@ -580,6 +926,7 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
                   {numPages > 1 && (
                     <div className="flex items-center gap-1 text-xs">
                       <button
+                        type="button"
                         onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                         disabled={currentPage <= 1}
                         className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 disabled:opacity-30 text-xs font-bold"
@@ -590,6 +937,7 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
                         {currentPage} / {numPages}
                       </span>
                       <button
+                        type="button"
                         onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
                         disabled={currentPage >= numPages}
                         className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 disabled:opacity-30 text-xs font-bold"
@@ -600,12 +948,16 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
                   )}
                 </div>
 
-                <div className="my-4 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-md max-w-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center min-h-[300px]">
+                <div className="my-4 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-md max-w-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center min-h-[300px] w-full p-2">
                   <canvas ref={previewCanvasRef} className="max-h-[380px] w-auto object-contain" />
                 </div>
 
                 <p className="text-[11px] text-slate-400 text-center">
-                  This watermark will be stamped permanently across all {numPages} page{numPages > 1 ? 's' : ''}.
+                  {targetPages === 'all'
+                    ? `This watermark will be stamped permanently across all ${numPages} page${numPages > 1 ? 's' : ''}.`
+                    : targetPages === 'first'
+                    ? 'This watermark will be stamped on page 1 only.'
+                    : `This watermark will be stamped on pages: ${customPagesStr || 'selected pages'}`}
                 </p>
               </div>
 
