@@ -335,12 +335,32 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // URL Route Parser for deep-linking (sitemap crawling & clean direct URLs)
+  // URL Route Parser for deep-linking (sitemap crawling, short URLs & clean direct URLs)
   useEffect(() => {
     const parseRoute = () => {
       const rawPath = window.location.pathname.replace(/^\//, '').toLowerCase();
       const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
       const params = new URLSearchParams(window.location.search);
+
+      // Check Short Image URL deep-links: /i/:id, /s/:id, /img/:id, /short/:id, or ?img=, ?i=, ?s=
+      const isShortUrlPath =
+        rawPath.startsWith('i/') ||
+        rawPath.startsWith('s/') ||
+        rawPath.startsWith('img/') ||
+        rawPath.startsWith('short/') ||
+        hash.startsWith('i/') ||
+        hash.startsWith('s/') ||
+        hash.startsWith('img/') ||
+        hash.startsWith('short/');
+
+      const hasShortUrlParam = params.has('img') || params.has('i') || params.has('s') || params.has('image');
+
+      if (isShortUrlPath || hasShortUrlParam) {
+        setActiveToolId('image-to-url');
+        setActivePage(null);
+        setIsNotFound(false);
+        return;
+      }
 
       if (!rawPath && !hash && !params.get('tool') && !params.get('page')) {
         setActiveToolId(null);

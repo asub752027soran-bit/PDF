@@ -41,7 +41,7 @@ function openImageDB(): Promise<IDBDatabase> {
 }
 
 /**
- * Save short image into both IndexedDB and LocalStorage
+ * Save short image into Server API, IndexedDB, and LocalStorage
  */
 export async function saveShortImageAsync(item: Omit<StoredShortImage, 'createdAt'>): Promise<StoredShortImage> {
   const fullItem: StoredShortImage = {
@@ -49,7 +49,26 @@ export async function saveShortImageAsync(item: Omit<StoredShortImage, 'createdA
     createdAt: Date.now(),
   };
 
-  // 1. Save to IndexedDB (No 5MB storage limit)
+  // 1. Sync to Server API for universal cross-device / cross-user short URL access
+  try {
+    if (typeof window !== 'undefined') {
+      const res = await fetch('/api/short', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fullItem)
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.publicCloudUrl) {
+          fullItem.publicCloudUrl = json.publicCloudUrl;
+        }
+      }
+    }
+  } catch (err) {
+    console.debug('Server short image sync note (client-side offline fallback):', err);
+  }
+
+  // 2. Save to IndexedDB (No 5MB storage limit)
   try {
     const db = await openImageDB();
     await new Promise<void>((resolve, reject) => {
@@ -63,7 +82,7 @@ export async function saveShortImageAsync(item: Omit<StoredShortImage, 'createdA
     console.debug('IndexedDB save note:', err);
   }
 
-  // 2. Try saving metadata + small image to localStorage
+  // 3. Try saving metadata + small image to localStorage
   try {
     const raw = localStorage.getItem(STORAGE_KEY) || '[]';
     const list: StoredShortImage[] = JSON.parse(raw);
@@ -73,7 +92,7 @@ export async function saveShortImageAsync(item: Omit<StoredShortImage, 'createdA
     const trimmed = filtered.slice(0, 20);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
   } catch (err) {
-    // If quota exceeded, save without dataUrl in localStorage (full dataUrl resides in IndexedDB)
+    // If quota exceeded, save without dataUrl in localStorage (full dataUrl resides in IndexedDB and server)
     try {
       const miniItem = { ...fullItem, dataUrl: fullItem.dataUrl.length > 50000 ? '' : fullItem.dataUrl };
       const raw = localStorage.getItem(STORAGE_KEY) || '[]';
@@ -95,19 +114,43 @@ export function saveShortImage(item: Omit<StoredShortImage, 'createdAt'>): Store
     createdAt: Date.now(),
   };
 
-  // Fire async IndexedDB save in background
+  // Fire async IndexedDB and server save in background
   saveShortImageAsync(item).catch(() => {});
 
   return fullItem;
 }
 
 /**
- * Retrieve short image by ID or custom Slug
+ * Retrieve short image by ID or custom Slug (Server -> IndexedDB -> LocalStorage)
  */
 export async function getShortImageAsync(idOrSlug: string): Promise<StoredShortImage | null> {
   const cleanKey = decodeURIComponent(idOrSlug).trim();
+  if (!cleanKey) return null;
 
-  // 1. Try IndexedDB first
+  // 1. Try Server API first (enables universal sharing across devices and browsers)
+  try {
+    if (typeof window !== 'undefined') {
+      const res = await fetch(`/api/short/${encodeURIComponent(cleanKey)}`);
+      if (res.ok) {
+        const item: StoredShortImage = await res.json();
+        if (item && item.dataUrl) {
+          // Cache in IndexedDB for offline access
+          try {
+            const db = await openImageDB();
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).put(item);
+          } catch {
+            // ignore cache error
+          }
+          return item;
+        }
+      }
+    }
+  } catch (err) {
+    console.debug('Server API lookup note:', err);
+  }
+
+  // 2. Try IndexedDB
   try {
     const db = await openImageDB();
     const result = await new Promise<StoredShortImage | null>((resolve) => {
@@ -139,12 +182,12 @@ export async function getShortImageAsync(idOrSlug: string): Promise<StoredShortI
     console.debug('IndexedDB lookup note:', err);
   }
 
-  // 2. Try LocalStorage fallback
+  // 3. Try LocalStorage fallback
   try {
     const raw = localStorage.getItem(STORAGE_KEY) || '[]';
     const list: StoredShortImage[] = JSON.parse(raw);
     const found = list.find((i) => i.id === cleanKey || i.customSlug === cleanKey);
-    if (found) return found;
+    if (found && found.dataUrl) return found;
   } catch {
     // ignore
   }
@@ -170,6 +213,15 @@ export function buildLocalShortUrl(idOrSlug: string): string {
   if (typeof window === 'undefined') return `https://pdfeditfy.com/tool/image-to-url?img=${encodeURIComponent(idOrSlug)}`;
   const origin = window.location.origin;
   return `${origin}/tool/image-to-url?img=${encodeURIComponent(idOrSlug)}`;
+}
+
+/**
+ * Generate direct raw image binary URL
+ */
+export function buildRawImageUrl(idOrSlug: string): string {
+  if (typeof window === 'undefined') return `https://pdfeditfy.com/api/short/raw/${encodeURIComponent(idOrSlug)}`;
+  const origin = window.location.origin;
+  return `${origin}/api/short/raw/${encodeURIComponent(idOrSlug)}`;
 }
 
 /**

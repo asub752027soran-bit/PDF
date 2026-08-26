@@ -37,6 +37,7 @@ import {
   getShortImage,
   getShortImageAsync,
   buildLocalShortUrl,
+  buildRawImageUrl,
   uploadToPublicCloud,
   StoredShortImage
 } from '../../utils/shortImageStore';
@@ -74,10 +75,12 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
   const [items, setItems] = useState<ConvertedImageItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
-    'shorturl' | 'dataurl' | 'base64' | 'html' | 'css' | 'react' | 'markdown' | 'bbcode' | 'blob' | 'qrcode'
+    'shorturl' | 'rawurl' | 'dataurl' | 'base64' | 'html' | 'css' | 'react' | 'markdown' | 'bbcode' | 'blob' | 'qrcode'
   >('shorturl');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isUrlLoading, setIsUrlLoading] = useState<boolean>(false);
+  const [urlLoadedSlug, setUrlLoadedSlug] = useState<string | null>(null);
 
   // Conversion options
   const [outputFormat, setOutputFormat] = useState<'original' | 'image/png' | 'image/jpeg' | 'image/webp'>('original');
@@ -320,14 +323,38 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
     [processImageFile]
   );
 
-  // Check URL query for ?img=xyz to auto-load saved short image
+  // Check URL query / path for ?img=xyz or /i/xyz to auto-load saved short image
   useEffect(() => {
     let isMounted = true;
     const loadFromQuery = async () => {
       try {
         const params = new URLSearchParams(window.location.search);
-        const imgParam = params.get('img');
+        let imgParam = params.get('img') || params.get('i') || params.get('s') || params.get('image');
+
+        if (!imgParam) {
+          const pathname = window.location.pathname.replace(/^\//, '');
+          const parts = pathname.split('/');
+          if (['i', 's', 'img', 'short'].includes(parts[0]) && parts[1]) {
+            imgParam = parts[1];
+          }
+        }
+
+        if (!imgParam && window.location.hash) {
+          const hashClean = window.location.hash.replace(/^#\/?/, '');
+          const hashParts = hashClean.split('/');
+          if (['i', 's', 'img', 'short'].includes(hashParts[0]) && hashParts[1]) {
+            imgParam = hashParts[1];
+          } else if (hashClean.startsWith('img=')) {
+            imgParam = hashClean.replace('img=', '');
+          }
+        }
+
         if (imgParam) {
+          if (isMounted) {
+            setIsUrlLoading(true);
+            setUrlLoadedSlug(imgParam);
+          }
+
           const stored = (await getShortImageAsync(imgParam)) || getShortImage(imgParam);
           if (stored && isMounted) {
             const shortUrl = buildLocalShortUrl(stored.customSlug || stored.id);
@@ -357,10 +384,17 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
             setItems([loadedItem]);
             setSelectedId(loadedItem.id);
             showToast(`Loaded image from Short URL: ${imgParam}`);
+          } else if (isMounted) {
+            showToast(`Short link "${imgParam}" not found or expired. Create a new link below.`);
+          }
+
+          if (isMounted) {
+            setIsUrlLoading(false);
           }
         }
       } catch (e) {
         console.debug('Error parsing img url query:', e);
+        if (isMounted) setIsUrlLoading(false);
       }
     };
     loadFromQuery();
@@ -616,10 +650,13 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
   const getCodeSnippet = (type: typeof activeTab, item: ConvertedImageItem | null) => {
     if (!item) return '';
     const activeUrl = item.publicCloudUrl || item.shortUrl;
+    const rawDirectUrl = item.publicCloudUrl || buildRawImageUrl(item.customSlug || item.shortId);
 
     switch (type) {
       case 'shorturl':
         return activeUrl;
+      case 'rawurl':
+        return rawDirectUrl;
       case 'dataurl':
         return item.dataUrl;
       case 'base64':
@@ -627,11 +664,11 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
       case 'blob':
         return item.blobUrl;
       case 'html':
-        return `<img src="${activeUrl}" alt="${item.name.replace(/\.[^/.]+$/, '')}" width="${item.width}" height="${item.height}" loading="lazy" />`;
+        return `<img src="${rawDirectUrl}" alt="${item.name.replace(/\.[^/.]+$/, '')}" width="${item.width}" height="${item.height}" loading="lazy" />`;
       case 'css':
         return `/* CSS Background Image with Short URL */
 .custom-image-element {
-  background-image: url("${activeUrl}");
+  background-image: url("${rawDirectUrl}");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -645,7 +682,7 @@ export const ImageToUrlTool: React.FC<ImageToUrlToolProps> = ({
 export const ShortImagePreview: React.FC = () => {
   return (
     <img
-      src="${activeUrl}"
+      src="${rawDirectUrl}"
       alt="${item.name.replace(/\.[^/.]+$/, '')}"
       width={${item.width}}
       height={${item.height}}
@@ -655,9 +692,9 @@ export const ShortImagePreview: React.FC = () => {
   );
 };`;
       case 'markdown':
-        return `[![${item.name.replace(/\.[^/.]+$/, '')}](${activeUrl})](${activeUrl})`;
+        return `[![${item.name.replace(/\.[^/.]+$/, '')}](${rawDirectUrl})](${activeUrl})`;
       case 'bbcode':
-        return `[url=${activeUrl}][img]${activeUrl}[/img][/url]`;
+        return `[url=${activeUrl}][img]${rawDirectUrl}[/img][/url]`;
       case 'qrcode':
         return activeUrl;
       default:
@@ -1034,6 +1071,39 @@ export const ShortImagePreview: React.FC = () => {
         {/* Right Column: Active Converted Image Workspace & Code Inspector */}
         <div className="lg:col-span-2 space-y-4">
           
+          {/* Loaded from URL Banner */}
+          {urlLoadedSlug && activeItem && (
+            <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>
+                  Viewing short link: <strong className="font-mono">{urlLoadedSlug}</strong>
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setUrlLoadedSlug(null);
+                  if (window.history.pushState) {
+                    const cleanUrl = window.location.pathname;
+                    window.history.pushState({}, '', cleanUrl);
+                  }
+                }}
+                className="px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 hover:bg-emerald-200 text-emerald-800 dark:text-emerald-200 font-bold transition-colors cursor-pointer"
+              >
+                Clear View
+              </button>
+            </div>
+          )}
+
+          {isUrlLoading && (
+            <div className="p-6 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 text-center space-y-2">
+              <RefreshCw className="w-6 h-6 text-purple-600 animate-spin mx-auto" />
+              <p className="text-xs font-bold text-purple-900 dark:text-purple-200">
+                Loading image from Short Link...
+              </p>
+            </div>
+          )}
+
           {activeItem ? (
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-6">
               
@@ -1136,36 +1206,96 @@ export const ShortImagePreview: React.FC = () => {
                   )}
                 </div>
 
-                {/* Short URL Copy Box */}
-                <div className="flex items-center gap-2 bg-white dark:bg-slate-900 p-1.5 rounded-xl border border-purple-200 dark:border-purple-800">
-                  <input
-                    type="text"
-                    readOnly
-                    value={activeItem.publicCloudUrl || activeItem.shortUrl}
-                    className="flex-1 px-3 py-1.5 bg-transparent text-purple-700 dark:text-purple-300 text-xs font-mono font-bold outline-none select-all"
-                  />
-                  <button
-                    onClick={() =>
-                      copyToClipboard(
-                        activeItem.publicCloudUrl || activeItem.shortUrl,
-                        'hero-short-url',
-                        'Short URL copied!'
-                      )
-                    }
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
-                  >
-                    {copiedKey === 'hero-short-url' ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-300" />
-                        <span>Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Copy Short Link</span>
-                      </>
-                    )}
-                  </button>
+                {/* 1. Interactive Web Short Link */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-purple-800 dark:text-purple-300 uppercase tracking-wider">
+                    Interactive Web Short Link (Full Viewer & QR):
+                  </span>
+                  <div className="flex items-center gap-2 bg-white dark:bg-slate-900 p-1.5 rounded-xl border border-purple-200 dark:border-purple-800">
+                    <input
+                      type="text"
+                      readOnly
+                      value={activeItem.publicCloudUrl || activeItem.shortUrl}
+                      className="flex-1 px-3 py-1.5 bg-transparent text-purple-700 dark:text-purple-300 text-xs font-mono font-bold outline-none select-all"
+                    />
+                    <button
+                      onClick={() =>
+                        copyToClipboard(
+                          activeItem.publicCloudUrl || activeItem.shortUrl,
+                          'hero-short-url',
+                          'Short URL copied!'
+                        )
+                      }
+                      className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                    >
+                      {copiedKey === 'hero-short-url' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-300" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy Link</span>
+                        </>
+                      )}
+                    </button>
+                    <a
+                      href={activeItem.publicCloudUrl || activeItem.shortUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1.5 rounded-lg bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 text-purple-600 dark:text-purple-300 transition-colors"
+                      title="Open Short Link in new tab"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                </div>
+
+                {/* 2. Direct Raw Image URL (for HTML & Markdown Embeds) */}
+                <div className="space-y-1 pt-1">
+                  <span className="text-[10px] font-bold text-indigo-800 dark:text-indigo-300 uppercase tracking-wider">
+                    Direct Image Link (For &lt;img&gt; tags, Markdown & CSS):
+                  </span>
+                  <div className="flex items-center gap-2 bg-white dark:bg-slate-900 p-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800">
+                    <input
+                      type="text"
+                      readOnly
+                      value={activeItem.publicCloudUrl || buildRawImageUrl(activeItem.customSlug || activeItem.shortId)}
+                      className="flex-1 px-3 py-1.5 bg-transparent text-indigo-700 dark:text-indigo-300 text-xs font-mono font-bold outline-none select-all"
+                    />
+                    <button
+                      onClick={() =>
+                        copyToClipboard(
+                          activeItem.publicCloudUrl || buildRawImageUrl(activeItem.customSlug || activeItem.shortId),
+                          'hero-raw-url',
+                          'Direct Image Link copied!'
+                        )
+                      }
+                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                    >
+                      {copiedKey === 'hero-raw-url' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-300" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy Image URL</span>
+                        </>
+                      )}
+                    </button>
+                    <a
+                      href={activeItem.publicCloudUrl || buildRawImageUrl(activeItem.customSlug || activeItem.shortId)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-300 transition-colors"
+                      title="Open Direct Image Stream in new tab"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
                 </div>
 
                 {/* 1-Click Social Share Row & Custom Slug Toggle */}
@@ -1249,7 +1379,19 @@ export const ShortImagePreview: React.FC = () => {
                     }`}
                   >
                     <Scissors className="w-3.5 h-3.5" />
-                    <span>Short URL</span>
+                    <span>Short Web URL</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('rawurl')}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                      activeTab === 'rawurl'
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span>Direct Image Link</span>
                   </button>
 
                   <button
