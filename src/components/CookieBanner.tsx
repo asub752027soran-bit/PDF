@@ -39,7 +39,10 @@ export const CookieBanner: React.FC = () => {
         </div>
 
         <p className="text-[11px] text-slate-300 leading-relaxed">
-          {t('cookieNoticeDesc', 'PDFEditfy uses local browser storage for basic site preferences and complies with Google AdSense and GDPR policies. We do not store your uploaded documents permanently.')}
+          {t('cookieNoticeDesc', 'PDFEditfy uses browser storage and standard cookies to deliver free services and analyze traffic in compliance with Google AdSense and GDPR policies. Documents remain 100% private in browser memory.')}{' '}
+          <a href="/privacy" className="text-blue-400 hover:text-blue-300 underline font-medium">
+            Privacy Policy
+          </a>
         </p>
 
         <div className="flex items-center justify-end gap-2 pt-1">

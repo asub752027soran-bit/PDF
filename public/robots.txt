@@ -1,7 +1,8 @@
-User-agent: *
+User-agent: Mediapartners-Google
 Allow: /
-Disallow: /admin
-Disallow: /api/
+
+User-agent: Google-Adwords-DisplayAds-Web
+Allow: /
 
 User-agent: Googlebot
 Allow: /
@@ -16,5 +17,10 @@ Allow: /favicon.ico
 Allow: /favicon*
 Allow: /icon-*
 Allow: /apple-touch-icon.png
+
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
 
 Sitemap: https://pdfeditfy.com/sitemap.xml

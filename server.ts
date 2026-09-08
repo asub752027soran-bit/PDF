@@ -230,6 +230,59 @@ app.get(['/i/:id', '/s/:id', '/img/:id', '/short/:id'], (req, res, next) => {
   next();
 });
 
+// Explicit Favicons & Web Manifest Route Handlers (Ensures 200 OK + proper MIME types + CORS for Googlebot-Favicons)
+const PUBLIC_DIR = path.join(process.cwd(), 'public');
+const DIST_DIR = path.join(process.cwd(), 'dist');
+
+const faviconEndpoints = [
+  'favicon.ico',
+  'favicon.svg',
+  'favicon-48x48.png',
+  'favicon-96x96.png',
+  'favicon-144x144.png',
+  'favicon-32x32.png',
+  'favicon-16x16.png',
+  'apple-touch-icon.png',
+  'icon-192x192.png',
+  'icon-512x512.png',
+  'manifest.webmanifest',
+  'site.webmanifest',
+  'manifest.json'
+];
+
+faviconEndpoints.forEach((fileName) => {
+  app.get(`/${fileName}`, (_req, res) => {
+    const actualFileName = (fileName === 'site.webmanifest' || fileName === 'manifest.json') ? 'manifest.webmanifest' : fileName;
+    
+    // Look in dist first (production build), then fallback to public
+    let targetPath = path.join(DIST_DIR, actualFileName);
+    if (!fs.existsSync(targetPath)) {
+      targetPath = path.join(PUBLIC_DIR, actualFileName);
+    }
+    if (!fs.existsSync(targetPath)) {
+      targetPath = path.join(PUBLIC_DIR, fileName);
+    }
+
+    if (fs.existsSync(targetPath)) {
+      if (fileName.endsWith('.ico')) {
+        res.setHeader('Content-Type', 'image/x-icon');
+      } else if (fileName.endsWith('.png')) {
+        res.setHeader('Content-Type', 'image/png');
+      } else if (fileName.endsWith('.svg')) {
+        res.setHeader('Content-Type', 'image/svg+xml');
+      } else if (fileName.endsWith('.webmanifest') || fileName.endsWith('.json')) {
+        res.setHeader('Content-Type', 'application/manifest+json');
+      }
+
+      res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      return res.sendFile(targetPath);
+    }
+
+    res.status(404).send('Asset not found');
+  });
+});
+
 // Dynamic SEO Robots.txt
 app.get('/robots.txt', (req, res) => {
   res.type('text/plain');
@@ -238,13 +291,42 @@ app.get('/robots.txt', (req, res) => {
   const baseUrl = process.env.APP_URL ? process.env.APP_URL.replace(/\/$/, '') : `${proto}://${host}`;
 
   res.send(
-`User-agent: *
+`User-agent: Mediapartners-Google
+Allow: /
+
+User-agent: Google-Adwords-DisplayAds-Web
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+Allow: /favicon.ico
+Allow: /favicon*
+Allow: /icon-*
+Allow: /apple-touch-icon.png
+
+User-agent: Googlebot-Image
+Allow: /
+
+User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /api/
 
 Sitemap: ${baseUrl}/sitemap.xml`
   );
+});
+
+// Official Google AdSense Authorized Digital Sellers (ads.txt)
+app.get('/ads.txt', (_req, res) => {
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=43200');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  
+  const adsTxtPath = path.join(process.cwd(), 'public', 'ads.txt');
+  if (fs.existsSync(adsTxtPath)) {
+    return res.sendFile(adsTxtPath);
+  }
+  res.send('google.com, pub-9806760868514523, DIRECT, f08c47fec0942fa0\n');
 });
 
 // Dynamic SEO Sitemap.xml
