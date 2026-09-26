@@ -50,6 +50,7 @@ import { updateSEOMeta } from './utils/seo';
 import { Megaphone, AlertTriangle } from 'lucide-react';
 import { GlobalDropZone } from './components/common/GlobalDropZone';
 import { GlobalProgressBar } from './components/common/GlobalProgressBar';
+import { ensureMonetagScript, DEFAULT_MONETAG_CONFIG } from './utils/monetag';
 
 
 const DEFAULT_ADMIN_CONFIG: AdminConfig = {
@@ -75,6 +76,8 @@ const DEFAULT_ADMIN_CONFIG: AdminConfig = {
     banner: '',
     sidebar: '',
   },
+  adServingMode: 'monetag_primary',
+  monetag: DEFAULT_MONETAG_CONFIG,
   disabledTools: [],
   customBadges: {},
   adminPasscode: 'Sobha@752027',
@@ -107,6 +110,13 @@ export default function App() {
   });
 
   const [showAdminLogin, setShowAdminLogin] = useState<boolean>(false);
+
+  // Initialize Monetag tag engine & WebPush service worker
+  useEffect(() => {
+    if (adminConfig.adsEnabled && adminConfig.monetag?.enabled !== false) {
+      ensureMonetagScript(adminConfig.monetag);
+    }
+  }, [adminConfig.adsEnabled, adminConfig.monetag]);
 
   // Theme state
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -580,6 +590,7 @@ export default function App() {
                   slotType="homepage_top"
                   adsEnabled={adminConfig.adsEnabled}
                   adServingMode={adminConfig.adServingMode}
+                  monetagConfig={adminConfig.monetag}
                   customAds={adminConfig.customAds}
                   adsensePublisherId={adminConfig.adsensePublisherId}
                   adsenseSlot={adminConfig.adsenseCustomSlots?.leaderboard}
@@ -601,6 +612,7 @@ export default function App() {
                   slotType="homepage_bottom"
                   adsEnabled={adminConfig.adsEnabled}
                   adServingMode={adminConfig.adServingMode}
+                  monetagConfig={adminConfig.monetag}
                   customAds={adminConfig.customAds}
                   adsensePublisherId={adminConfig.adsensePublisherId}
                   adsenseSlot={adminConfig.adsenseCustomSlots?.leaderboard}
@@ -628,6 +640,7 @@ export default function App() {
                 adSlotPlacement={adminConfig.toolAdSlotType || 'banner'}
                 adSlotsConfig={adminConfig.toolAdSlots}
                 adServingMode={adminConfig.adServingMode}
+                monetagConfig={adminConfig.monetag}
                 customAds={adminConfig.customAds}
                 adsensePublisherId={adminConfig.adsensePublisherId}
                 adsenseCustomSlots={adminConfig.adsenseCustomSlots}
@@ -708,7 +721,10 @@ export default function App() {
       <CookieBanner />
 
       {/* Monetag In-Page Push & Sponsored Notification */}
-      <InPagePushAd adsEnabled={adminConfig.adsEnabled} />
+      <InPagePushAd
+        adsEnabled={adminConfig.adsEnabled}
+        monetagConfig={adminConfig.monetag}
+      />
 
       {/* Global Progress Indicator for Long Operations */}
       <GlobalProgressBar />

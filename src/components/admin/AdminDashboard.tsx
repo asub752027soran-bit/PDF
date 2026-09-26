@@ -38,10 +38,12 @@ import {
   Columns,
   Layout,
   PanelRight,
-  Maximize2
+  Maximize2,
+  Zap
 } from 'lucide-react';
 import { TOOLS } from '../../data/toolsData';
-import { AdminConfig, ContactInquiry, ToolItem, ActionLogEntry } from '../../types';
+import { AdminConfig, ContactInquiry, ToolItem, ActionLogEntry, MonetagConfig } from '../../types';
+import { testMonetagZoneEndpoint, triggerMonetagAction, DEFAULT_MONETAG_CONFIG } from '../../utils/monetag';
 import {
   getLiveStats,
   resetLiveStats,
@@ -83,6 +85,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Service Worker (sw.js) Ads Verification State
   const [swContent, setSwContent] = useState<string>('');
   const [isSavingSw, setIsSavingSw] = useState(false);
+  const [monetagZoneTest, setMonetagZoneTest] = useState<{ running: boolean; result?: any; error?: string } | null>(null);
   const [swStatus, setSwStatus] = useState<{ checked: boolean; ok: boolean; status?: number; message?: string }>({ checked: false, ok: false });
 
   // Load sw.js content on mount
@@ -1644,42 +1647,56 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Monetag Network Active Verification & Ad Delivery Card */}
-              <div className="p-5 rounded-2xl bg-gradient-to-r from-amber-950/40 via-slate-900 to-indigo-950/40 border border-amber-500/40 shadow-sm space-y-4">
+              {/* Monetag Ad Network Master Config & Direct Link Controls */}
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-amber-950/40 via-slate-900 to-indigo-950/40 border border-amber-500/40 shadow-sm space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
-                      <Sparkles className="w-4 h-4" />
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                      <Zap className="w-5 h-5" />
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                        <span>Monetag / 5gvci.com Network Active</span>
+                        <span>Monetag / 5gvci Ad Network</span>
                         <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-extrabold border border-emerald-500/30 flex items-center gap-1">
                           <CheckCircle2 className="w-3 h-3" />
-                          <span>Verified &amp; Showing Ads</span>
+                          <span>Active • Showing Ads</span>
                         </span>
                       </h4>
                       <p className="text-xs text-slate-400">
-                        Zone ID: <code className="text-amber-400 font-mono font-bold">11893764</code> • Domain: <code className="text-amber-400 font-mono">5gvci.com</code>
+                        Official Zone ID: <code className="text-amber-400 font-mono font-bold">{config.monetag?.zoneId || '11893764'}</code> • Network Domain: <code className="text-amber-400 font-mono">{config.monetag?.domain || '5gvci.com'}</code>
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
                     <button
-                      onClick={() => {
-                        if ('Notification' in window) {
-                          Notification.requestPermission().then((perm) => {
-                            showToast(`Browser Push Permission status: ${perm}`);
-                          });
+                      onClick={async () => {
+                        const mConfig = config.monetag || DEFAULT_MONETAG_CONFIG;
+                        setMonetagZoneTest({ running: true });
+                        const res = await testMonetagZoneEndpoint(mConfig.zoneId, mConfig.domain);
+                        if (res.ok) {
+                          setMonetagZoneTest({ running: false, result: res.data });
+                          showToast(`Monetag Zone ${mConfig.zoneId} verified & active!`);
                         } else {
-                          showToast('Browser notifications not supported in this environment');
+                          setMonetagZoneTest({ running: false, error: res.error });
+                          showToast(`Monetag endpoint notice: ${res.error}`);
                         }
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md"
                     >
-                      <Megaphone className="w-3.5 h-3.5" />
-                      <span>Trigger Push Ad Prompt</span>
+                      <RefreshCw className={`w-3.5 h-3.5 ${monetagZoneTest?.running ? 'animate-spin' : ''}`} />
+                      <span>Test Zone API Live</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        triggerMonetagAction('download', config.monetag);
+                        showToast('Simulated high-value user conversion action (Monetag Pop / Ad triggered)');
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-slate-700"
+                    >
+                      <Megaphone className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Trigger Ad Now</span>
                     </button>
 
                     <button
@@ -1689,49 +1706,195 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       }}
                       className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-slate-700"
                     >
-                      <RefreshCw className="w-3.5 h-3.5" />
+                      <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
                       <span>Reset In-Page Push</span>
                     </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                  <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
-                    <span className="text-[10px] uppercase font-bold text-slate-400">Web Push Notifications</span>
-                    <p className="text-emerald-400 font-bold mt-1 flex items-center gap-1">
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Service Worker Active (/sw.js)</span>
-                    </p>
-                    <span className="text-[10px] text-slate-500">importScripts loaded from 5gvci.com</span>
+                {/* Monetag Live API Response Card if tested */}
+                {monetagZoneTest && (
+                  <div className="p-3.5 rounded-xl bg-black/70 border border-amber-500/30 font-mono text-xs text-slate-300 space-y-1 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between text-[11px] text-amber-400 font-bold border-b border-white/10 pb-1">
+                      <span>Monetag Zone Live Endpoint Result</span>
+                      <button onClick={() => setMonetagZoneTest(null)} className="text-slate-400 hover:text-white">✕</button>
+                    </div>
+                    {monetagZoneTest.running && <p className="text-amber-300">Querying Monetag network endpoint...</p>}
+                    {monetagZoneTest.error && <p className="text-rose-400">Error: {monetagZoneTest.error}</p>}
+                    {monetagZoneTest.result && (
+                      <pre className="text-[11px] text-emerald-400 overflow-x-auto whitespace-pre-wrap max-h-36">
+                        {JSON.stringify(monetagZoneTest.result, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                )}
+
+                {/* Configuration Inputs */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">Monetag Zone ID</label>
+                    <input
+                      type="text"
+                      value={config.monetag?.zoneId ?? '11893764'}
+                      onChange={(e) => {
+                        const m = config.monetag || DEFAULT_MONETAG_CONFIG;
+                        onUpdateConfig({ ...config, monetag: { ...m, zoneId: e.target.value } });
+                      }}
+                      placeholder="11893764"
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono outline-none focus:border-amber-400"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">Verified Monetag main zone identifier</p>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
-                    <span className="text-[10px] uppercase font-bold text-slate-400">Official Ad Tag Script</span>
-                    <p className="text-emerald-400 font-bold mt-1 flex items-center gap-1">
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Active in &lt;head&gt;</span>
-                    </p>
-                    <span className="text-[10px] text-slate-500">tag.min.js?z=11893764</span>
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">Serving Domain</label>
+                    <input
+                      type="text"
+                      value={config.monetag?.domain ?? '5gvci.com'}
+                      onChange={(e) => {
+                        const m = config.monetag || DEFAULT_MONETAG_CONFIG;
+                        onUpdateConfig({ ...config, monetag: { ...m, domain: e.target.value } });
+                      }}
+                      placeholder="5gvci.com"
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono outline-none focus:border-amber-400"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">Monetag anti-adblock delivery domain</p>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
-                    <span className="text-[10px] uppercase font-bold text-slate-400">Visual Banners &amp; Units</span>
-                    <p className="text-emerald-400 font-bold mt-1 flex items-center gap-1">
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Homepage &amp; Tools Displaying</span>
-                    </p>
-                    <span className="text-[10px] text-slate-500">Leaderboards, Sidebars, In-Page Push</span>
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">
+                      Direct Link / SmartLink URL
+                    </label>
+                    <input
+                      type="url"
+                      value={config.monetag?.directLinkUrl ?? ''}
+                      onChange={(e) => {
+                        const m = config.monetag || DEFAULT_MONETAG_CONFIG;
+                        onUpdateConfig({ ...config, monetag: { ...m, directLinkUrl: e.target.value } });
+                      }}
+                      placeholder="https://5gvci.com/... or Monetag Direct Link"
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-xs outline-none focus:border-amber-400"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">Banners and push clicks credit to your account</p>
                   </div>
                 </div>
 
+                {/* Ad Serving Mode & Format Toggles */}
+                <div className="pt-2 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                  {/* Master Ad Serving Mode */}
+                  <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1">
+                    <span className="text-[10px] uppercase font-bold text-slate-400">Ad Serving Engine</span>
+                    <select
+                      value={config.adServingMode || 'monetag_primary'}
+                      onChange={(e) => {
+                        onUpdateConfig({ ...config, adServingMode: e.target.value as any });
+                        showToast(`Ad serving mode changed to ${e.target.value}`);
+                      }}
+                      className="w-full mt-1 px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white font-bold outline-none text-xs"
+                    >
+                      <option value="monetag_primary">🌟 Monetag Primary (Recommended)</option>
+                      <option value="hybrid">🔄 Hybrid (Monetag + AdSense)</option>
+                      <option value="adsense_only">🏢 AdSense Only</option>
+                      <option value="custom_only">🎨 Custom Ads Only</option>
+                    </select>
+                    <p className="text-[10px] text-amber-400 pt-0.5">Controls which ads display across website</p>
+                  </div>
+
+                  {/* Banners Toggle */}
+                  <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-white block">In-Content Banners</span>
+                      <span className="text-[10px] text-slate-400">Homepage &amp; Tool slots</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const m = config.monetag || DEFAULT_MONETAG_CONFIG;
+                        const next = !(m.showBanners ?? true);
+                        onUpdateConfig({ ...config, monetag: { ...m, showBanners: next } });
+                        showToast(`Monetag banners ${next ? 'enabled' : 'disabled'}`);
+                      }}
+                      className={`w-10 h-5 rounded-full p-0.5 transition-colors cursor-pointer ${
+                        (config.monetag?.showBanners ?? true) ? 'bg-amber-500' : 'bg-slate-700'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                        (config.monetag?.showBanners ?? true) ? 'translate-x-5' : 'translate-x-0'
+                      }`} />
+                    </button>
+                  </div>
+
+                  {/* In-Page Push Toggle */}
+                  <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-white block">In-Page Push (IPP)</span>
+                      <span className="text-[10px] text-slate-400">Floating ad notification</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const m = config.monetag || DEFAULT_MONETAG_CONFIG;
+                        const next = !(m.showInPagePush ?? true);
+                        onUpdateConfig({ ...config, monetag: { ...m, showInPagePush: next } });
+                        showToast(`In-Page Push ${next ? 'enabled' : 'disabled'}`);
+                      }}
+                      className={`w-10 h-5 rounded-full p-0.5 transition-colors cursor-pointer ${
+                        (config.monetag?.showInPagePush ?? true) ? 'bg-amber-500' : 'bg-slate-700'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                        (config.monetag?.showInPagePush ?? true) ? 'translate-x-5' : 'translate-x-0'
+                      }`} />
+                    </button>
+                  </div>
+
+                  {/* OnClick / Popunder Toggle */}
+                  <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-white block">OnClick / Popunder</span>
+                      <span className="text-[10px] text-slate-400">Triggers on tool actions</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const m = config.monetag || DEFAULT_MONETAG_CONFIG;
+                        const next = !(m.autoOnClick ?? true);
+                        onUpdateConfig({ ...config, monetag: { ...m, autoOnClick: next } });
+                        showToast(`OnClick monetization ${next ? 'enabled' : 'disabled'}`);
+                      }}
+                      className={`w-10 h-5 rounded-full p-0.5 transition-colors cursor-pointer ${
+                        (config.monetag?.autoOnClick ?? true) ? 'bg-amber-500' : 'bg-slate-700'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                        (config.monetag?.autoOnClick ?? true) ? 'translate-x-5' : 'translate-x-0'
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Custom Banner Script Snippet Editor (Optional) */}
+                <div className="space-y-1.5 pt-2 border-t border-white/10">
+                  <label className="block text-xs font-bold text-slate-300">
+                    Optional Custom Monetag HTML/Script Snippet (Overrides default responsive banners)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={config.monetag?.customBannerScript ?? ''}
+                    onChange={(e) => {
+                      const m = config.monetag || DEFAULT_MONETAG_CONFIG;
+                      onUpdateConfig({ ...config, monetag: { ...m, customBannerScript: e.target.value } });
+                    }}
+                    placeholder="Leave empty to use high-converting verified Monetag banners, or paste raw container code..."
+                    className="w-full p-2.5 bg-black/60 border border-slate-700 rounded-xl font-mono text-[11px] text-emerald-400 outline-none focus:border-amber-400"
+                  />
+                </div>
+
                 <div className="p-3 rounded-xl bg-black/40 border border-slate-800 flex items-center justify-between text-xs font-mono text-slate-300">
-                  <span className="truncate pr-2">&lt;script src="https://5gvci.com/act/files/tag.min.js?z=11893764" data-cfasync="false" async&gt;&lt;/script&gt;</span>
+                  <span className="truncate pr-2">&lt;script src="https://5gvci.com/act/files/tag.min.js?z={config.monetag?.zoneId || '11893764'}" data-zone="{config.monetag?.zoneId || '11893764'}" data-domain="5gvci.com" data-cfasync="false" async&gt;&lt;/script&gt;</span>
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText('<script src="https://5gvci.com/act/files/tag.min.js?z=11893764" data-cfasync="false" async></script>');
+                      navigator.clipboard.writeText(`<script src="https://5gvci.com/act/files/tag.min.js?z=${config.monetag?.zoneId || '11893764'}" data-zone="${config.monetag?.zoneId || '11893764'}" data-domain="5gvci.com" data-cfasync="false" async></script>`);
                       showToast('Monetag tag copied to clipboard');
                     }}
-                    className="shrink-0 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors flex items-center gap-1 text-[11px]"
+                    className="shrink-0 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors flex items-center gap-1 text-[11px] cursor-pointer"
                   >
                     <Copy className="w-3 h-3" />
                     <span>Copy Tag</span>

@@ -1,14 +1,16 @@
 import React from 'react';
-import { CustomAdItem, AdSlotType } from '../types';
+import { CustomAdItem, AdSlotType, MonetagConfig } from '../types';
 import { AdSenseBanner } from './AdSenseBanner';
 import { CustomAdBanner } from './CustomAdBanner';
+import { MonetagBanner } from './ads/MonetagBanner';
 import { pickCustomAd } from '../utils/customAdTracker';
 
 interface AdPlacementProps {
   slotType: AdSlotType;
   toolId?: string;
   adsEnabled?: boolean;
-  adServingMode?: 'hybrid' | 'adsense_only' | 'custom_only' | 'fallback';
+  adServingMode?: 'monetag_primary' | 'hybrid' | 'adsense_only' | 'custom_only' | 'fallback';
+  monetagConfig?: MonetagConfig;
   customAds?: CustomAdItem[];
   adsensePublisherId?: string;
   adsenseSlot?: string;
@@ -20,7 +22,8 @@ export const AdPlacement: React.FC<AdPlacementProps> = ({
   slotType,
   toolId,
   adsEnabled = true,
-  adServingMode = 'hybrid',
+  adServingMode = 'monetag_primary',
+  monetagConfig,
   customAds,
   adsensePublisherId = 'ca-pub-9806760868514523',
   adsenseSlot,
@@ -29,22 +32,19 @@ export const AdPlacement: React.FC<AdPlacementProps> = ({
 }) => {
   if (!adsEnabled) return null;
 
-  // Custom Ad selection for this specific slot & tool context
-  const matchedCustomAd = pickCustomAd(customAds, slotType, toolId);
+  const isMonetagEnabled = monetagConfig?.enabled ?? true;
+  const isMonetagBannersActive = isMonetagEnabled && (monetagConfig?.showBanners ?? true);
 
-  // 1. CUSTOM ONLY MODE
-  if (adServingMode === 'custom_only') {
-    if (matchedCustomAd) {
-      return (
-        <CustomAdBanner
-          ad={matchedCustomAd}
-          slotType={slotType}
-          className={className}
-          showLabel={showLabel}
-        />
-      );
-    }
-    return null;
+  // 1. MONETAG PRIMARY MODE (Directly serves official verified Monetag ad units across all website slots)
+  if (adServingMode === 'monetag_primary' || (isMonetagBannersActive && adServingMode !== 'adsense_only' && adServingMode !== 'custom_only')) {
+    return (
+      <MonetagBanner
+        slotType={slotType}
+        monetagConfig={monetagConfig}
+        className={className}
+        showLabel={showLabel}
+      />
+    );
   }
 
   // 2. ADSENSE ONLY MODE
@@ -60,9 +60,9 @@ export const AdPlacement: React.FC<AdPlacementProps> = ({
     );
   }
 
-  // 3. HYBRID MODE (Both can co-exist: display verified sponsor banners across all active slots, with AdSense support)
-  if (adServingMode === 'hybrid') {
-    // If a verified sponsor or custom campaign matches this slot, show high-converting responsive ad unit
+  // 3. CUSTOM ADS ONLY
+  const matchedCustomAd = pickCustomAd(customAds, slotType, toolId);
+  if (adServingMode === 'custom_only') {
     if (matchedCustomAd) {
       return (
         <CustomAdBanner
@@ -73,20 +73,10 @@ export const AdPlacement: React.FC<AdPlacementProps> = ({
         />
       );
     }
-
-    // Default to Google AdSense when no custom ad is matched
-    return (
-      <AdSenseBanner
-        slotType={slotType as any}
-        client={adsensePublisherId}
-        slot={adsenseSlot}
-        className={className}
-        showLabel={showLabel}
-      />
-    );
+    return null;
   }
 
-  // 4. FALLBACK MODE (AdSense with Custom Ad ready)
+  // 4. HYBRID MODE (Monetag primary -> Custom ad fallback -> AdSense)
   if (matchedCustomAd) {
     return (
       <CustomAdBanner
