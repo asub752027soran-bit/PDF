@@ -45,7 +45,9 @@ if (fs.existsSync(distDir)) {
     'favicon.svg',
     'robots.txt',
     'sitemap.xml',
-    'manifest.webmanifest'
+    'manifest.webmanifest',
+    'ads.txt',
+    'sw.js'
   ];
 
   let missing = 0;

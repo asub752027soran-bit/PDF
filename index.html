@@ -97,6 +97,21 @@
     <!-- Google AdSense Verification & Ad Engine -->
     <meta name="google-adsense-account" content="ca-pub-9806760868514523" />
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9806760868514523" crossorigin="anonymous"></script>
+
+    <!-- Service Worker Registration for Ads Verification & WebPush -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(function(reg) {
+              console.log('Ads Verification ServiceWorker active (scope: ' + reg.scope + ')');
+            })
+            .catch(function(err) {
+              console.warn('ServiceWorker registration note:', err);
+            });
+        });
+      }
+    </script>
   </head>
   <body>
     <div id="root">

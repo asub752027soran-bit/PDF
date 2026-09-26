@@ -329,6 +329,59 @@ app.get('/ads.txt', (_req, res) => {
   res.send('google.com, pub-9806760868514523, DIRECT, f08c47fec0942fa0\n');
 });
 
+// Service Worker & Ads Verification Script (sw.js)
+app.get('/sw.js', (_req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  
+  const distSw = path.join(DIST_DIR, 'sw.js');
+  const publicSw = path.join(PUBLIC_DIR, 'sw.js');
+  if (fs.existsSync(distSw)) {
+    return res.sendFile(distSw);
+  }
+  if (fs.existsSync(publicSw)) {
+    return res.sendFile(publicSw);
+  }
+  res.status(404).send('// Service worker not found');
+});
+
+// Admin API: Read current sw.js
+app.get('/api/admin/sw', (_req, res) => {
+  const publicSw = path.join(PUBLIC_DIR, 'sw.js');
+  if (fs.existsSync(publicSw)) {
+    return res.json({ content: fs.readFileSync(publicSw, 'utf-8') });
+  }
+  res.json({ content: '' });
+});
+
+// Admin API: Update sw.js
+app.post('/api/admin/sw', (req, res) => {
+  try {
+    const { content } = req.body;
+    if (typeof content !== 'string') {
+      return res.status(400).json({ error: 'content must be a string' });
+    }
+    const publicSw = path.join(PUBLIC_DIR, 'sw.js');
+    fs.writeFileSync(publicSw, content, 'utf-8');
+    
+    // Also sync to dist if dist exists
+    const distSw = path.join(DIST_DIR, 'sw.js');
+    if (fs.existsSync(DIST_DIR)) {
+      try {
+        fs.writeFileSync(distSw, content, 'utf-8');
+      } catch (distErr) {
+        console.debug('dist sync note:', distErr);
+      }
+    }
+    
+    res.json({ success: true, message: 'sw.js updated successfully' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to write sw.js', details: err?.message });
+  }
+});
+
 // Dynamic SEO Sitemap.xml
 app.get('/sitemap.xml', (req, res) => {
   res.type('application/xml');

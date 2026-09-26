@@ -71,7 +71,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   initialTab = 'overview',
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'action-log' | 'tools' | 'monetization' | 'inquiries' | 'seo' | 'security'>(initialTab);
-  const [monetizationSubTab, setMonetizationSubTab] = useState<'custom_ads' | 'adsense'>('custom_ads');
+  const [monetizationSubTab, setMonetizationSubTab] = useState<'custom_ads' | 'adsense' | 'sw_verification'>('custom_ads');
   const [seoSubTab, setSeoSubTab] = useState<'audit' | 'settings' | 'overrides'>('audit');
   const [toolSearch, setToolSearch] = useState('');
   const [inquiries, setInquiries] = useState<ContactInquiry[]>([]);
@@ -79,6 +79,58 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [liveStats, setLiveStats] = useState<LiveStats>(() => getLiveStats());
   const [actionLogs, setActionLogs] = useState<ActionLogEntry[]>(() => getActionLogs());
+
+  // Service Worker (sw.js) Ads Verification State
+  const [swContent, setSwContent] = useState<string>('');
+  const [isSavingSw, setIsSavingSw] = useState(false);
+  const [swStatus, setSwStatus] = useState<{ checked: boolean; ok: boolean; status?: number; message?: string }>({ checked: false, ok: false });
+
+  // Load sw.js content on mount
+  useEffect(() => {
+    fetch('/api/admin/sw')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && typeof data.content === 'string') {
+          setSwContent(data.content);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const testSwEndpoint = async () => {
+    try {
+      const res = await fetch('/sw.js');
+      if (res.ok) {
+        setSwStatus({ checked: true, ok: true, status: res.status, message: 'Reachable & Serving 200 OK' });
+        showToast('Live /sw.js is operational (200 OK)');
+      } else {
+        setSwStatus({ checked: true, ok: false, status: res.status, message: `Returned HTTP ${res.status}` });
+      }
+    } catch (err: any) {
+      setSwStatus({ checked: true, ok: false, message: err?.message || 'Connection failed' });
+    }
+  };
+
+  const handleSaveSw = async () => {
+    setIsSavingSw(true);
+    try {
+      const res = await fetch('/api/admin/sw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: swContent }),
+      });
+      if (res.ok) {
+        showToast('sw.js successfully updated and live at /sw.js');
+        testSwEndpoint();
+      } else {
+        showToast('Failed to save sw.js');
+      }
+    } catch (err) {
+      showToast('Network error saving sw.js');
+    } finally {
+      setIsSavingSw(false);
+    }
+  };
 
   // Listen for real-time live stats and action logs updates
   useEffect(() => {
@@ -1025,6 +1077,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <DollarSign className="w-4 h-4 text-emerald-500" />
               <span>Google AdSense Master Config</span>
             </button>
+
+            <button
+              onClick={() => {
+                setMonetizationSubTab('sw_verification');
+                testSwEndpoint();
+              }}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                monetizationSubTab === 'sw_verification'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <FileCode className="w-4 h-4 text-amber-500" />
+              <span>Ads Verification (sw.js)</span>
+              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-[10px] font-extrabold text-amber-500 dark:text-amber-300">
+                Live
+              </span>
+            </button>
           </div>
 
           {/* Sub Tab 1: Custom Self-Served Ads */}
@@ -1488,6 +1558,197 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
 
+              </div>
+            </div>
+          )}
+
+          {/* Sub Tab 3: Ads Verification & Service Worker (sw.js) */}
+          {monetizationSubTab === 'sw_verification' && (
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-6">
+              <div className="border-b border-slate-100 dark:border-slate-800 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                    <FileCode className="w-4 h-4 text-amber-500" />
+                    Ads Verification &amp; Service Worker (<code className="text-amber-600 dark:text-amber-400">sw.js</code>)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Manage the root Service Worker file required by ad networks (Monetag, PropellerAds, Adsterra, Push networks) for domain verification and WebPush ad delivery.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={testSwEndpoint}
+                    className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Test Live /sw.js</span>
+                  </button>
+
+                  <a
+                    href="/sw.js"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 text-xs font-bold border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900 transition-all flex items-center gap-1.5"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>View /sw.js</span>
+                  </a>
+                </div>
+              </div>
+
+              {/* Status & Headers Banner */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Serving Status</span>
+                  <div className="flex items-center gap-2 pt-1">
+                    {swStatus.checked ? (
+                      swStatus.ok ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">200 OK Active</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="w-4 h-4 text-rose-500" />
+                          <span className="text-xs font-bold text-rose-500">{swStatus.message || 'Error'}</span>
+                        </>
+                      )
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Configured at /sw.js</span>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400">Registered with root scope (<code>/</code>)</p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Required HTTP Headers</span>
+                  <div className="text-[11px] text-slate-700 dark:text-slate-300 font-mono space-y-0.5 pt-1">
+                    <div>Content-Type: application/javascript</div>
+                    <div>Service-Worker-Allowed: /</div>
+                  </div>
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400">All required headers automatically injected</p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Crawl &amp; Bot Access</span>
+                  <div className="flex items-center gap-1.5 pt-1 text-xs font-bold text-slate-800 dark:text-slate-200">
+                    <Check className="w-4 h-4 text-emerald-500" />
+                    <span>robots.txt allows all crawlers</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">Ad network bots can verify root domain immediately</p>
+                </div>
+              </div>
+
+              {/* Template Presets */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Quick Presets &amp; Templates
+                </label>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <button
+                    onClick={() => {
+                      const snippet = `// Monetag / PropellerAds Service Worker Verification\nimportScripts('https://YOUR_AD_DOMAIN.com/sw.js?zoneid=YOUR_ZONE_ID');\n\nself.addEventListener('install', () => self.skipWaiting());\nself.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));\n`;
+                      setSwContent(snippet);
+                      showToast('Monetag / PropellerAds template loaded into editor');
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 transition-all font-medium cursor-pointer"
+                  >
+                    + Monetag / PropellerAds Template
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const snippet = `// WebPush Ad Network Service Worker\nimportScripts('https://YOUR_AD_DOMAIN.com/pfe/current/service-worker.min.js?r=sw');\n\nself.addEventListener('install', () => self.skipWaiting());\nself.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));\n`;
+                      setSwContent(snippet);
+                      showToast('WebPush template loaded into editor');
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-all font-medium cursor-pointer"
+                  >
+                    + Adsterra / Push Template
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const snippet = `/**\n * Service Worker for Ads Verification & Web Push Notifications\n * PDF Editfy (https://pdfeditfy.com)\n */\n\nself.addEventListener('install', (event) => {\n  self.skipWaiting();\n});\n\nself.addEventListener('activate', (event) => {\n  event.waitUntil(self.clients.claim());\n});\n\nself.addEventListener('fetch', (event) => {\n  // Pass-through fetch handler for verification crawlers\n});\n`;
+                      setSwContent(snippet);
+                      showToast('Standard clean Service Worker loaded');
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition-all font-medium cursor-pointer"
+                  >
+                    + Clean Standard SW
+                  </button>
+                </div>
+              </div>
+
+              {/* Code Editor */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Live <code className="font-mono text-amber-600 dark:text-amber-400">sw.js</code> File Contents
+                  </label>
+                  <span className="text-[11px] text-slate-400">
+                    Filesystem target: <code className="font-mono">/public/sw.js</code>
+                  </span>
+                </div>
+
+                <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-inner">
+                  <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400 font-mono">
+                    <span className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                      sw.js
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(swContent);
+                        showToast('Copied sw.js to clipboard');
+                      }}
+                      className="hover:text-white transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy</span>
+                    </button>
+                  </div>
+
+                  <textarea
+                    value={swContent}
+                    onChange={(e) => setSwContent(e.target.value)}
+                    rows={12}
+                    placeholder="// Paste your ad network verification script or importScripts line here..."
+                    className="w-full p-4 bg-transparent text-emerald-400 font-mono text-xs leading-relaxed outline-none resize-y border-none"
+                    spellCheck={false}
+                  />
+                </div>
+              </div>
+
+              {/* Save & Action Footer */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
+                <p className="text-xs text-slate-500">
+                  Changes take effect immediately and are deployed to both development and production static outputs.
+                </p>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleSaveSw}
+                    disabled={isSavingSw}
+                    className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-md shadow-amber-500/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingSw ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Deploying sw.js...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>Save &amp; Deploy sw.js</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           )}
