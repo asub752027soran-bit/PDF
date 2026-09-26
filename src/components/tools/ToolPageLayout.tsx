@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { TOOL_SEO_DETAILS } from '../../data/toolSeoData';
 import { TOOLS } from '../../data/toolsData';
-import { ToolItem, CustomAdItem, MonetagConfig } from '../../types';
+import { ToolItem, CustomAdItem } from '../../types';
 import { AdPlacement } from '../AdPlacement';
 import { AdSenseBanner } from '../AdSenseBanner';
 
@@ -33,8 +33,7 @@ interface ToolPageLayoutProps {
     banner: boolean;
     sidebar: boolean;
   };
-  adServingMode?: 'monetag_primary' | 'hybrid' | 'adsense_only' | 'custom_only' | 'fallback';
-  monetagConfig?: MonetagConfig;
+  adServingMode?: 'hybrid' | 'adsense_only' | 'custom_only' | 'fallback';
   customAds?: CustomAdItem[];
   adsensePublisherId?: string;
   adsenseCustomSlots?: {
@@ -53,8 +52,7 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
   adsEnabled = true,
   adSlotPlacement = 'banner',
   adSlotsConfig = { leaderboard: true, banner: true, sidebar: true },
-  adServingMode = 'monetag_primary',
-  monetagConfig,
+  adServingMode = 'adsense_only',
   customAds,
   adsensePublisherId,
   adsenseCustomSlots,
@@ -109,7 +107,6 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
             toolId={toolId}
             adsEnabled={adsEnabled}
             adServingMode={adServingMode}
-            monetagConfig={monetagConfig}
             customAds={customAds}
             adsensePublisherId={adsensePublisherId}
             adsenseSlot={adsenseCustomSlots?.leaderboard}
@@ -180,7 +177,6 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
                 toolId={toolId}
                 adsEnabled={adsEnabled}
                 adServingMode={adServingMode}
-                monetagConfig={monetagConfig}
                 customAds={customAds}
                 adsensePublisherId={adsensePublisherId}
                 adsenseSlot={adsenseCustomSlots?.banner}
@@ -387,7 +383,6 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
                 toolId={toolId}
                 adsEnabled={adsEnabled}
                 adServingMode={adServingMode}
-                monetagConfig={monetagConfig}
                 customAds={customAds}
                 adsensePublisherId={adsensePublisherId}
                 adsenseSlot={adsenseCustomSlots?.sidebar}

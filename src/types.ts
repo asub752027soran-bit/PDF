@@ -120,19 +120,6 @@ export interface ToolSeoConfig {
   indexable?: boolean;
 }
 
-export interface MonetagConfig {
-  enabled: boolean;
-  zoneId: string;
-  domain: string;
-  directLinkUrl?: string;
-  autoOnClick?: boolean;
-  showInPagePush?: boolean;
-  showVignette?: boolean;
-  showBanners?: boolean;
-  bannerMode?: 'monetag_primary' | 'hybrid' | 'custom_ads';
-  customBannerScript?: string;
-}
-
 export interface AdminConfig {
   siteName: string;
   announcementBar: {
@@ -169,10 +156,8 @@ export interface AdminConfig {
   canonicalBaseUrl?: string;
   ogImage?: string;
   toolSeoOverrides?: Record<string, ToolSeoConfig>;
-  // Monetag Ad Network Config
-  monetag?: MonetagConfig;
   // Custom Self-Served Advertisements & Direct Sponsors
-  adServingMode?: 'monetag_primary' | 'hybrid' | 'adsense_only' | 'custom_only' | 'fallback';
+  adServingMode?: 'hybrid' | 'adsense_only' | 'custom_only' | 'fallback';
   customAds?: CustomAdItem[];
 }
 

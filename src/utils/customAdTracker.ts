@@ -2,11 +2,11 @@ import { CustomAdItem, AdSlotType } from '../types';
 
 export const DEFAULT_CUSTOM_ADS: CustomAdItem[] = [
   {
-    id: 'ad-monetag-partner',
-    title: '⚡ Cloud Document Converter & OCR Engine API',
+    id: 'ad-cloud-api',
+    title: '⚡ Cloud Document Conversion & OCR API Engine',
     description: 'Transform bulk PDFs into Word, Excel, and text with 99.99% uptime, zero file limits, and instant processing.',
-    sponsorName: 'Monetag Verified Network (Zone #11893764)',
-    targetUrl: 'https://5gvci.com/act/files/tag.min.js?z=11893764',
+    sponsorName: 'DocuCloud Technologies',
+    targetUrl: 'https://pdfeditfy.com',
     adType: 'card',
     ctaText: 'Access Free API',
     badgeText: 'Verified Partner',

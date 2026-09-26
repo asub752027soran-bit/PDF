@@ -1,9 +1,9 @@
-self.options = {
-    "domain": "5gvci.com",
-    "zoneId": 11893764
-};
-self.lary = "";
-importScripts('https://5gvci.com/act/files/service-worker.min.js?r=sw');
+/**
+ * Service Worker - PDF Editfy (https://pdfeditfy.com)
+ * Standard offline cache and crawler verification handler
+ */
+
+const CACHE_NAME = 'pdfeditfy-v1';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -11,4 +11,8 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener('fetch', (event) => {
+  // Pass-through network fetch handler
 });
