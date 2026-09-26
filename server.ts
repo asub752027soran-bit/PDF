@@ -336,13 +336,13 @@ app.get('/sw.js', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Access-Control-Allow-Origin', '*');
   
-  const distSw = path.join(DIST_DIR, 'sw.js');
   const publicSw = path.join(PUBLIC_DIR, 'sw.js');
-  if (fs.existsSync(distSw)) {
-    return res.sendFile(distSw);
-  }
+  const distSw = path.join(DIST_DIR, 'sw.js');
   if (fs.existsSync(publicSw)) {
     return res.sendFile(publicSw);
+  }
+  if (fs.existsSync(distSw)) {
+    return res.sendFile(distSw);
   }
   res.status(404).send('// Service worker not found');
 });

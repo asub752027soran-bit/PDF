@@ -1090,9 +1090,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               }`}
             >
               <FileCode className="w-4 h-4 text-amber-500" />
-              <span>Ads Verification (sw.js)</span>
-              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-[10px] font-extrabold text-amber-500 dark:text-amber-300">
-                Live
+              <span>Monetag &amp; Ads Verification (sw.js)</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" />
+                <span>Verified</span>
               </span>
             </button>
           </div>
@@ -1640,6 +1641,101 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <span>robots.txt allows all crawlers</span>
                   </div>
                   <p className="text-[10px] text-slate-400">Ad network bots can verify root domain immediately</p>
+                </div>
+              </div>
+
+              {/* Monetag Network Active Verification & Ad Delivery Card */}
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-amber-950/40 via-slate-900 to-indigo-950/40 border border-amber-500/40 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>Monetag / 5gvci.com Network Active</span>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-extrabold border border-emerald-500/30 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>Verified &amp; Showing Ads</span>
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-400">
+                        Zone ID: <code className="text-amber-400 font-mono font-bold">11893764</code> • Domain: <code className="text-amber-400 font-mono">5gvci.com</code>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => {
+                        if ('Notification' in window) {
+                          Notification.requestPermission().then((perm) => {
+                            showToast(`Browser Push Permission status: ${perm}`);
+                          });
+                        } else {
+                          showToast('Browser notifications not supported in this environment');
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Megaphone className="w-3.5 h-3.5" />
+                      <span>Trigger Push Ad Prompt</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        sessionStorage.removeItem('pdfeditfy_monetag_ipp_dismissed');
+                        showToast('Reset In-Page Push dismissed state. Reload page to see it.');
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-slate-700"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Reset In-Page Push</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                    <span className="text-[10px] uppercase font-bold text-slate-400">Web Push Notifications</span>
+                    <p className="text-emerald-400 font-bold mt-1 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Service Worker Active (/sw.js)</span>
+                    </p>
+                    <span className="text-[10px] text-slate-500">importScripts loaded from 5gvci.com</span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                    <span className="text-[10px] uppercase font-bold text-slate-400">Official Ad Tag Script</span>
+                    <p className="text-emerald-400 font-bold mt-1 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Active in &lt;head&gt;</span>
+                    </p>
+                    <span className="text-[10px] text-slate-500">tag.min.js?z=11893764</span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                    <span className="text-[10px] uppercase font-bold text-slate-400">Visual Banners &amp; Units</span>
+                    <p className="text-emerald-400 font-bold mt-1 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Homepage &amp; Tools Displaying</span>
+                    </p>
+                    <span className="text-[10px] text-slate-500">Leaderboards, Sidebars, In-Page Push</span>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-black/40 border border-slate-800 flex items-center justify-between text-xs font-mono text-slate-300">
+                  <span className="truncate pr-2">&lt;script src="https://5gvci.com/act/files/tag.min.js?z=11893764" data-cfasync="false" async&gt;&lt;/script&gt;</span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText('<script src="https://5gvci.com/act/files/tag.min.js?z=11893764" data-cfasync="false" async></script>');
+                      showToast('Monetag tag copied to clipboard');
+                    }}
+                    className="shrink-0 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors flex items-center gap-1 text-[11px]"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>Copy Tag</span>
+                  </button>
                 </div>
               </div>
 

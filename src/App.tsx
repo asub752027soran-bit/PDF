@@ -6,6 +6,7 @@ import { ToolGrid } from './components/ToolGrid';
 import { Footer } from './components/Footer';
 import { AdSenseBanner } from './components/AdSenseBanner';
 import { AdPlacement } from './components/AdPlacement';
+import { InPagePushAd } from './components/InPagePushAd';
 import { CookieBanner } from './components/CookieBanner';
 import { AdminLoginModal } from './components/admin/AdminLoginModal';
 import { ToolPageLayout } from './components/tools/ToolPageLayout';
@@ -705,6 +706,9 @@ export default function App() {
       />
 
       <CookieBanner />
+
+      {/* Monetag In-Page Push & Sponsored Notification */}
+      <InPagePushAd adsEnabled={adminConfig.adsEnabled} />
 
       {/* Global Progress Indicator for Long Operations */}
       <GlobalProgressBar />

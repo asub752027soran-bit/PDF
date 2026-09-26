@@ -60,24 +60,21 @@ export const AdPlacement: React.FC<AdPlacementProps> = ({
     );
   }
 
-  // 3. HYBRID MODE (Both can co-exist: e.g., in sidebar or leaderboard, show rich partner sponsor or AdSense)
+  // 3. HYBRID MODE (Both can co-exist: display verified sponsor banners across all active slots, with AdSense support)
   if (adServingMode === 'hybrid') {
-    // In hybrid mode, if there is a customized sponsor ad for sidebar or banner, we can prioritize custom sponsor or alternate
-    // For sidebar & inline banner, custom sponsor banner gives top conversion rate; AdSense fills leaderboard
-    if (matchedCustomAd && (slotType === 'sidebar' || slotType === 'banner')) {
+    // If a verified sponsor or custom campaign matches this slot, show high-converting responsive ad unit
+    if (matchedCustomAd) {
       return (
-        <div className="space-y-4">
-          <CustomAdBanner
-            ad={matchedCustomAd}
-            slotType={slotType}
-            className={className}
-            showLabel={showLabel}
-          />
-        </div>
+        <CustomAdBanner
+          ad={matchedCustomAd}
+          slotType={slotType}
+          className={className}
+          showLabel={showLabel}
+        />
       );
     }
 
-    // Default to Google AdSense for leaderboard slots in hybrid mode, or fallback to custom ad
+    // Default to Google AdSense when no custom ad is matched
     return (
       <AdSenseBanner
         slotType={slotType as any}
