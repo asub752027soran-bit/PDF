@@ -76,7 +76,7 @@ const DEFAULT_ADMIN_CONFIG: AdminConfig = {
     banner: '',
     sidebar: '',
   },
-  adServingMode: 'monetag_primary',
+  adServingMode: 'hybrid',
   monetag: DEFAULT_MONETAG_CONFIG,
   disabledTools: [],
   customBadges: {},

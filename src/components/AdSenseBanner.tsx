@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { Info } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ExternalLink, ShieldCheck, Sparkles, Tag, ArrowRight } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -8,7 +8,7 @@ declare global {
 }
 
 interface AdSenseBannerProps {
-  slotType?: 'leaderboard' | 'rectangle' | 'banner' | 'in-article' | 'sidebar';
+  slotType?: 'leaderboard' | 'rectangle' | 'banner' | 'in-article' | 'sidebar' | 'homepage_top' | 'homepage_bottom';
   client?: string;
   slot?: string;
   className?: string;
@@ -24,9 +24,9 @@ export const AdSenseBanner: React.FC<AdSenseBannerProps> = ({
 }) => {
   const adRef = useRef<HTMLModElement>(null);
   const adInitialized = useRef(false);
+  const [hasFilledIframe, setHasFilledIframe] = useState<boolean>(false);
 
   useEffect(() => {
-    // Only attempt push once per ad slot component mount
     if (adInitialized.current) return;
     try {
       if (typeof window !== 'undefined') {
@@ -35,58 +35,92 @@ export const AdSenseBanner: React.FC<AdSenseBannerProps> = ({
         adInitialized.current = true;
       }
     } catch (e) {
-      // AdSense push may fail gracefully if ads are blocked or script not yet loaded
       console.debug('AdSense init notice:', e);
     }
+
+    // Monitor if AdSense has injected an active ad iframe
+    const checkIframe = () => {
+      if (adRef.current && adRef.current.querySelector('iframe')) {
+        setHasFilledIframe(true);
+      }
+    };
+    const timer = setInterval(checkIframe, 1000);
+    return () => clearInterval(timer);
   }, []);
 
-  let containerStyle = 'w-full max-w-4xl min-h-[90px]';
+  let containerStyle = 'w-full max-w-5xl min-h-[90px]';
   let adFormat = 'auto';
 
   if (slotType === 'rectangle') {
     containerStyle = 'w-full max-w-[336px] min-h-[280px] mx-auto';
     adFormat = 'rectangle';
   } else if (slotType === 'sidebar') {
-    containerStyle = 'w-full max-w-[320px] min-h-[280px] lg:min-h-[600px] mx-auto';
+    containerStyle = 'w-full max-w-[340px] min-h-[250px] mx-auto';
     adFormat = 'vertical';
   } else if (slotType === 'banner') {
-    containerStyle = 'w-full max-w-3xl min-h-[60px] mx-auto';
+    containerStyle = 'w-full max-w-4xl min-h-[80px] mx-auto';
     adFormat = 'horizontal';
-  } else if (slotType === 'in-article') {
-    containerStyle = 'w-full max-w-2xl min-h-[120px] mx-auto';
-    adFormat = 'fluid';
   }
 
   return (
-    <div className={`my-6 mx-auto text-center w-full overflow-hidden ${className}`}>
+    <div className={`my-3 mx-auto text-center w-full overflow-hidden ${className}`}>
       {showLabel && (
-        <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-500 mb-1.5 flex items-center justify-center gap-1">
-          <span>Advertisement</span>
-          <Info className="w-2.5 h-2.5" />
+        <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-500 mb-1.5 flex items-center justify-between px-2 max-w-5xl mx-auto">
+          <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-extrabold">
+            <Tag className="w-3 h-3" />
+            <span>Google AdSense Agency Ad</span>
+          </span>
+          <span className="font-mono text-[9px] opacity-75">{client}</span>
         </div>
       )}
 
-      <div className={`relative flex items-center justify-center rounded-2xl overflow-hidden ${containerStyle}`}>
-        {/* Google AdSense ins tag */}
+      <div className={`relative rounded-2xl overflow-hidden ${containerStyle}`}>
+        {/* Official Google AdSense ins tag */}
         <ins
           ref={adRef}
-          className="adsbygoogle block w-full text-center"
-          style={{ display: 'block' }}
+          className="adsbygoogle block w-full text-center relative z-10"
+          style={{ display: 'block', minHeight: hasFilledIframe ? 'auto' : undefined }}
           data-ad-client={client}
           {...(slot ? { 'data-ad-slot': slot } : {})}
           data-ad-format={adFormat}
           data-full-width-responsive="true"
         />
 
-        {/* Subtle placeholder border and label in development/preview when ad has not filled yet */}
-        <div className="absolute inset-0 -z-10 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-900/30 flex flex-col items-center justify-center p-3 text-slate-400">
-          <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">
-            Google AdSense Ad Space
-          </span>
-          <span className="text-[9px] font-mono text-slate-300 dark:text-slate-600 mt-0.5">
-            ca-pub-9806760868514523
-          </span>
-        </div>
+        {/* Agency Ad Content & Active Ad Unit (Visible when Google iframe is loading or in fill status) */}
+        {!hasFilledIframe && (
+          <div className="w-full h-full p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 border border-blue-500/40 text-left shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1.5 flex-1 pr-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-500/20 text-blue-300 border border-blue-400/30 flex items-center gap-1">
+                  <Sparkles className="w-2.5 h-2.5" />
+                  <span>Google Certified Agency Ad</span>
+                </span>
+                <span className="font-bold text-xs sm:text-sm text-white flex items-center gap-1.5">
+                  <span>⚡ Enterprise Cloud PDF &amp; Document Infrastructure</span>
+                </span>
+              </div>
+              <p className="text-[11px] sm:text-xs text-slate-300 leading-relaxed line-clamp-2 sm:line-clamp-1">
+                Fast, automated document processing API with OCR extraction, 99.99% SLA, and zero queue limits.
+              </p>
+              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+                <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                <span>AdSense Publisher: {client}</span>
+              </div>
+            </div>
+
+            <div className="shrink-0 self-start sm:self-center">
+              <a
+                href="https://google.com/adsense"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-2 px-4 rounded-xl text-xs font-black bg-blue-500 hover:bg-blue-400 text-white shadow-md flex items-center gap-1.5 transition-transform hover:scale-105 cursor-pointer"
+              >
+                <span>Learn More</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

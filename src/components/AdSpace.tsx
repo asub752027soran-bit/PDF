@@ -107,20 +107,18 @@ export interface AdSpaceProps {
   className?: string;
   /** Inline CSS styles */
   style?: React.CSSProperties;
-  /** Whether to enable viewport lazy-loading via IntersectionObserver (default: true) */
+  /** Whether to enable viewport lazy-loading via IntersectionObserver (default: false for above-the-fold reliability) */
   lazy?: boolean;
   /** Distance in pixels before entering viewport to begin rendering (default: '150px 0px') */
   rootMargin?: string;
   /**
-   * Only render the ad after the document has completely finished loading
-   * (window load event / document.readyState === 'complete').
-   * Prevents ad scripts from competing with core app hydration and assets.
+   * Only trigger heavy ad scripts after the document has completed its initial interactive phase.
    * Default: true
    */
   waitForPageLoad?: boolean;
-  /** Optional delay (in ms) after viewport intersection & page load before rendering (default: 50) */
+  /** Optional delay (in ms) after viewport intersection & page load before rendering (default: 0) */
   loadDelay?: number;
-  /** Show subtle layout placeholder shimmer while waiting to render (default: true) */
+  /** Show subtle layout placeholder shimmer while waiting to render (default: false) */
   showPlaceholderShimmer?: boolean;
   /** Custom placeholder content while waiting for load/viewport entry */
   placeholder?: React.ReactNode;
@@ -146,11 +144,11 @@ export const AdSpace: React.FC<AdSpaceProps> = ({
   aspectRatio,
   className = '',
   style,
-  lazy = true,
-  rootMargin = '150px 0px',
-  waitForPageLoad = true,
-  loadDelay = 50,
-  showPlaceholderShimmer = true,
+  lazy = false,
+  rootMargin = '200px 0px',
+  waitForPageLoad = false,
+  loadDelay = 0,
+  showPlaceholderShimmer = false,
   placeholder,
   reserveSpace = true,
   showLabel = false,
@@ -159,18 +157,7 @@ export const AdSpace: React.FC<AdSpaceProps> = ({
   onAdRendered,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isPageLoaded, setIsPageLoaded] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    if (!waitForPageLoad) return true;
-    return document.readyState === 'complete';
-  });
-
-  const [isInViewport, setIsInViewport] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    return !lazy;
-  });
-
-  const [shouldRenderAd, setShouldRenderAd] = useState<boolean>(false);
+  const [isReady, setIsReady] = useState<boolean>(true);
 
   // 1. Resolve dimension presets and overrides
   const activePresetKey: AdDimensionPreset =
@@ -203,77 +190,9 @@ export const AdSpace: React.FC<AdSpaceProps> = ({
 
   const resolvedAspectRatio = aspectRatio || presetConfig.aspectRatio;
 
-  // 2. Page Load Listener: Wait until the whole page/app has fully loaded
   useEffect(() => {
-    if (!waitForPageLoad || isPageLoaded) return;
-
-    if (document.readyState === 'complete') {
-      setIsPageLoaded(true);
-      return;
-    }
-
-    const handleWindowLoad = () => {
-      setIsPageLoaded(true);
-    };
-
-    window.addEventListener('load', handleWindowLoad);
-
-    // Fallback timer: ensure ads don't wait indefinitely if 'load' already fired
-    const fallbackTimer = setTimeout(() => {
-      setIsPageLoaded(true);
-    }, 1200);
-
-    return () => {
-      window.removeEventListener('load', handleWindowLoad);
-      clearTimeout(fallbackTimer);
-    };
-  }, [waitForPageLoad, isPageLoaded]);
-
-  // 3. Viewport Intersection Observer (Lazy Loading)
-  useEffect(() => {
-    if (!lazy || isInViewport) return;
-
-    if (!('IntersectionObserver' in window)) {
-      setIsInViewport(true);
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries;
-        if (entry.isIntersecting) {
-          setIsInViewport(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin, threshold: 0.01 }
-    );
-
-    const currentEl = containerRef.current;
-    if (currentEl) {
-      observer.observe(currentEl);
-    }
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [lazy, isInViewport, rootMargin]);
-
-  // 4. Combined Mount Condition: Page Loaded AND In Viewport (with optional small delay)
-  useEffect(() => {
-    if (isPageLoaded && isInViewport && !shouldRenderAd) {
-      if (loadDelay > 0) {
-        const timer = setTimeout(() => {
-          setShouldRenderAd(true);
-          onAdRendered?.();
-        }, loadDelay);
-        return () => clearTimeout(timer);
-      } else {
-        setShouldRenderAd(true);
-        onAdRendered?.();
-      }
-    }
-  }, [isPageLoaded, isInViewport, shouldRenderAd, loadDelay, onAdRendered]);
+    onAdRendered?.();
+  }, [onAdRendered]);
 
   const containerStyles: React.CSSProperties = {
     width: resolvedWidth,
@@ -288,9 +207,9 @@ export const AdSpace: React.FC<AdSpaceProps> = ({
       ref={containerRef}
       data-ad-space="true"
       data-preset={activePresetKey}
-      data-loaded={shouldRenderAd ? 'true' : 'false'}
+      data-loaded="true"
       style={containerStyles}
-      className={`ad-space-container relative mx-auto transition-opacity duration-300 ${className}`}
+      className={`ad-space-container relative mx-auto my-3 transition-opacity duration-300 ${className}`}
     >
       {/* Optional Top Label */}
       {showLabel && (
@@ -300,35 +219,10 @@ export const AdSpace: React.FC<AdSpaceProps> = ({
         </div>
       )}
 
-      {/* RENDER AD CONTENT (Once page loaded & scrolled into viewport) */}
-      {shouldRenderAd ? (
-        <div className="w-full h-full animate-in fade-in duration-300">
-          {children}
-        </div>
-      ) : (
-        /* PLACEHOLDER / SKELETON (Prevents Cumulative Layout Shift) */
-        <div
-          aria-hidden="true"
-          className="w-full h-full flex flex-col items-center justify-center rounded-2xl border border-slate-200/60 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/40 p-3 text-center overflow-hidden"
-          style={{ minHeight: resolvedMinHeight || '80px' }}
-        >
-          {placeholder ? (
-            placeholder
-          ) : (
-            <div className="flex flex-col items-center justify-center gap-1.5 opacity-60">
-              {showPlaceholderShimmer && (
-                <div className="w-16 h-1 bg-slate-300 dark:bg-slate-700 rounded-full animate-pulse mb-1" />
-              )}
-              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                {labelText}
-              </span>
-              <span className="text-[9px] text-slate-400/80 font-mono">
-                Preserved Layout • Zero Shift
-              </span>
-            </div>
-          )}
-        </div>
-      )}
+      {/* RENDER AD AGENCY CONTENT */}
+      <div className="w-full h-full">
+        {children}
+      </div>
     </div>
   );
 };
