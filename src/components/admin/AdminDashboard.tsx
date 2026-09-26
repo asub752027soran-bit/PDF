@@ -1161,6 +1161,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <Check className="w-3.5 h-3.5 text-emerald-500" />
                         Footer Responsive Native Ad Slot
                       </li>
+                      <li className="flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        AdSpace Lazy-Loading &amp; Layout Stability (Zero CLS)
+                      </li>
                     </ul>
                   </div>
                 </div>
