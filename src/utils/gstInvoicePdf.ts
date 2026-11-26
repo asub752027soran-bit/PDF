@@ -921,3 +921,232 @@ export const generateGSTInvoicePDF = async (data: GSTInvoiceData): Promise<void>
   const safeInvNo = (data.invoiceNumber || 'GST-Invoice').replace(/[^a-zA-Z0-9_-]/g, '_');
   doc.save(`${safeInvNo}.pdf`);
 };
+
+function escapeHtml(str: string): string {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+export const buildPrintableInvoiceHtml = (data: GSTInvoiceData): string => {
+  const totals = calculateGSTInvoiceTotals(data);
+  const sym = data.currencySymbol || '₹';
+
+  const itemsRows = totals.items
+    .map(
+      (item, idx) => `
+      <tr>
+        <td class="center">${idx + 1}</td>
+        <td><strong>${escapeHtml(item.description || '-')}</strong></td>
+        <td class="center mono">${escapeHtml(item.hsnSac || '-')}</td>
+        <td class="right nowrap">${item.quantity} ${escapeHtml(item.unit || 'Pc')}</td>
+        <td class="right nowrap">${escapeHtml(formatMoney(item.rate, sym))}</td>
+        <td class="right nowrap">${escapeHtml(formatMoney(item.taxableAmount, sym))}</td>
+        <td class="right nowrap">
+          <div>${escapeHtml(formatMoney(item.cgstAmount, sym))}</div>
+          <div class="sub">(${item.cgstRate}%)</div>
+        </td>
+        <td class="right nowrap">
+          <div>${escapeHtml(formatMoney(item.sgstAmount, sym))}</div>
+          <div class="sub">(${item.sgstRate}%)</div>
+        </td>
+        <td class="right nowrap"><strong>${escapeHtml(formatMoney(item.totalAmount, sym))}</strong></td>
+      </tr>`
+    )
+    .join('');
+
+  const sellerContact = [
+    data.sellerPhone ? `Ph: ${escapeHtml(data.sellerPhone)}` : '',
+    data.sellerEmail ? `Email: ${escapeHtml(data.sellerEmail)}` : '',
+  ]
+    .filter(Boolean)
+    .join(' | ');
+
+  const bankEntries = [
+    data.bankName ? `<p><span>Bank Name:</span> <strong>${escapeHtml(data.bankName)}</strong></p>` : '',
+    data.accountHolderName ? `<p><span>Account Name:</span> <strong>${escapeHtml(data.accountHolderName)}</strong></p>` : '',
+    data.accountNumber ? `<p><span>A/C No.:</span> <strong class="mono">${escapeHtml(data.accountNumber)}</strong></p>` : '',
+    data.ifscCode ? `<p><span>IFSC Code:</span> <strong class="mono">${escapeHtml(data.ifscCode)}</strong></p>` : '',
+    data.branchName ? `<p><span>Branch:</span> <strong>${escapeHtml(data.branchName)}</strong></p>` : '',
+    data.upiId ? `<p><span>UPI ID:</span> <strong>${escapeHtml(data.upiId)}</strong></p>` : '',
+  ]
+    .filter(Boolean)
+    .join('');
+
+  return `<!DOCTYPE html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>${escapeHtml(data.invoiceNumber || 'GST Tax Invoice')}</title>
+      <style>
+        @page { size: A4 portrait; margin: 10mm; }
+        * { box-sizing: border-box; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          color: #0f172a;
+          background: #ffffff;
+          margin: 0;
+          padding: 0;
+          font-size: 11px;
+          line-height: 1.4;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        .sheet { width: 100%; border: 1px solid #cbd5e1; }
+        .topbar {
+          background: #0f172a;
+          color: #ffffff;
+          padding: 10px 14px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .topbar h1 { margin: 0; font-size: 14px; letter-spacing: 0.5px; text-transform: uppercase; }
+        .topbar span { font-size: 10px; color: #cbd5e1; text-transform: uppercase; }
+        .row { display: flex; border-bottom: 1px solid #cbd5e1; }
+        .col-left { width: 58%; border-right: 1px solid #cbd5e1; padding: 12px 14px; }
+        .col-right { width: 42%; padding: 12px 14px; }
+        .seller-wrap { display: flex; gap: 12px; align-items: flex-start; }
+        .logo { max-width: 72px; max-height: 64px; object-fit: contain; }
+        .seller-name { font-size: 14px; font-weight: 800; margin: 0 0 3px 0; }
+        .muted { color: #475569; margin: 2px 0; white-space: pre-line; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .meta-line { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+        .meta-label { color: #64748b; font-weight: 600; }
+        .buyer-box { padding: 12px 14px; border-bottom: 1px solid #cbd5e1; }
+        .section-kicker { font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.4px; margin: 0 0 4px 0; }
+        .buyer-name { font-size: 12.5px; font-weight: 800; margin: 0; }
+        .buyer-desc { margin-top: 6px; padding-top: 5px; border-top: 1px solid #e2e8f0; color: #334155; white-space: pre-line; }
+        table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+        th, td { border-bottom: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; padding: 6px 7px; vertical-align: top; }
+        th:last-child, td:last-child { border-right: none; }
+        th { background: #f1f5f9; font-size: 10px; font-weight: 700; color: #334155; text-align: left; }
+        .center { text-align: center; }
+        .right { text-align: right; }
+        .nowrap { white-space: nowrap; }
+        .sub { font-size: 9px; color: #64748b; }
+        .words-box { padding: 10px 14px; border-bottom: 1px solid #e2e8f0; }
+        .bank-box { padding: 10px 14px; }
+        .bank-box p { margin: 2px 0; }
+        .bank-box span { color: #64748b; }
+        .totals-list { padding: 10px 14px; font-variant-numeric: tabular-nums; }
+        .total-line { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .grand-total {
+          background: #f1f5f9;
+          border-top: 1px solid #cbd5e1;
+          padding: 9px 14px;
+          display: flex;
+          justify-content: space-between;
+          font-size: 13px;
+          font-weight: 800;
+        }
+        .sig-col { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; text-align: right; min-height: 105px; }
+        .sig-img { max-height: 48px; max-width: 140px; object-fit: contain; margin: 6px 0; }
+        .sig-line { border-top: 1px solid #94a3b8; padding-top: 4px; min-width: 140px; font-weight: 700; }
+        .footer-note { text-align: center; font-size: 9.5px; color: #94a3b8; margin-top: 8px; font-style: italic; }
+      </style>
+    </head>
+    <body>
+      <div class="sheet">
+        <div class="topbar">
+          <h1>${escapeHtml(data.invoiceTitle || 'TAX INVOICE')}</h1>
+          <span>Original for Recipient</span>
+        </div>
+
+        <div class="row">
+          <div class="col-left">
+            <div class="seller-wrap">
+              ${data.logoDataUrl ? `<img class="logo" src="${data.logoDataUrl}" alt="Logo" />` : ''}
+              <div>
+                <p class="seller-name">${escapeHtml(data.sellerName || 'Seller / Business Name')}</p>
+                ${data.sellerGstin ? `<p class="mono"><strong>GSTIN: ${escapeHtml(data.sellerGstin)}</strong></p>` : ''}
+                ${data.sellerAddress ? `<p class="muted">${escapeHtml(data.sellerAddress)}</p>` : ''}
+                ${sellerContact ? `<p class="muted">${sellerContact}</p>` : ''}
+              </div>
+            </div>
+          </div>
+          <div class="col-right" style="background:#f8fafc;">
+            <div class="meta-line"><span class="meta-label">Invoice No.:</span><strong class="mono">${escapeHtml(data.invoiceNumber || '-')}</strong></div>
+            <div class="meta-line"><span class="meta-label">Invoice Date:</span><strong>${escapeHtml(data.invoiceDate || '-')}</strong></div>
+            ${data.dueDate ? `<div class="meta-line"><span class="meta-label">Due Date:</span><span>${escapeHtml(data.dueDate)}</span></div>` : ''}
+            ${data.placeOfSupply ? `<div class="meta-line"><span class="meta-label">Place of Supply:</span><span>${escapeHtml(data.placeOfSupply)}</span></div>` : ''}
+          </div>
+        </div>
+
+        <div class="buyer-box">
+          <p class="section-kicker">Bill To (Buyer Details)</p>
+          <p class="buyer-name">${escapeHtml(data.buyerName || 'Customer / Buyer Name')}</p>
+          ${data.buyerGstin ? `<p class="mono" style="margin:2px 0;"><strong>GSTIN: ${escapeHtml(data.buyerGstin)}</strong></p>` : ''}
+          ${data.buyerAddress ? `<p class="muted">${escapeHtml(data.buyerAddress)}</p>` : ''}
+          ${data.buyerPhone ? `<p class="muted">Phone: ${escapeHtml(data.buyerPhone)}</p>` : ''}
+          ${data.buyerDescription ? `<p class="buyer-desc"><span style="color:#64748b;font-weight:600;">Description:</span> ${escapeHtml(data.buyerDescription)}</p>` : ''}
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th class="center" style="width:28px;">#</th>
+              <th>Item &amp; Description</th>
+              <th class="center" style="width:68px;">HSN/SAC</th>
+              <th class="right" style="width:66px;">Qty / Pc</th>
+              <th class="right" style="width:76px;">Rate</th>
+              <th class="right" style="width:82px;">Taxable</th>
+              <th class="right" style="width:68px;">CGST</th>
+              <th class="right" style="width:68px;">SGST</th>
+              <th class="right" style="width:84px;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsRows}
+          </tbody>
+        </table>
+
+        <div class="row">
+          <div class="col-left" style="padding:0;">
+            <div class="words-box">
+              <p class="section-kicker">Invoice Amount in Words</p>
+              <strong>${escapeHtml(amountToWords(totals.grandTotal, sym))}</strong>
+            </div>
+            <div class="bank-box">
+              <p class="section-kicker">Bank Details for Payment</p>
+              ${bankEntries || '<p class="muted">No bank details provided.</p>'}
+            </div>
+          </div>
+          <div class="col-right" style="padding:0;display:flex;flex-direction:column;justify-content:space-between;">
+            <div class="totals-list">
+              <div class="total-line"><span class="meta-label">Total Quantity:</span><strong>${totals.totalQuantity}</strong></div>
+              <div class="total-line"><span class="meta-label">Taxable Subtotal:</span><strong>${escapeHtml(formatMoney(totals.subTotal, sym))}</strong></div>
+              <div class="total-line"><span class="meta-label">Total CGST:</span><strong>${escapeHtml(formatMoney(totals.totalCgst, sym))}</strong></div>
+              <div class="total-line"><span class="meta-label">Total SGST:</span><strong>${escapeHtml(formatMoney(totals.totalSgst, sym))}</strong></div>
+              ${
+                data.roundOffEnabled
+                  ? `<div class="total-line"><span class="meta-label">Round Off:</span><strong>${totals.roundOff >= 0 ? '+' : ''}${escapeHtml(formatMoney(totals.roundOff, sym))}</strong></div>`
+                  : ''
+              }
+            </div>
+            <div class="grand-total">
+              <span>Grand Total:</span>
+              <span>${escapeHtml(formatMoney(totals.grandTotal, sym))}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="row" style="border-bottom:none;">
+          <div class="col-left">
+            <p class="section-kicker">Terms &amp; Conditions</p>
+            <p class="muted">${escapeHtml(data.termsAndConditions || 'Thank you for your business.')}</p>
+          </div>
+          <div class="col-right sig-col">
+            <div style="font-weight:700;color:#334155;">For ${escapeHtml(data.signatoryCompany || data.sellerName || 'Seller')}</div>
+            ${data.signatureDataUrl ? `<img class="sig-img" src="${data.signatureDataUrl}" alt="Signature" />` : '<div style="height:40px;"></div>'}
+            <div class="sig-line">${escapeHtml(data.signatoryName || 'Authorised Signatory')}</div>
+          </div>
+        </div>
+      </div>
+      <p class="footer-note">This is a computer-generated GST Tax Invoice.</p>
+    </body>
+  </html>`;
+};

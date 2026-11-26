@@ -32,7 +32,8 @@ import {
   calculateGSTInvoiceTotals,
   formatMoney,
   amountToWords,
-  generateGSTInvoicePDF
+  generateGSTInvoicePDF,
+  buildPrintableInvoiceHtml
 } from '../../utils/gstInvoicePdf';
 import { recordToolConversion } from '../../utils/activityTracker';
 
@@ -297,11 +298,8 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
     }
   };
 
-  // Print using hidden iframe (avoids window.open popup blocks)
+  // Print using hidden iframe (works across Split, Edit, and Preview modes)
   const handlePrintInvoice = () => {
-    const previewEl = previewRef.current;
-    if (!previewEl) return;
-
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
     iframe.style.right = '0';
@@ -317,27 +315,8 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
       return;
     }
 
-    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-      .map((node) => node.outerHTML)
-      .join('\n');
-
     doc.open();
-    doc.write(`<!DOCTYPE html>
-      <html>
-        <head>
-          <title>${invoiceData.invoiceNumber || 'GST Tax Invoice'}</title>
-          ${styles}
-          <style>
-            @page { size: A4 portrait; margin: 10mm; }
-            body { background: #ffffff !important; color: #0f172a !important; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          </style>
-        </head>
-        <body>
-          <div style="width: 100%; max-width: 190mm; margin: 0 auto;">
-            ${previewEl.innerHTML}
-          </div>
-        </body>
-      </html>`);
+    doc.write(buildPrintableInvoiceHtml(invoiceData));
     doc.close();
 
     setTimeout(() => {
@@ -347,9 +326,9 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
       } finally {
         setTimeout(() => {
           if (iframe.parentNode) document.body.removeChild(iframe);
-        }, 1000);
+        }, 1200);
       }
-    }, 350);
+    }, 250);
   };
 
   const inputClass =
@@ -460,7 +439,7 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
             className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
-            <span>Print</span>
+            <span>Print Invoice</span>
           </button>
 
           <button
@@ -469,7 +448,7 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
             className="px-4 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white transition-colors flex items-center gap-1.5 shadow-xs whitespace-nowrap shrink-0 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>{isDownloading ? 'Exporting PDF...' : 'Export PDF Invoice'}</span>
+            <span>{isDownloading ? 'Exporting PDF...' : 'Download PDF'}</span>
           </button>
         </div>
       </div>
@@ -1173,6 +1152,35 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
                   className={inputClass}
                 />
               </div>
+
+              {/* Bottom Action Bar for Quick Print & Download */}
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                  Grand Total:{' '}
+                  <strong className="text-slate-900 dark:text-white text-sm">
+                    {formatMoney(totals.grandTotal, invoiceData.currencySymbol)}
+                  </strong>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handlePrintInvoice}
+                    className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>Print Invoice</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadPdf}
+                    disabled={isDownloading}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer whitespace-nowrap"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>{isDownloading ? 'Exporting PDF...' : 'Download PDF'}</span>
+                  </button>
+                </div>
+              </div>
             </section>
           </div>
         )}
@@ -1185,16 +1193,38 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
             }`}
           >
             <div className="bg-slate-200/70 dark:bg-slate-800/70 border border-slate-300 dark:border-slate-700 rounded-2xl p-3 sm:p-5 overflow-x-auto">
-              <div className="flex items-center justify-between mb-3 px-1">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                  Live A4 Tax Invoice Preview
-                </span>
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-                  {totals.items.length} item{totals.items.length === 1 ? '' : 's'} · Grand Total:{' '}
-                  <strong className="text-slate-800 dark:text-white">
-                    {formatMoney(totals.grandTotal, invoiceData.currencySymbol)}
-                  </strong>
-                </span>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3 px-1">
+                <div>
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200 block">
+                    Live A4 Tax Invoice Preview
+                  </span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                    {totals.items.length} item{totals.items.length === 1 ? '' : 's'} · Grand Total:{' '}
+                    <strong className="text-slate-800 dark:text-white">
+                      {formatMoney(totals.grandTotal, invoiceData.currencySymbol)}
+                    </strong>
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handlePrintInvoice}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadPdf}
+                    disabled={isDownloading}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer whitespace-nowrap"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>{isDownloading ? 'Exporting...' : 'Download PDF'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* A4 Sheet */}
