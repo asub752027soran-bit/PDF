@@ -38,14 +38,29 @@ export const AdSenseBanner: React.FC<AdSenseBannerProps> = ({
       console.debug('AdSense init notice:', e);
     }
 
-    // Monitor if AdSense has injected an active ad iframe
-    const checkIframe = () => {
-      if (adRef.current && adRef.current.querySelector('iframe')) {
+    // Monitor if AdSense has injected an active ad iframe or anchor links
+    const enforceNewTabLinks = () => {
+      if (!adRef.current) return;
+      if (adRef.current.querySelector('iframe')) {
         setHasFilledIframe(true);
       }
+      adRef.current.querySelectorAll('a[href]').forEach((anchor) => {
+        anchor.setAttribute('target', '_blank');
+        anchor.setAttribute('rel', 'sponsored noopener noreferrer');
+      });
     };
-    const timer = setInterval(checkIframe, 1000);
-    return () => clearInterval(timer);
+
+    const timer = setInterval(enforceNewTabLinks, 1000);
+    let observer: MutationObserver | null = null;
+    if (adRef.current && typeof MutationObserver !== 'undefined') {
+      observer = new MutationObserver(enforceNewTabLinks);
+      observer.observe(adRef.current, { childList: true, subtree: true });
+    }
+
+    return () => {
+      clearInterval(timer);
+      observer?.disconnect();
+    };
   }, []);
 
   let containerStyle = 'w-full max-w-5xl min-h-[90px]';
@@ -86,16 +101,21 @@ export const AdSenseBanner: React.FC<AdSenseBannerProps> = ({
           data-full-width-responsive="true"
         />
 
-        {/* Agency Ad Content & Active Ad Unit (Visible when Google iframe is loading or in fill status) */}
+        {/* Agency Ad Content & Active Ad Unit (Entire card opens in a new tab when clicked) */}
         {!hasFilledIframe && (
-          <div className="w-full h-full p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 border border-blue-500/40 text-left shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <a
+            href="https://google.com/adsense"
+            target="_blank"
+            rel="sponsored noopener noreferrer"
+            className="w-full h-full p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 border border-blue-500/40 hover:border-blue-400/70 text-left shadow-md hover:shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all group cursor-pointer"
+          >
             <div className="space-y-1.5 flex-1 pr-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-500/20 text-blue-300 border border-blue-400/30 flex items-center gap-1">
                   <Sparkles className="w-2.5 h-2.5" />
                   <span>Google Certified Agency Ad</span>
                 </span>
-                <span className="font-bold text-xs sm:text-sm text-white flex items-center gap-1.5">
+                <span className="font-bold text-xs sm:text-sm text-white group-hover:text-blue-200 transition-colors flex items-center gap-1.5">
                   <span>⚡ Enterprise Cloud PDF &amp; Document Infrastructure</span>
                 </span>
               </div>
@@ -109,17 +129,13 @@ export const AdSenseBanner: React.FC<AdSenseBannerProps> = ({
             </div>
 
             <div className="shrink-0 self-start sm:self-center">
-              <a
-                href="https://google.com/adsense"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="py-2 px-4 rounded-xl text-xs font-black bg-blue-500 hover:bg-blue-400 text-white shadow-md flex items-center gap-1.5 transition-transform hover:scale-105 cursor-pointer"
-              >
+              <span className="py-2 px-4 rounded-xl text-xs font-black bg-blue-500 group-hover:bg-blue-400 text-white shadow-md flex items-center gap-1.5 transition-transform group-hover:scale-105">
                 <span>Learn More</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </a>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                <ExternalLink className="w-3 h-3 opacity-80" />
+              </span>
             </div>
-          </div>
+          </a>
         )}
       </div>
     </div>

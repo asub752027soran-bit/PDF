@@ -57,17 +57,50 @@ const CustomHtmlScriptContainer: React.FC<{
       }
     });
 
+    // Force all injected or dynamically added links to open in a new tab/page
+    const enforceLinksOpenInNewTab = () => {
+      container.querySelectorAll('a[href]').forEach((anchor) => {
+        const href = anchor.getAttribute('href') || '';
+        if (href && href !== '#' && !href.startsWith('javascript:')) {
+          anchor.setAttribute('target', '_blank');
+          anchor.setAttribute('rel', 'sponsored noopener noreferrer');
+        }
+      });
+    };
+
+    enforceLinksOpenInNewTab();
+
+    let observer: MutationObserver | null = null;
+    if (typeof MutationObserver !== 'undefined') {
+      observer = new MutationObserver(enforceLinksOpenInNewTab);
+      observer.observe(container, { childList: true, subtree: true });
+    }
+
     return () => {
+      observer?.disconnect();
       if (container) {
         container.innerHTML = '';
       }
     };
   }, [htmlContent, scriptCode]);
 
+  const handleContainerClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement | null;
+    const anchor = target?.closest('a[href]') as HTMLAnchorElement | null;
+    if (anchor) {
+      const href = anchor.getAttribute('href') || '';
+      if (href && href !== '#' && !href.startsWith('javascript:')) {
+        anchor.setAttribute('target', '_blank');
+        anchor.setAttribute('rel', 'sponsored noopener noreferrer');
+      }
+    }
+    onClick?.(e);
+  };
+
   return (
     <div
       ref={containerRef}
-      onClick={onClick}
+      onClick={handleContainerClick}
       className={`custom-ad-html-container overflow-hidden w-full flex items-center justify-center ${className}`}
     />
   );
@@ -90,7 +123,18 @@ export const CustomAdBanner: React.FC<CustomAdBannerProps> = ({
 
   if (!ad || !ad.enabled) return null;
 
+  const resolvedTargetUrl = (() => {
+    const raw = (ad.targetUrl || '').trim();
+    if (!raw || raw === '#') return '#';
+    if (/^(https?:\/\/|\/)/i.test(raw)) return raw;
+    return `https://${raw}`;
+  })();
+
   const handleClick = (e: React.MouseEvent) => {
+    if (resolvedTargetUrl === '#' && ad.adType !== 'custom_html' && ad.adType !== 'script') {
+      e.preventDefault();
+      return;
+    }
     recordAdClick(ad.id);
   };
 
@@ -165,7 +209,7 @@ export const CustomAdBanner: React.FC<CustomAdBannerProps> = ({
           </div>
         )}
         <a
-          href={ad.targetUrl || '#'}
+          href={resolvedTargetUrl}
           target="_blank"
           rel="sponsored noopener noreferrer"
           onClick={handleClick}
@@ -196,7 +240,7 @@ export const CustomAdBanner: React.FC<CustomAdBannerProps> = ({
         )}
 
         <a
-          href={ad.targetUrl || '#'}
+          href={resolvedTargetUrl}
           target="_blank"
           rel="sponsored noopener noreferrer"
           onClick={handleClick}
@@ -256,7 +300,7 @@ export const CustomAdBanner: React.FC<CustomAdBannerProps> = ({
       )}
 
       <a
-        href={ad.targetUrl || '#'}
+        href={resolvedTargetUrl}
         target="_blank"
         rel="sponsored noopener noreferrer"
         onClick={handleClick}
