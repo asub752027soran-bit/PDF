@@ -27,6 +27,7 @@ import { useLanguage } from '../lib/LanguageContext';
 
 interface HeaderProps {
   currentCategory: CategoryType;
+  activeToolId?: string | null;
   onSelectCategory: (category: CategoryType) => void;
   onSelectTool: (toolId: string) => void;
   onOpenAdmin: (tabId?: string) => void;
@@ -43,6 +44,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   currentCategory,
+  activeToolId,
   onSelectCategory,
   onSelectTool,
   onOpenAdmin,
@@ -173,9 +175,20 @@ export const Header: React.FC<HeaderProps> = ({
 
         <button
           onClick={() => onSelectTool('universal-converter')}
-          className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors hidden md:block"
+          className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors hidden md:block whitespace-nowrap shrink-0 cursor-pointer"
         >
           {t('convert')}
+        </button>
+
+        <button
+          onClick={() => onSelectTool('gst-invoice-generator')}
+          className={`transition-colors whitespace-nowrap shrink-0 cursor-pointer hidden sm:block ${
+            activeToolId === 'gst-invoice-generator'
+              ? 'text-blue-600 dark:text-blue-400 font-bold underline underline-offset-4'
+              : 'text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400'
+          }`}
+        >
+          GST Invoice
         </button>
 
         {/* Recently Used Dropdown */}

@@ -22,6 +22,7 @@ const ImageToUrlTool = lazy(() => import('./components/tools/ImageToUrlTool').th
 const FaviconGeneratorTool = lazy(() => import('./components/tools/FaviconGeneratorTool').then(m => ({ default: m.FaviconGeneratorTool })));
 const OCRTool = lazy(() => import('./components/tools/OCRTool').then(m => ({ default: m.OCRTool })));
 const UniversalConvertTool = lazy(() => import('./components/tools/UniversalConvertTool').then(m => ({ default: m.UniversalConvertTool })));
+const GSTInvoiceGeneratorTool = lazy(() => import('./components/tools/GSTInvoiceGeneratorTool').then(m => ({ default: m.GSTInvoiceGeneratorTool })));
 
 // Lazy Loaded Pages & Admin Components
 const BlogPage = lazy(() => import('./components/pages/BlogPage').then(m => ({ default: m.BlogPage })));
@@ -525,6 +526,7 @@ export default function App() {
       {/* Header */}
       <Header
         currentCategory={currentCategory}
+        activeToolId={activeToolId}
         onSelectCategory={(cat) => {
           setCurrentCategory(cat);
           handleGoHome();
@@ -582,17 +584,6 @@ export default function App() {
                 setSearchQuery={setSearchQuery}
                 onQuickSelect={handleSelectTool}
               />
-
-              {adminConfig.adsEnabled && (
-                <AdPlacement
-                  slotType="homepage_top"
-                  adsEnabled={adminConfig.adsEnabled}
-                  adServingMode={adminConfig.adServingMode}
-                  customAds={adminConfig.customAds}
-                  adsensePublisherId={adminConfig.adsensePublisherId}
-                  adsenseSlot={adminConfig.adsenseCustomSlots?.leaderboard}
-                />
-              )}
 
               <ToolGrid
                 tools={TOOLS}
@@ -673,6 +664,7 @@ export default function App() {
 
                 {activeToolId === 'ocr-reader' && <OCRTool onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
                 {activeToolId === 'universal-converter' && <UniversalConvertTool onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />}
+                {activeToolId === 'gst-invoice-generator' && <GSTInvoiceGeneratorTool onBack={handleGoHome} />}
               </ToolPageLayout>
             </Suspense>
           )}

@@ -3,6 +3,18 @@ import { ToolItem, CategoryType } from '../types';
 export const TOOLS: ToolItem[] = [
   // --- PDF TOOLS ---
   {
+    id: 'gst-invoice-generator',
+    name: 'GST Invoice Generator',
+    category: 'PDF Tools',
+    description: 'Create GST tax invoices with company logo, HSN/SAC codes, CGST & SGST breakdown, bank details, and authorised signature.',
+    iconName: 'Receipt',
+    badge: 'New',
+    supportedFormats: ['PDF', 'A4', 'PRINT'],
+    tags: ['gst', 'invoice', 'tax invoice', 'billing', 'hsn', 'sac', 'cgst', 'sgst', 'receipt', 'signature'],
+    seoTitle: 'Free GST Invoice Generator Online - Create Tax Invoice PDF',
+    seoDescription: 'Generate professional GST tax invoices online for free. Add company logo, GSTIN, buyer details, HSN/SAC items, CGST & SGST, bank details, and authorised signature.'
+  },
+  {
     id: 'edit-pdf',
     name: 'Edit PDF',
     category: 'PDF Tools',

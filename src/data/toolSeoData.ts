@@ -714,5 +714,37 @@ export const TOOL_SEO_DETAILS: Record<string, ToolSeoDetail> = {
     relatedToolIds: ['pdf-to-word', 'edit-pdf', 'compress-pdf', 'image-converter'],
     canonicalSlug: 'universal-converter',
     alternateSlugs: ['batch-converter', 'multi-file-converter']
+  },
+
+  'gst-invoice-generator': {
+    h1: 'Free Online GST Invoice Generator',
+    shortIntro: 'Create compliant A4 GST tax invoices with your company logo, buyer details, HSN/SAC items, CGST & SGST split, bank details, and authorised signature.',
+    fullDescription: 'PDF Editfy GST Invoice Generator lets businesses, freelancers, and shops build itemized tax invoices directly in the browser. Upload your logo, enter seller and buyer GSTINs, add products or services with HSN/SAC codes, quantities, units (Pc, Box, Kg, Hrs), rates, and automatic CGST/SGST tax calculation, then export a crisp A4 PDF or print immediately.',
+    howToSteps: [
+      { title: 'Add Seller Details & Company Logo', description: 'Upload your business logo and enter your company name, GSTIN, address, phone, and email.' },
+      { title: 'Enter Invoice & Buyer Info', description: 'Set your invoice number, invoice date, due date, place of supply, and buyer billing details.' },
+      { title: 'Add Items with HSN/SAC, Qty & GST', description: 'Enter item descriptions, HSN/SAC codes, quantities, units (Pc), rates, and CGST/SGST percentages.' },
+      { title: 'Add Bank Details, Signature & Download PDF', description: 'Fill in bank account & IFSC details, upload or draw your authorised signature, and download your A4 PDF.' }
+    ],
+    features: [
+      'Company Logo Upload & Live A4 Tax Invoice Preview',
+      'Automatic Taxable Amount, CGST & SGST Tax Calculation',
+      'HSN / SAC Code, Quantity, Unit (Pc/Box/Kg/Hrs) & Rate Support',
+      'Automatic Amount in Words (Indian Numbering System)',
+      'Bank Details & UPI Payment Information Section',
+      'Authorised Signature Upload or Interactive Draw Pad',
+      '1-Click High-Resolution A4 PDF Download & Print Support'
+    ],
+    supportedInput: 'Business details, PNG/JPG Logo & Signature',
+    supportedOutput: 'Print-Ready A4 GST Tax Invoice (.pdf)',
+    faqs: [
+      { question: 'Is the GST Invoice Generator completely free?', answer: 'Yes! You can create, preview, print, and download unlimited GST tax invoice PDFs for free with zero watermarks or sign-up.' },
+      { question: 'Does it calculate CGST and SGST automatically?', answer: 'Yes. Enter the quantity, rate, CGST %, and SGST % for each line item and the tool automatically calculates taxable values, CGST, SGST, round-off, grand total, and amount in words.' },
+      { question: 'Can I add my company logo and authorised signature?', answer: 'Yes. You can upload your company logo and either upload a signature image or draw your authorised signature directly inside the signature pad.' },
+      { question: 'Is my invoice data stored on external servers?', answer: 'No. Your invoice details, logo, and signature stay private in your browser and are saved only as a local draft in your browser storage.' }
+    ],
+    relatedToolIds: ['edit-pdf', 'compress-pdf', 'merge-pdf', 'pdf-to-excel'],
+    canonicalSlug: 'gst-invoice-generator',
+    alternateSlugs: ['gst-invoice', 'tax-invoice-generator', 'invoice-generator']
   }
 };

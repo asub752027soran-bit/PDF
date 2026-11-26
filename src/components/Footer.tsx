@@ -132,6 +132,11 @@ export const Footer: React.FC<FooterProps> = ({
                   {getToolName('ocr-reader', 'OCR Text Extractor')}
                 </button>
               </li>
+              <li>
+                <button onClick={() => onSelectTool('gst-invoice-generator')} className="hover:text-indigo-400 transition-colors">
+                  {getToolName('gst-invoice-generator', 'GST Invoice Generator')}
+                </button>
+              </li>
             </ul>
           </div>
 
