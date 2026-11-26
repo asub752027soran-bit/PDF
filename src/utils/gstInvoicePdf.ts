@@ -7,6 +7,8 @@ export interface GSTInvoiceItem {
   quantity: number;
   unit: string;
   rate: number;
+  discount?: number;
+  discountType?: 'percent' | 'amount';
   cgstRate: number;
   sgstRate: number;
 }
@@ -47,6 +49,8 @@ export interface GSTInvoiceData {
   upiId: string;
 
   // Totals & Notes
+  additionalDiscount?: number;
+  additionalDiscountType?: 'percent' | 'amount';
   roundOffEnabled: boolean;
   termsAndConditions: string;
 
@@ -57,6 +61,10 @@ export interface GSTInvoiceData {
 }
 
 export interface CalculatedItem extends GSTInvoiceItem {
+  discount: number;
+  discountType: 'percent' | 'amount';
+  grossAmount: number;
+  discountAmount: number;
   taxableAmount: number;
   cgstAmount: number;
   sgstAmount: number;
@@ -66,10 +74,14 @@ export interface CalculatedItem extends GSTInvoiceItem {
 export interface GSTInvoiceTotals {
   items: CalculatedItem[];
   totalQuantity: number;
+  totalGross: number;
+  totalItemDiscount: number;
   subTotal: number;
   totalCgst: number;
   totalSgst: number;
   totalTax: number;
+  additionalDiscountAmount: number;
+  totalDiscount: number;
   exactTotal: number;
   roundOff: number;
   grandTotal: number;
@@ -132,6 +144,8 @@ export const getDefaultGSTInvoiceData = (): GSTInvoiceData => {
         quantity: 5,
         unit: 'Pc',
         rate: 2400,
+        discount: 5,
+        discountType: 'percent',
         cgstRate: 9,
         sgstRate: 9,
       },
@@ -142,6 +156,8 @@ export const getDefaultGSTInvoiceData = (): GSTInvoiceData => {
         quantity: 10,
         unit: 'Box',
         rate: 450,
+        discount: 0,
+        discountType: 'percent',
         cgstRate: 6,
         sgstRate: 6,
       },
@@ -154,6 +170,8 @@ export const getDefaultGSTInvoiceData = (): GSTInvoiceData => {
     branchName: 'Andheri East, Mumbai',
     upiId: 'apexenterprises@hdfcbank',
 
+    additionalDiscount: 0,
+    additionalDiscountType: 'amount',
     roundOffEnabled: true,
     termsAndConditions:
       '1. Goods once sold will not be taken back.\n2. Payment is due within 15 days from the invoice date.\n3. Subject to Mumbai Jurisdiction only.',
@@ -195,6 +213,8 @@ export const getEmptyGSTInvoiceData = (): GSTInvoiceData => {
         quantity: 1,
         unit: 'Pc',
         rate: 0,
+        discount: 0,
+        discountType: 'percent',
         cgstRate: 9,
         sgstRate: 9,
       },
@@ -207,6 +227,8 @@ export const getEmptyGSTInvoiceData = (): GSTInvoiceData => {
     branchName: '',
     upiId: '',
 
+    additionalDiscount: 0,
+    additionalDiscountType: 'amount',
     roundOffEnabled: true,
     termsAndConditions: '1. Payment due upon receipt.\n2. Thank you for your business.',
 
@@ -218,6 +240,8 @@ export const getEmptyGSTInvoiceData = (): GSTInvoiceData => {
 
 export const calculateGSTInvoiceTotals = (data: GSTInvoiceData): GSTInvoiceTotals => {
   let totalQuantity = 0;
+  let totalGross = 0;
+  let totalItemDiscount = 0;
   let subTotal = 0;
   let totalCgst = 0;
   let totalSgst = 0;
@@ -225,15 +249,24 @@ export const calculateGSTInvoiceTotals = (data: GSTInvoiceData): GSTInvoiceTotal
   const items: CalculatedItem[] = data.items.map((item) => {
     const qty = Math.max(0, Number(item.quantity) || 0);
     const rate = Math.max(0, Number(item.rate) || 0);
+    const discount = Math.max(0, Number(item.discount) || 0);
+    const discountType: 'percent' | 'amount' = item.discountType === 'amount' ? 'amount' : 'percent';
     const cgstRate = Math.max(0, Number(item.cgstRate) || 0);
     const sgstRate = Math.max(0, Number(item.sgstRate) || 0);
 
-    const taxableAmount = qty * rate;
+    const grossAmount = qty * rate;
+    const discountAmount =
+      discountType === 'amount'
+        ? Math.min(grossAmount, discount)
+        : (grossAmount * Math.min(100, discount)) / 100;
+    const taxableAmount = Math.max(0, grossAmount - discountAmount);
     const cgstAmount = (taxableAmount * cgstRate) / 100;
     const sgstAmount = (taxableAmount * sgstRate) / 100;
     const totalAmount = taxableAmount + cgstAmount + sgstAmount;
 
     totalQuantity += qty;
+    totalGross += grossAmount;
+    totalItemDiscount += discountAmount;
     subTotal += taxableAmount;
     totalCgst += cgstAmount;
     totalSgst += sgstAmount;
@@ -242,8 +275,12 @@ export const calculateGSTInvoiceTotals = (data: GSTInvoiceData): GSTInvoiceTotal
       ...item,
       quantity: qty,
       rate,
+      discount,
+      discountType,
       cgstRate,
       sgstRate,
+      grossAmount,
+      discountAmount,
       taxableAmount,
       cgstAmount,
       sgstAmount,
@@ -252,17 +289,29 @@ export const calculateGSTInvoiceTotals = (data: GSTInvoiceData): GSTInvoiceTotal
   });
 
   const totalTax = totalCgst + totalSgst;
-  const exactTotal = subTotal + totalTax;
+  const beforeExtraDiscount = subTotal + totalTax;
+  const rawExtraDiscount = Math.max(0, Number(data.additionalDiscount) || 0);
+  const extraDiscountType = data.additionalDiscountType === 'percent' ? 'percent' : 'amount';
+  const additionalDiscountAmount =
+    extraDiscountType === 'percent'
+      ? (beforeExtraDiscount * Math.min(100, rawExtraDiscount)) / 100
+      : Math.min(beforeExtraDiscount, rawExtraDiscount);
+  const totalDiscount = totalItemDiscount + additionalDiscountAmount;
+  const exactTotal = Math.max(0, beforeExtraDiscount - additionalDiscountAmount);
   const roundOff = data.roundOffEnabled ? Math.round(exactTotal) - exactTotal : 0;
   const grandTotal = exactTotal + roundOff;
 
   return {
     items,
     totalQuantity,
+    totalGross,
+    totalItemDiscount,
     subTotal,
     totalCgst,
     totalSgst,
     totalTax,
+    additionalDiscountAmount,
+    totalDiscount,
     exactTotal,
     roundOff,
     grandTotal,
@@ -607,14 +656,15 @@ export const generateGSTInvoicePDF = async (data: GSTInvoiceData): Promise<void>
   y = buyerStartY + buyerHeight;
 
   // Items Table Columns (Total = 186mm)
-  // #, Description, HSN/SAC, Qty/Pc, Rate, Taxable, CGST, SGST, Amount
+  // #, Description, HSN/SAC, Qty/Pc, Rate, Disc., Taxable, CGST, SGST, Amount
   const cols = [
-    { key: 'sno', label: '#', width: 8, align: 'center' as const },
-    { key: 'desc', label: 'Item & Description', width: 50, align: 'left' as const },
-    { key: 'hsn', label: 'HSN/SAC', width: 17, align: 'center' as const },
-    { key: 'qty', label: 'Qty / Unit', width: 17, align: 'right' as const },
-    { key: 'rate', label: 'Rate', width: 20, align: 'right' as const },
-    { key: 'taxable', label: 'Taxable', width: 22, align: 'right' as const },
+    { key: 'sno', label: '#', width: 7, align: 'center' as const },
+    { key: 'desc', label: 'Item & Description', width: 41, align: 'left' as const },
+    { key: 'hsn', label: 'HSN/SAC', width: 16, align: 'center' as const },
+    { key: 'qty', label: 'Qty / Unit', width: 15, align: 'right' as const },
+    { key: 'rate', label: 'Rate', width: 18, align: 'right' as const },
+    { key: 'disc', label: 'Disc.', width: 16, align: 'right' as const },
+    { key: 'taxable', label: 'Taxable', width: 21, align: 'right' as const },
     { key: 'cgst', label: 'CGST', width: 17, align: 'right' as const },
     { key: 'sgst', label: 'SGST', width: 17, align: 'right' as const },
     { key: 'total', label: 'Amount', width: 18, align: 'right' as const },
@@ -626,7 +676,7 @@ export const generateGSTInvoicePDF = async (data: GSTInvoiceData): Promise<void>
     doc.rect(margin, startY, contentWidth, 8, 'FD');
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
+    doc.setFontSize(7.2);
     doc.setTextColor(30, 41, 59);
 
     let x = margin;
@@ -638,7 +688,7 @@ export const generateGSTInvoicePDF = async (data: GSTInvoiceData): Promise<void>
         col.align === 'center'
           ? x + col.width / 2
           : col.align === 'right'
-          ? x + col.width - 2
+          ? x + col.width - 1.8
           : x + 2;
       doc.text(col.label, textX, startY + 5.2, { align: col.align });
       x += col.width;
@@ -672,7 +722,7 @@ export const generateGSTInvoicePDF = async (data: GSTInvoiceData): Promise<void>
     });
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.6);
+    doc.setFontSize(7.3);
     doc.setTextColor(15, 23, 42);
 
     let cx = margin;
@@ -691,38 +741,53 @@ export const generateGSTInvoicePDF = async (data: GSTInvoiceData): Promise<void>
     cx += cols[2].width;
 
     // Qty + Unit (Pc)
-    doc.text(`${item.quantity} ${item.unit || 'Pc'}`, cx + cols[3].width - 2, y + 5, { align: 'right' });
+    doc.text(`${item.quantity} ${item.unit || 'Pc'}`, cx + cols[3].width - 1.8, y + 5, { align: 'right' });
     cx += cols[3].width;
 
     // Rate
-    doc.text(formatPdfMoney(item.rate, data.currencySymbol), cx + cols[4].width - 2, y + 5, { align: 'right' });
+    doc.text(formatPdfMoney(item.rate, data.currencySymbol), cx + cols[4].width - 1.8, y + 5, { align: 'right' });
     cx += cols[4].width;
 
-    // Taxable
-    doc.text(formatPdfMoney(item.taxableAmount, data.currencySymbol), cx + cols[5].width - 2, y + 5, { align: 'right' });
+    // Discount
+    if (item.discountAmount > 0) {
+      doc.text(formatPdfMoney(item.discountAmount, data.currencySymbol), cx + cols[5].width - 1.8, y + 4.4, { align: 'right' });
+      if (item.discountType === 'percent') {
+        doc.setFontSize(6.2);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`(${item.discount}%)`, cx + cols[5].width - 1.8, y + 7.6, { align: 'right' });
+        doc.setFontSize(7.3);
+        doc.setTextColor(15, 23, 42);
+      }
+    } else {
+      doc.text('-', cx + cols[5].width - 1.8, y + 5, { align: 'right' });
+    }
     cx += cols[5].width;
 
-    // CGST
-    doc.text(formatPdfMoney(item.cgstAmount, data.currencySymbol), cx + cols[6].width - 2, y + 4.4, { align: 'right' });
-    doc.setFontSize(6.4);
-    doc.setTextColor(100, 116, 139);
-    doc.text(`(${item.cgstRate}%)`, cx + cols[6].width - 2, y + 7.6, { align: 'right' });
-    doc.setFontSize(7.6);
-    doc.setTextColor(15, 23, 42);
+    // Taxable
+    doc.text(formatPdfMoney(item.taxableAmount, data.currencySymbol), cx + cols[6].width - 1.8, y + 5, { align: 'right' });
     cx += cols[6].width;
 
-    // SGST
-    doc.text(formatPdfMoney(item.sgstAmount, data.currencySymbol), cx + cols[7].width - 2, y + 4.4, { align: 'right' });
-    doc.setFontSize(6.4);
+    // CGST
+    doc.text(formatPdfMoney(item.cgstAmount, data.currencySymbol), cx + cols[7].width - 1.8, y + 4.4, { align: 'right' });
+    doc.setFontSize(6.2);
     doc.setTextColor(100, 116, 139);
-    doc.text(`(${item.sgstRate}%)`, cx + cols[7].width - 2, y + 7.6, { align: 'right' });
-    doc.setFontSize(7.6);
+    doc.text(`(${item.cgstRate}%)`, cx + cols[7].width - 1.8, y + 7.6, { align: 'right' });
+    doc.setFontSize(7.3);
     doc.setTextColor(15, 23, 42);
     cx += cols[7].width;
 
+    // SGST
+    doc.text(formatPdfMoney(item.sgstAmount, data.currencySymbol), cx + cols[8].width - 1.8, y + 4.4, { align: 'right' });
+    doc.setFontSize(6.2);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`(${item.sgstRate}%)`, cx + cols[8].width - 1.8, y + 7.6, { align: 'right' });
+    doc.setFontSize(7.3);
+    doc.setTextColor(15, 23, 42);
+    cx += cols[8].width;
+
     // Line Total
     doc.setFont('helvetica', 'bold');
-    doc.text(formatPdfMoney(item.totalAmount, data.currencySymbol), cx + cols[8].width - 2, y + 5, { align: 'right' });
+    doc.text(formatPdfMoney(item.totalAmount, data.currencySymbol), cx + cols[9].width - 1.8, y + 5, { align: 'right' });
 
     y += rowHeight;
   });
@@ -790,10 +855,24 @@ export const generateGSTInvoicePDF = async (data: GSTInvoiceData): Promise<void>
   let rightBottomY = summaryStartY + 5.5;
   const totalRows: { label: string; value: string; bold?: boolean }[] = [
     { label: 'Total Quantity:', value: `${totals.totalQuantity}` },
-    { label: 'Taxable Amount (Subtotal):', value: formatPdfMoney(totals.subTotal, data.currencySymbol) },
-    { label: 'Total CGST:', value: formatPdfMoney(totals.totalCgst, data.currencySymbol) },
-    { label: 'Total SGST:', value: formatPdfMoney(totals.totalSgst, data.currencySymbol) },
   ];
+  if (totals.totalItemDiscount > 0) {
+    totalRows.push({
+      label: 'Item Discount:',
+      value: `-${formatPdfMoney(totals.totalItemDiscount, data.currencySymbol)}`,
+    });
+  }
+  totalRows.push(
+    { label: 'Taxable Subtotal:', value: formatPdfMoney(totals.subTotal, data.currencySymbol) },
+    { label: 'Total CGST:', value: formatPdfMoney(totals.totalCgst, data.currencySymbol) },
+    { label: 'Total SGST:', value: formatPdfMoney(totals.totalSgst, data.currencySymbol) }
+  );
+  if (totals.additionalDiscountAmount > 0) {
+    totalRows.push({
+      label: 'Additional Discount:',
+      value: `-${formatPdfMoney(totals.additionalDiscountAmount, data.currencySymbol)}`,
+    });
+  }
   if (data.roundOffEnabled) {
     const sign = totals.roundOff >= 0 ? '+' : '';
     totalRows.push({
@@ -944,6 +1023,13 @@ export const buildPrintableInvoiceHtml = (data: GSTInvoiceData): string => {
         <td class="center mono">${escapeHtml(item.hsnSac || '-')}</td>
         <td class="right nowrap">${item.quantity} ${escapeHtml(item.unit || 'Pc')}</td>
         <td class="right nowrap">${escapeHtml(formatMoney(item.rate, sym))}</td>
+        <td class="right nowrap">${
+          item.discountAmount > 0
+            ? `<div>-${escapeHtml(formatMoney(item.discountAmount, sym))}</div>${
+                item.discountType === 'percent' ? `<div class="sub">(${item.discount}%)</div>` : ''
+              }`
+            : '-'
+        }</td>
         <td class="right nowrap">${escapeHtml(formatMoney(item.taxableAmount, sym))}</td>
         <td class="right nowrap">
           <div>${escapeHtml(formatMoney(item.cgstAmount, sym))}</div>
@@ -1088,15 +1174,16 @@ export const buildPrintableInvoiceHtml = (data: GSTInvoiceData): string => {
         <table>
           <thead>
             <tr>
-              <th class="center" style="width:28px;">#</th>
+              <th class="center" style="width:26px;">#</th>
               <th>Item &amp; Description</th>
-              <th class="center" style="width:68px;">HSN/SAC</th>
-              <th class="right" style="width:66px;">Qty / Pc</th>
-              <th class="right" style="width:76px;">Rate</th>
-              <th class="right" style="width:82px;">Taxable</th>
-              <th class="right" style="width:68px;">CGST</th>
-              <th class="right" style="width:68px;">SGST</th>
-              <th class="right" style="width:84px;">Amount</th>
+              <th class="center" style="width:62px;">HSN/SAC</th>
+              <th class="right" style="width:60px;">Qty / Pc</th>
+              <th class="right" style="width:70px;">Rate</th>
+              <th class="right" style="width:64px;">Disc.</th>
+              <th class="right" style="width:76px;">Taxable</th>
+              <th class="right" style="width:64px;">CGST</th>
+              <th class="right" style="width:64px;">SGST</th>
+              <th class="right" style="width:78px;">Amount</th>
             </tr>
           </thead>
           <tbody>
@@ -1118,9 +1205,19 @@ export const buildPrintableInvoiceHtml = (data: GSTInvoiceData): string => {
           <div class="col-right" style="padding:0;display:flex;flex-direction:column;justify-content:space-between;">
             <div class="totals-list">
               <div class="total-line"><span class="meta-label">Total Quantity:</span><strong>${totals.totalQuantity}</strong></div>
+              ${
+                totals.totalItemDiscount > 0
+                  ? `<div class="total-line"><span class="meta-label">Item Discount:</span><strong>-${escapeHtml(formatMoney(totals.totalItemDiscount, sym))}</strong></div>`
+                  : ''
+              }
               <div class="total-line"><span class="meta-label">Taxable Subtotal:</span><strong>${escapeHtml(formatMoney(totals.subTotal, sym))}</strong></div>
               <div class="total-line"><span class="meta-label">Total CGST:</span><strong>${escapeHtml(formatMoney(totals.totalCgst, sym))}</strong></div>
               <div class="total-line"><span class="meta-label">Total SGST:</span><strong>${escapeHtml(formatMoney(totals.totalSgst, sym))}</strong></div>
+              ${
+                totals.additionalDiscountAmount > 0
+                  ? `<div class="total-line"><span class="meta-label">Additional Discount:</span><strong>-${escapeHtml(formatMoney(totals.additionalDiscountAmount, sym))}</strong></div>`
+                  : ''
+              }
               ${
                 data.roundOffEnabled
                   ? `<div class="total-line"><span class="meta-label">Round Off:</span><strong>${totals.roundOff >= 0 ? '+' : ''}${escapeHtml(formatMoney(totals.roundOff, sym))}</strong></div>`

@@ -123,6 +123,8 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
       quantity: 1,
       unit: 'Pc',
       rate: 0,
+      discount: 0,
+      discountType: 'percent',
       cgstRate: 9,
       sgstRate: 9,
     };
@@ -156,6 +158,8 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
               quantity: 1,
               unit: 'Pc',
               rate: 0,
+              discount: 0,
+              discountType: 'percent',
               cgstRate: 9,
               sgstRate: 9,
             },
@@ -846,7 +850,7 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
                           </select>
                         </div>
 
-                        <div className="sm:col-span-3">
+                        <div className="sm:col-span-2">
                           <label className={labelClass}>Rate ({invoiceData.currencySymbol})</label>
                           <input
                             type="number"
@@ -855,6 +859,38 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
                             value={item.rate}
                             onChange={(e) =>
                               updateItem(idx, 'rate', Math.max(0, Number(e.target.value)))
+                            }
+                            className={`${inputClass} tabular-nums`}
+                          />
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                              Discount
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateItem(
+                                  idx,
+                                  'discountType',
+                                  item.discountType === 'amount' ? 'percent' : 'amount'
+                                )
+                              }
+                              className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer"
+                              title="Toggle between percentage (%) and flat amount"
+                            >
+                              {item.discountType === 'amount' ? invoiceData.currencySymbol : '%'}
+                            </button>
+                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={item.discount}
+                            onChange={(e) =>
+                              updateItem(idx, 'discount', Math.max(0, Number(e.target.value)))
                             }
                             className={`${inputClass} tabular-nums`}
                           />
@@ -875,7 +911,7 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
                           />
                         </div>
 
-                        <div className="col-span-2 sm:col-span-3">
+                        <div className="sm:col-span-2">
                           <label className={labelClass}>SGST (%)</label>
                           <input
                             type="number"
@@ -894,6 +930,14 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
 
                     {/* Row Sub-summary */}
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/70 dark:border-slate-700/70 text-[11px] text-slate-600 dark:text-slate-400 tabular-nums">
+                      {item.discountAmount > 0 && (
+                        <span>
+                          Discount:{' '}
+                          <strong className="text-emerald-700 dark:text-emerald-400">
+                            -{formatMoney(item.discountAmount, invoiceData.currencySymbol)}
+                          </strong>
+                        </span>
+                      )}
                       <span>
                         Taxable Amt:{' '}
                         <strong className="text-slate-800 dark:text-slate-200">
@@ -1143,14 +1187,59 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
                 )}
               </div>
 
-              <div>
-                <label className={labelClass}>Terms &amp; Conditions</label>
-                <textarea
-                  rows={3}
-                  value={invoiceData.termsAndConditions}
-                  onChange={(e) => updateField('termsAndConditions', e.target.value)}
-                  className={inputClass}
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                      Additional Invoice Discount (Optional)
+                    </label>
+                    <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => updateField('additionalDiscountType', 'amount')}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                          (invoiceData.additionalDiscountType || 'amount') === 'amount'
+                            ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                            : 'text-slate-500'
+                        }`}
+                      >
+                        {invoiceData.currencySymbol}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateField('additionalDiscountType', 'percent')}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                          invoiceData.additionalDiscountType === 'percent'
+                            ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                            : 'text-slate-500'
+                        }`}
+                      >
+                        %
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={invoiceData.additionalDiscount ?? 0}
+                    onChange={(e) =>
+                      updateField('additionalDiscount', Math.max(0, Number(e.target.value)))
+                    }
+                    placeholder="0"
+                    className={`${inputClass} tabular-nums`}
+                  />
+                </div>
+
+                <div>
+                  <label className={labelClass}>Terms &amp; Conditions</label>
+                  <textarea
+                    rows={2}
+                    value={invoiceData.termsAndConditions}
+                    onChange={(e) => updateField('termsAndConditions', e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
               </div>
 
               {/* Bottom Action Bar for Quick Print & Download */}
@@ -1347,57 +1436,72 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
                   <table className="w-full border-collapse tabular-nums">
                     <thead>
                       <tr className="bg-slate-100 border-b border-slate-300 text-[10px] font-bold text-slate-700">
-                        <th className="py-2 px-2 border-r border-slate-300 text-center w-8">#</th>
+                        <th className="py-2 px-1.5 border-r border-slate-300 text-center w-7">#</th>
                         <th className="py-2 px-2 border-r border-slate-300 text-left">
                           Item &amp; Description
                         </th>
-                        <th className="py-2 px-2 border-r border-slate-300 text-center w-16">
+                        <th className="py-2 px-1.5 border-r border-slate-300 text-center w-16">
                           HSN/SAC
                         </th>
-                        <th className="py-2 px-2 border-r border-slate-300 text-right w-16">
+                        <th className="py-2 px-1.5 border-r border-slate-300 text-right w-14">
                           Qty / Pc
                         </th>
-                        <th className="py-2 px-2 border-r border-slate-300 text-right w-20">
+                        <th className="py-2 px-1.5 border-r border-slate-300 text-right w-18">
                           Rate
                         </th>
-                        <th className="py-2 px-2 border-r border-slate-300 text-right w-20">
+                        <th className="py-2 px-1.5 border-r border-slate-300 text-right w-16">
+                          Disc.
+                        </th>
+                        <th className="py-2 px-1.5 border-r border-slate-300 text-right w-20">
                           Taxable
                         </th>
-                        <th className="py-2 px-2 border-r border-slate-300 text-right w-18">
+                        <th className="py-2 px-1.5 border-r border-slate-300 text-right w-16">
                           CGST
                         </th>
-                        <th className="py-2 px-2 border-r border-slate-300 text-right w-18">
+                        <th className="py-2 px-1.5 border-r border-slate-300 text-right w-16">
                           SGST
                         </th>
-                        <th className="py-2 px-2 text-right w-22">Amount</th>
+                        <th className="py-2 px-2 text-right w-20">Amount</th>
                       </tr>
                     </thead>
                     <tbody>
                       {totals.items.map((item, idx) => (
                         <tr key={item.id} className="border-b border-slate-200 align-top">
-                          <td className="py-2 px-2 border-r border-slate-200 text-center text-slate-500">
+                          <td className="py-2 px-1.5 border-r border-slate-200 text-center text-slate-500">
                             {idx + 1}
                           </td>
                           <td className="py-2 px-2 border-r border-slate-200 font-semibold text-slate-900 break-words">
                             {item.description || '-'}
                           </td>
-                          <td className="py-2 px-2 border-r border-slate-200 text-center font-mono text-[10px] text-slate-700">
+                          <td className="py-2 px-1.5 border-r border-slate-200 text-center font-mono text-[10px] text-slate-700">
                             {item.hsnSac || '-'}
                           </td>
-                          <td className="py-2 px-2 border-r border-slate-200 text-right whitespace-nowrap">
+                          <td className="py-2 px-1.5 border-r border-slate-200 text-right whitespace-nowrap">
                             {item.quantity} {item.unit || 'Pc'}
                           </td>
-                          <td className="py-2 px-2 border-r border-slate-200 text-right whitespace-nowrap">
+                          <td className="py-2 px-1.5 border-r border-slate-200 text-right whitespace-nowrap">
                             {formatMoney(item.rate, invoiceData.currencySymbol)}
                           </td>
-                          <td className="py-2 px-2 border-r border-slate-200 text-right whitespace-nowrap">
+                          <td className="py-2 px-1.5 border-r border-slate-200 text-right whitespace-nowrap">
+                            {item.discountAmount > 0 ? (
+                              <>
+                                <div>-{formatMoney(item.discountAmount, invoiceData.currencySymbol)}</div>
+                                {item.discountType === 'percent' && (
+                                  <div className="text-[9px] text-slate-500">({item.discount}%)</div>
+                                )}
+                              </>
+                            ) : (
+                              '-'
+                            )}
+                          </td>
+                          <td className="py-2 px-1.5 border-r border-slate-200 text-right whitespace-nowrap">
                             {formatMoney(item.taxableAmount, invoiceData.currencySymbol)}
                           </td>
-                          <td className="py-2 px-2 border-r border-slate-200 text-right whitespace-nowrap">
+                          <td className="py-2 px-1.5 border-r border-slate-200 text-right whitespace-nowrap">
                             <div>{formatMoney(item.cgstAmount, invoiceData.currencySymbol)}</div>
                             <div className="text-[9px] text-slate-500">({item.cgstRate}%)</div>
                           </td>
-                          <td className="py-2 px-2 border-r border-slate-200 text-right whitespace-nowrap">
+                          <td className="py-2 px-1.5 border-r border-slate-200 text-right whitespace-nowrap">
                             <div>{formatMoney(item.sgstAmount, invoiceData.currencySymbol)}</div>
                             <div className="text-[9px] text-slate-500">({item.sgstRate}%)</div>
                           </td>
@@ -1480,6 +1584,14 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
                         <span className="text-slate-600">Total Quantity:</span>
                         <span className="font-semibold text-slate-900">{totals.totalQuantity}</span>
                       </div>
+                      {totals.totalItemDiscount > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Item Discount:</span>
+                          <span className="font-semibold text-emerald-700">
+                            -{formatMoney(totals.totalItemDiscount, invoiceData.currencySymbol)}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex justify-between">
                         <span className="text-slate-600">Taxable Subtotal:</span>
                         <span className="font-semibold text-slate-900">
@@ -1498,6 +1610,14 @@ export const GSTInvoiceGeneratorTool: React.FC<GSTInvoiceGeneratorToolProps> = (
                           {formatMoney(totals.totalSgst, invoiceData.currencySymbol)}
                         </span>
                       </div>
+                      {totals.additionalDiscountAmount > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Additional Discount:</span>
+                          <span className="font-semibold text-emerald-700">
+                            -{formatMoney(totals.additionalDiscountAmount, invoiceData.currencySymbol)}
+                          </span>
+                        </div>
+                      )}
                       {invoiceData.roundOffEnabled && (
                         <div className="flex justify-between">
                           <span className="text-slate-600">Round Off:</span>
