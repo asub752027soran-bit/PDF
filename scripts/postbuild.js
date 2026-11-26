@@ -50,7 +50,25 @@ if (fs.existsSync(distDir)) {
     'sw.js'
   ];
 
+  const isValidBinaryIcon = (filePath, fileName) => {
+    try {
+      const buf = fs.readFileSync(filePath);
+      if (fileName.endsWith('.png')) {
+        // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+        return buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+      }
+      if (fileName.endsWith('.ico')) {
+        // ICO header: 00 00 01 00 and no UTF-8 replacement character EF BF BD
+        return buf.length > 6 && buf[0] === 0x00 && buf[1] === 0x00 && buf[2] === 0x01 && buf[3] === 0x00 && !buf.includes(Buffer.from([0xef, 0xbf, 0xbd]));
+      }
+      return buf.length > 0;
+    } catch {
+      return false;
+    }
+  };
+
   let missing = 0;
+  let corrupted = 0;
   for (const file of requiredIcons) {
     const p = path.join(distDir, file);
     if (!fs.existsSync(p)) {
@@ -62,10 +80,17 @@ if (fs.existsSync(distDir)) {
       } else {
         console.warn(`⚠️ Warning: ${file} not found in public/ or dist/`);
         missing++;
+        continue;
       }
     }
+    if ((file.endsWith('.png') || file.endsWith('.ico')) && !isValidBinaryIcon(p, file)) {
+      console.error(`❌ Corrupted binary icon detected in dist/${file}`);
+      corrupted++;
+    }
   }
-  if (missing === 0) {
-    console.log('🎯 All SEO & Favicon assets verified in dist/');
+  if (missing === 0 && corrupted === 0) {
+    console.log('🎯 All SEO & Favicon assets verified as valid binaries in dist/');
+  } else if (corrupted > 0) {
+    process.exitCode = 1;
   }
 }
