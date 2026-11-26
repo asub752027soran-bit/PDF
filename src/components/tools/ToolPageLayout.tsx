@@ -33,13 +33,23 @@ interface ToolPageLayoutProps {
     banner: boolean;
     sidebar: boolean;
   };
-  adServingMode?: 'hybrid' | 'adsense_only' | 'custom_only' | 'fallback';
+  adServingMode?: 'hybrid' | 'adsense_only' | 'ezoic_only' | 'custom_only' | 'fallback';
   customAds?: CustomAdItem[];
   adsensePublisherId?: string;
   adsenseCustomSlots?: {
     leaderboard?: string;
     banner?: string;
     sidebar?: string;
+  };
+  ezoicEnabled?: boolean;
+  ezoicSiteId?: string;
+  ezoicCmpEnabled?: boolean;
+  ezoicPlaceholders?: {
+    leaderboard?: string;
+    banner?: string;
+    sidebar?: string;
+    homepageBottom?: string;
+    rectangle?: string;
   };
 }
 
@@ -56,6 +66,10 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
   customAds,
   adsensePublisherId,
   adsenseCustomSlots,
+  ezoicEnabled = false,
+  ezoicSiteId,
+  ezoicCmpEnabled = true,
+  ezoicPlaceholders,
 }) => {
   const tool = TOOLS.find((t) => t.id === toolId);
   const seoDetail = TOOL_SEO_DETAILS[toolId];
@@ -110,6 +124,10 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
             customAds={customAds}
             adsensePublisherId={adsensePublisherId}
             adsenseSlot={adsenseCustomSlots?.leaderboard}
+            ezoicEnabled={ezoicEnabled}
+            ezoicSiteId={ezoicSiteId}
+            ezoicCmpEnabled={ezoicCmpEnabled}
+            ezoicPlaceholders={ezoicPlaceholders}
             className="my-0"
           />
         </div>
@@ -180,6 +198,10 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
                 customAds={customAds}
                 adsensePublisherId={adsensePublisherId}
                 adsenseSlot={adsenseCustomSlots?.banner}
+                ezoicEnabled={ezoicEnabled}
+                ezoicSiteId={ezoicSiteId}
+                ezoicCmpEnabled={ezoicCmpEnabled}
+                ezoicPlaceholders={ezoicPlaceholders}
                 className="my-0"
               />
             </div>
@@ -325,6 +347,10 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
                 customAds={customAds}
                 adsensePublisherId={adsensePublisherId}
                 adsenseSlot={adsenseCustomSlots?.leaderboard}
+                ezoicEnabled={ezoicEnabled}
+                ezoicSiteId={ezoicSiteId}
+                ezoicCmpEnabled={ezoicCmpEnabled}
+                ezoicPlaceholders={ezoicPlaceholders}
                 className="my-0"
               />
             </div>
@@ -386,6 +412,10 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
                 customAds={customAds}
                 adsensePublisherId={adsensePublisherId}
                 adsenseSlot={adsenseCustomSlots?.sidebar}
+                ezoicEnabled={ezoicEnabled}
+                ezoicSiteId={ezoicSiteId}
+                ezoicCmpEnabled={ezoicCmpEnabled}
+                ezoicPlaceholders={ezoicPlaceholders}
                 className="my-0"
               />
             </div>

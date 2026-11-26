@@ -157,8 +157,19 @@ export interface AdminConfig {
   ogImage?: string;
   toolSeoOverrides?: Record<string, ToolSeoConfig>;
   // Custom Self-Served Advertisements & Direct Sponsors
-  adServingMode?: 'hybrid' | 'adsense_only' | 'custom_only' | 'fallback';
+  adServingMode?: 'hybrid' | 'adsense_only' | 'ezoic_only' | 'custom_only' | 'fallback';
   customAds?: CustomAdItem[];
+  // Ezoic Ads Service Configuration
+  ezoicEnabled?: boolean;
+  ezoicSiteId?: string;
+  ezoicCmpEnabled?: boolean;
+  ezoicPlaceholders?: {
+    leaderboard?: string;
+    banner?: string;
+    sidebar?: string;
+    homepageBottom?: string;
+    rectangle?: string;
+  };
 }
 
 export type AdSlotType = 'leaderboard' | 'banner' | 'sidebar' | 'homepage_top' | 'homepage_bottom' | 'rectangle';

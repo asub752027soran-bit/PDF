@@ -1,6 +1,7 @@
 import React from 'react';
 import { CustomAdItem, AdSlotType } from '../types';
 import { AdSenseBanner } from './AdSenseBanner';
+import { EzoicBanner } from './EzoicBanner';
 import { CustomAdBanner } from './CustomAdBanner';
 import { AdSpace, AdDimensionPreset } from './AdSpace';
 import { pickCustomAd } from '../utils/customAdTracker';
@@ -9,10 +10,21 @@ export interface AdPlacementProps {
   slotType: AdSlotType;
   toolId?: string;
   adsEnabled?: boolean;
-  adServingMode?: 'hybrid' | 'adsense_only' | 'custom_only' | 'fallback';
+  adServingMode?: 'hybrid' | 'adsense_only' | 'ezoic_only' | 'custom_only' | 'fallback';
   customAds?: CustomAdItem[];
   adsensePublisherId?: string;
   adsenseSlot?: string;
+  ezoicEnabled?: boolean;
+  ezoicSiteId?: string;
+  ezoicCmpEnabled?: boolean;
+  ezoicPlaceholderId?: string;
+  ezoicPlaceholders?: {
+    leaderboard?: string;
+    banner?: string;
+    sidebar?: string;
+    homepageBottom?: string;
+    rectangle?: string;
+  };
   className?: string;
   showLabel?: boolean;
   // Customizable dimensions & lazy-loading options forwarded to AdSpace
@@ -36,6 +48,11 @@ export const AdPlacement: React.FC<AdPlacementProps> = ({
   customAds,
   adsensePublisherId = 'ca-pub-9806760868514523',
   adsenseSlot,
+  ezoicEnabled = false,
+  ezoicSiteId,
+  ezoicCmpEnabled = true,
+  ezoicPlaceholderId,
+  ezoicPlaceholders,
   className = '',
   showLabel = true,
   preset,
@@ -51,8 +68,36 @@ export const AdPlacement: React.FC<AdPlacementProps> = ({
 }) => {
   if (!adsEnabled) return null;
 
+  const resolvedEzoicPlaceholderId =
+    ezoicPlaceholderId ||
+    (slotType === 'homepage_bottom'
+      ? ezoicPlaceholders?.homepageBottom
+      : slotType === 'homepage_top' || slotType === 'leaderboard'
+      ? ezoicPlaceholders?.leaderboard
+      : slotType === 'banner'
+      ? ezoicPlaceholders?.banner
+      : slotType === 'sidebar'
+      ? ezoicPlaceholders?.sidebar
+      : slotType === 'rectangle'
+      ? ezoicPlaceholders?.rectangle
+      : undefined);
+
   const renderBannerContent = () => {
-    // 1. CUSTOM ADS ONLY
+    // 1. EZOIC ADS SERVICE ONLY
+    if (adServingMode === 'ezoic_only') {
+      return (
+        <EzoicBanner
+          slotType={slotType}
+          placeholderId={resolvedEzoicPlaceholderId}
+          siteId={ezoicSiteId}
+          cmpEnabled={ezoicCmpEnabled}
+          className="my-0"
+          showLabel={showLabel}
+        />
+      );
+    }
+
+    // 2. CUSTOM ADS ONLY
     if (adServingMode === 'custom_only') {
       const matchedCustomAd = pickCustomAd(customAds, slotType, toolId);
       if (matchedCustomAd) {
@@ -68,7 +113,7 @@ export const AdPlacement: React.FC<AdPlacementProps> = ({
       return null;
     }
 
-    // 2. HYBRID MODE (Custom Sponsor Ad on secondary in-content slots if available, AdSense on primary)
+    // 3. HYBRID MODE (Custom Sponsor Ad on secondary in-content slots if available, Ezoic or AdSense on primary)
     if (adServingMode === 'hybrid') {
       const matchedCustomAd = pickCustomAd(customAds, slotType, toolId);
       if (matchedCustomAd && (slotType === 'banner' || slotType === 'rectangle')) {
@@ -81,9 +126,35 @@ export const AdPlacement: React.FC<AdPlacementProps> = ({
           />
         );
       }
+      if (ezoicEnabled) {
+        return (
+          <EzoicBanner
+            slotType={slotType}
+            placeholderId={resolvedEzoicPlaceholderId}
+            siteId={ezoicSiteId}
+            cmpEnabled={ezoicCmpEnabled}
+            className="my-0"
+            showLabel={showLabel}
+          />
+        );
+      }
     }
 
-    // 3. GOOGLE ADSENSE PRIMARY
+    // 4. FALLBACK MODE WITH EZOIC ENABLED
+    if (adServingMode === 'fallback' && ezoicEnabled) {
+      return (
+        <EzoicBanner
+          slotType={slotType}
+          placeholderId={resolvedEzoicPlaceholderId}
+          siteId={ezoicSiteId}
+          cmpEnabled={ezoicCmpEnabled}
+          className="my-0"
+          showLabel={showLabel}
+        />
+      );
+    }
+
+    // 5. GOOGLE ADSENSE PRIMARY
     return (
       <AdSenseBanner
         slotType={slotType as any}

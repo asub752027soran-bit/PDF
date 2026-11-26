@@ -6,6 +6,7 @@ import { ToolGrid } from './components/ToolGrid';
 import { Footer } from './components/Footer';
 import { AdSenseBanner } from './components/AdSenseBanner';
 import { AdPlacement } from './components/AdPlacement';
+import { ensureEzoicScriptsLoaded } from './components/EzoicBanner';
 import { CookieBanner } from './components/CookieBanner';
 import { AdminLoginModal } from './components/admin/AdminLoginModal';
 import { ToolPageLayout } from './components/tools/ToolPageLayout';
@@ -75,7 +76,17 @@ const DEFAULT_ADMIN_CONFIG: AdminConfig = {
     banner: '',
     sidebar: '',
   },
-  adServingMode: 'adsense_only',
+  adServingMode: 'ezoic_only',
+  ezoicEnabled: true,
+  ezoicSiteId: '',
+  ezoicCmpEnabled: true,
+  ezoicPlaceholders: {
+    leaderboard: '101',
+    banner: '102',
+    sidebar: '103',
+    homepageBottom: '104',
+    rectangle: '105',
+  },
   disabledTools: [],
   customBadges: {},
   adminPasscode: 'Sobha@752027',
@@ -103,11 +114,13 @@ export default function App() {
           ...DEFAULT_ADMIN_CONFIG,
           ...parsed,
           adsEnabled: parsed.adsEnabled !== undefined ? parsed.adsEnabled : true,
+          ezoicEnabled: parsed.ezoicEnabled !== undefined ? parsed.ezoicEnabled : true,
+          adServingMode: parsed.ezoicEnabled === undefined ? 'ezoic_only' : (parsed.adServingMode || 'ezoic_only'),
         };
       }
-      return { ...DEFAULT_ADMIN_CONFIG, adsEnabled: true };
+      return { ...DEFAULT_ADMIN_CONFIG, adsEnabled: true, ezoicEnabled: true };
     } catch {
-      return { ...DEFAULT_ADMIN_CONFIG, adsEnabled: true };
+      return { ...DEFAULT_ADMIN_CONFIG, adsEnabled: true, ezoicEnabled: true };
     }
   });
 
@@ -116,6 +129,13 @@ export default function App() {
   });
 
   const [showAdminLogin, setShowAdminLogin] = useState<boolean>(false);
+
+  // Preload Ezoic standalone scripts when Ezoic Ads Service is enabled
+  useEffect(() => {
+    if (adminConfig.adsEnabled && (adminConfig.ezoicEnabled || adminConfig.adServingMode === 'ezoic_only')) {
+      ensureEzoicScriptsLoaded(adminConfig.ezoicCmpEnabled ?? true);
+    }
+  }, [adminConfig.adsEnabled, adminConfig.ezoicEnabled, adminConfig.adServingMode, adminConfig.ezoicCmpEnabled]);
 
   // Theme state
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -603,6 +623,10 @@ export default function App() {
                   customAds={adminConfig.customAds}
                   adsensePublisherId={adminConfig.adsensePublisherId}
                   adsenseSlot={adminConfig.adsenseCustomSlots?.leaderboard}
+                  ezoicEnabled={adminConfig.ezoicEnabled}
+                  ezoicSiteId={adminConfig.ezoicSiteId}
+                  ezoicCmpEnabled={adminConfig.ezoicCmpEnabled}
+                  ezoicPlaceholders={adminConfig.ezoicPlaceholders}
                 />
               )}
             </>
@@ -630,6 +654,10 @@ export default function App() {
                 customAds={adminConfig.customAds}
                 adsensePublisherId={adminConfig.adsensePublisherId}
                 adsenseCustomSlots={adminConfig.adsenseCustomSlots}
+                ezoicEnabled={adminConfig.ezoicEnabled}
+                ezoicSiteId={adminConfig.ezoicSiteId}
+                ezoicCmpEnabled={adminConfig.ezoicCmpEnabled}
+                ezoicPlaceholders={adminConfig.ezoicPlaceholders}
               >
                 {activeToolId === 'edit-pdf' && <PDFEditorTool mode="edit" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}
                 {activeToolId === 'watermark-pdf' && <PDFSecurityTool mode="watermark" onBack={handleGoHome} initialFile={droppedFiles?.files[0]} />}

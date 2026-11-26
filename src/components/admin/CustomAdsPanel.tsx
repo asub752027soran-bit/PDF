@@ -311,13 +311,13 @@ export const CustomAdsPanel: React.FC<CustomAdsPanelProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
             
             {/* 1. Hybrid Co-Existence */}
             <div
               onClick={() => {
                 onUpdateConfig({ ...config, adServingMode: 'hybrid' });
-                showToast('Strategy changed to: Hybrid (AdSense + Custom Ads)');
+                showToast('Strategy changed to: Hybrid (Network + Custom Ads)');
               }}
               className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
                 currentMode === 'hybrid'
@@ -333,18 +333,18 @@ export const CustomAdsPanel: React.FC<CustomAdsPanelProps> = ({
                 {currentMode === 'hybrid' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                Displays Google AdSense alongside your custom sponsor cards and scripts in sidebar and tool banner positions.
+                Displays {config.ezoicEnabled ? 'Ezoic' : 'Google AdSense'} alongside your custom sponsor cards and scripts in tool banner positions.
               </p>
             </div>
 
-            {/* 2. Custom Ads Only */}
+            {/* 2. Ezoic Ads Service Only */}
             <div
               onClick={() => {
-                onUpdateConfig({ ...config, adServingMode: 'custom_only' });
-                showToast('Strategy changed to: Custom Ads & Scripts Only');
+                onUpdateConfig({ ...config, adServingMode: 'ezoic_only', ezoicEnabled: true, adsEnabled: true });
+                showToast('Strategy changed to: Ezoic Ads Service Only');
               }}
               className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-                currentMode === 'custom_only'
+                currentMode === 'ezoic_only'
                   ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 shadow-xs'
                   : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300'
               }`}
@@ -352,16 +352,40 @@ export const CustomAdsPanel: React.FC<CustomAdsPanelProps> = ({
               <div className="flex items-center justify-between mb-1.5">
                 <span className="font-extrabold text-xs text-slate-900 dark:text-white flex items-center gap-1">
                   <Zap className="w-3 h-3 text-emerald-600" />
-                  Custom Ads Only
+                  Ezoic Ads Only
                 </span>
-                {currentMode === 'custom_only' && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+                {currentMode === 'ezoic_only' && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                100% direct sponsor banners, HTML snippets, and affiliate links. Completely disables Google AdSense.
+                Serves Ezoic AI standalone ad placeholders (sa.min.js) across all enabled slots.
               </p>
             </div>
 
-            {/* 3. Google AdSense Only */}
+            {/* 3. Custom Ads Only */}
+            <div
+              onClick={() => {
+                onUpdateConfig({ ...config, adServingMode: 'custom_only' });
+                showToast('Strategy changed to: Custom Ads & Scripts Only');
+              }}
+              className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                currentMode === 'custom_only'
+                  ? 'bg-teal-50 dark:bg-teal-950/40 border-teal-500 shadow-xs'
+                  : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-extrabold text-xs text-slate-900 dark:text-white flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-teal-600" />
+                  Custom Ads Only
+                </span>
+                {currentMode === 'custom_only' && <CheckCircle2 className="w-4 h-4 text-teal-600" />}
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                100% direct sponsor banners, HTML snippets, and affiliate links.
+              </p>
+            </div>
+
+            {/* 4. Google AdSense Only */}
             <div
               onClick={() => {
                 onUpdateConfig({ ...config, adServingMode: 'adsense_only' });
@@ -385,11 +409,11 @@ export const CustomAdsPanel: React.FC<CustomAdsPanelProps> = ({
               </p>
             </div>
 
-            {/* 4. AdSense + Fallback */}
+            {/* 5. Fallback Mode */}
             <div
               onClick={() => {
                 onUpdateConfig({ ...config, adServingMode: 'fallback' });
-                showToast('Strategy changed to: AdSense + Custom Fallback');
+                showToast('Strategy changed to: Network + Custom Fallback');
               }}
               className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
                 currentMode === 'fallback'
@@ -405,7 +429,7 @@ export const CustomAdsPanel: React.FC<CustomAdsPanelProps> = ({
                 {currentMode === 'fallback' && <CheckCircle2 className="w-4 h-4 text-purple-600" />}
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                Serves direct sponsor ads as failover when AdSense units are unfilled or blocked.
+                Serves direct sponsor ads as failover when primary units are unfilled or blocked.
               </p>
             </div>
 
