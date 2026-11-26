@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Download, ScanText, ArrowLeft, Copy, Check, FileText } from 'lucide-react';
+import { Upload, Download, ScanText, ArrowLeft, Copy, Check, AlertCircle, X } from 'lucide-react';
 import { createWorker } from 'tesseract.js';
 import { renderPDFToImages } from '../../utils/pdfExtractor';
 import { downloadBlob } from '../../utils/batchProcessor';
@@ -12,13 +12,26 @@ interface OCRToolProps {
   initialFile?: File | null;
 }
 
+const OCR_LANGUAGES = [
+  { code: 'eng', label: 'English' },
+  { code: 'hin', label: 'Hindi (हिन्दी)' },
+  { code: 'spa', label: 'Spanish (Español)' },
+  { code: 'fra', label: 'French (Français)' },
+  { code: 'deu', label: 'German (Deutsch)' },
+  { code: 'por', label: 'Portuguese (Português)' },
+  { code: 'ara', label: 'Arabic (العربية)' },
+  { code: 'chi_sim', label: 'Chinese Simplified (简体中文)' },
+];
+
 export const OCRTool: React.FC<OCRToolProps> = ({ onBack, initialFile }) => {
   const [file, setFile] = useState<File | null>(null);
+  const [ocrLang, setOcrLang] = useState<string>('eng');
   const [extractedText, setExtractedText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [copied, setCopied] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { startProgress, updateProgress, setItemsProgress, completeProgress, failProgress } = useProgress();
 
   useEffect(() => {
@@ -27,15 +40,19 @@ export const OCRTool: React.FC<OCRToolProps> = ({ onBack, initialFile }) => {
       setExtractedText('');
       setProgress(0);
       setStatusMsg('');
+      setErrorMsg(null);
     }
   }, [initialFile]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+    const selected = e.target.files?.[0];
+    e.target.value = '';
+    if (selected) {
+      setFile(selected);
       setExtractedText('');
       setProgress(0);
       setStatusMsg('');
+      setErrorMsg(null);
     }
   };
 
@@ -43,25 +60,26 @@ export const OCRTool: React.FC<OCRToolProps> = ({ onBack, initialFile }) => {
     if (!file) return;
     setIsProcessing(true);
     setProgress(5);
+    setErrorMsg(null);
     setStatusMsg('Initializing OCR engine...');
 
     startProgress({
       title: 'Extracting Text via Neural OCR',
-      status: 'Booting Tesseract neural engine...',
+      status: `Loading ${OCR_LANGUAGES.find((l) => l.code === ocrLang)?.label || ocrLang} language model...`,
       stage: 'Engine Warmup',
       indeterminate: false
     });
 
     let worker: any = null;
     try {
-      worker = await createWorker('eng');
+      worker = await createWorker(ocrLang);
       let combinedText = '';
 
       if (file.name.toLowerCase().endsWith('.pdf')) {
         setStatusMsg('Rendering PDF pages to high-res images...');
         updateProgress(15, 'Rasterizing document pages to high-res bitmaps...', 'Page Rasterization');
         setProgress(20);
-        const pageImgs = await renderPDFToImages(file, 'png', 1.5);
+        const pageImgs = await renderPDFToImages(file, 'png', 1.8);
 
         for (let i = 0; i < pageImgs.length; i++) {
           const msg = `Recognizing text on page ${i + 1} of ${pageImgs.length}...`;
@@ -83,15 +101,16 @@ export const OCRTool: React.FC<OCRToolProps> = ({ onBack, initialFile }) => {
         setProgress(90);
       }
 
-      setExtractedText(combinedText || 'No text could be extracted from this document.');
+      setExtractedText(combinedText.trim() || 'No readable text could be detected in this document.');
       setStatusMsg('OCR Recognition Complete!');
       recordToolConversion('ocr-reader', file.size);
 
       completeProgress('Text extracted successfully!');
     } catch (err: any) {
       console.error('OCR failed:', err);
-      failProgress(err?.message || 'Failed to extract text from document.');
-      alert('Failed to extract text from document. Please ensure file is valid.');
+      const msg = err?.message || 'Failed to extract text from document. Please ensure file is valid.';
+      failProgress(msg);
+      setErrorMsg(msg);
     } finally {
       if (worker && typeof worker.terminate === 'function') {
         try {
@@ -138,6 +157,18 @@ export const OCRTool: React.FC<OCRToolProps> = ({ onBack, initialFile }) => {
         </div>
       </div>
 
+      {errorMsg && (
+        <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs flex items-center justify-between gap-2 font-semibold">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+          <button onClick={() => setErrorMsg(null)} className="p-1 hover:bg-rose-100 dark:hover:bg-rose-900 rounded-lg">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {!file ? (
         <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-3xl p-12 text-center bg-white dark:bg-slate-800/80 hover:border-indigo-500 transition-all shadow-sm">
           <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto mb-4">
@@ -164,11 +195,31 @@ export const OCRTool: React.FC<OCRToolProps> = ({ onBack, initialFile }) => {
           {/* Client-Side Visual File Preview */}
           <FilePreviewCard
             file={file}
-            onRemove={() => { setFile(null); setExtractedText(''); }}
-            onReplace={(newF) => { setFile(newF); setExtractedText(''); }}
+            onRemove={() => { setFile(null); setExtractedText(''); setErrorMsg(null); }}
+            onReplace={(newF) => { setFile(newF); setExtractedText(''); setErrorMsg(null); }}
           />
 
           <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
+
+          {/* Language Selector */}
+          {!isProcessing && (
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+              <label className="font-bold text-slate-700 dark:text-slate-300">
+                Document Recognition Language
+              </label>
+              <select
+                value={ocrLang}
+                onChange={(e) => setOcrLang(e.target.value)}
+                className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-200"
+              >
+                {OCR_LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Progress Bar */}
           {isProcessing && (

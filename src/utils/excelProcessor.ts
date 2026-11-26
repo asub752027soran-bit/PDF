@@ -146,25 +146,99 @@ export function exportSheetToCSV(sheetData: SheetData): string {
     .join('\n');
 }
 
-export async function convertExcelToPDF(file: File): Promise<Uint8Array> {
-  const sheets = await readExcelFile(file);
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt' });
+export async function convertExcelToPDF(fileOrSheets: File | SheetData[]): Promise<Uint8Array> {
+  const sheets = Array.isArray(fileOrSheets) ? fileOrSheets : await readExcelFile(fileOrSheets);
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginX = 36;
+  const marginTop = 48;
+  const marginBottom = 40;
+  const usableWidth = pageWidth - marginX * 2;
 
-  sheets.forEach((sheet, idx) => {
-    if (idx > 0) doc.addPage();
-    doc.setFontSize(16);
-    doc.text(sheet.sheetName, 40, 40);
+  let pageNumber = 0;
 
-    doc.setFontSize(10);
-    let startY = 70;
+  sheets.forEach((sheet, sheetIdx) => {
+    const rows = (sheet.data || []).filter((r) => r.some((cell) => String(cell ?? '').trim() !== ''));
+    const safeRows = rows.length > 0 ? rows : [['Empty Sheet']];
+    const maxCols = Math.max(1, ...safeRows.map((r) => r.length));
+    const displayCols = Math.min(maxCols, 14);
+    const colWidth = usableWidth / displayCols;
 
-    sheet.data.slice(0, 40).forEach((row) => {
-      if (startY > 540) return;
-      const rowText = row.map((cell) => String(cell ?? '')).join(' | ');
-      doc.text(rowText.substring(0, 140), 40, startY);
-      startY += 18;
+    const addSheetHeader = (continued: boolean) => {
+      if (pageNumber > 0) doc.addPage();
+      pageNumber++;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.setTextColor(15, 23, 42);
+      const title = continued
+        ? `${sheet.sheetName || `Sheet ${sheetIdx + 1}`} (continued)`
+        : sheet.sheetName || `Sheet ${sheetIdx + 1}`;
+      doc.text(title, marginX, 30);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Page ${pageNumber}`, pageWidth - marginX - 35, 30);
+    };
+
+    addSheetHeader(false);
+    let currentY = marginTop;
+    const headerRow = safeRows[0];
+
+    const drawRow = (row: (string | number)[], isHeader: boolean) => {
+      doc.setFont('helvetica', isHeader ? 'bold' : 'normal');
+      doc.setFontSize(isHeader ? 9 : 8.5);
+
+      const cellTexts: string[][] = [];
+      let maxLines = 1;
+      for (let c = 0; c < displayCols; c++) {
+        const rawVal = String(row[c] ?? '').trim();
+        const wrapped = doc.splitTextToSize(rawVal || ' ', Math.max(24, colWidth - 10));
+        const capped = wrapped.slice(0, 6);
+        cellTexts.push(capped);
+        if (capped.length > maxLines) maxLines = capped.length;
+      }
+
+      const rowHeight = Math.max(18, maxLines * 11 + 8);
+
+      if (currentY + rowHeight > pageHeight - marginBottom) {
+        addSheetHeader(true);
+        currentY = marginTop;
+        if (!isHeader && headerRow) {
+          drawRow(headerRow, true);
+        }
+      }
+
+      if (isHeader) {
+        doc.setFillColor(241, 245, 249);
+        doc.rect(marginX, currentY, usableWidth, rowHeight, 'F');
+      }
+
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.5);
+      doc.rect(marginX, currentY, usableWidth, rowHeight, 'S');
+
+      for (let c = 0; c < displayCols; c++) {
+        const cellX = marginX + c * colWidth;
+        if (c > 0) {
+          doc.line(cellX, currentY, cellX, currentY + rowHeight);
+        }
+        doc.setTextColor(isHeader ? 15 : 51, isHeader ? 23 : 65, isHeader ? 42 : 85);
+        cellTexts[c].forEach((lineStr, lineIdx) => {
+          doc.text(lineStr, cellX + 5, currentY + 12 + lineIdx * 11);
+        });
+      }
+
+      currentY += rowHeight;
+    };
+
+    safeRows.forEach((row, rIdx) => {
+      drawRow(row, rIdx === 0);
     });
   });
 
   return new Uint8Array(doc.output('arraybuffer'));
 }
+

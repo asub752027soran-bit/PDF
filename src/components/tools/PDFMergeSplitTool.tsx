@@ -16,7 +16,9 @@ import {
   CheckCircle2,
   ArrowUpDown,
   ListOrdered,
-  Shuffle
+  Shuffle,
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { mergePDFs, splitPDF, manipulatePDFPages, readFileAsArrayBuffer } from '../../utils/pdfProcessor';
 import { createZipArchive, downloadBlob } from '../../utils/batchProcessor';
@@ -38,10 +40,12 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
   const [splitRange, setSplitRange] = useState('1-3, 4-6');
   const [pagesList, setPagesList] = useState<{ origIndex: number; rotation: number }[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { startProgress, updateProgress, setItemsProgress, completeProgress, failProgress } = useProgress();
 
 
   const addFiles = async (incomingFiles: File[]) => {
+    setErrorMsg(null);
     setFiles((prev) => [...prev, ...incomingFiles]);
 
     if (mode === 'organize' && incomingFiles.length > 0) {
@@ -74,6 +78,7 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
       const newFiles = Array.from(e.target.files);
       addFiles(newFiles);
     }
+    e.target.value = '';
   };
 
   const removeFile = (index: number) => {
@@ -130,6 +135,7 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
   const handleOrganize = async () => {
     if (files.length === 0 || pagesList.length === 0) return;
     setIsProcessing(true);
+    setErrorMsg(null);
     startProgress({
       title: 'Organizing & Rotating PDF Pages',
       status: `Re-sequencing ${pagesList.length} pages in "${files[0].name}"...`,
@@ -153,16 +159,17 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
       completeProgress(`Successfully organized ${pagesList.length} pages!`);
     } catch (err: any) {
       console.error('Organize failed:', err);
+      setErrorMsg(err?.message || 'Failed to organize PDF pages. Please check that the file is not corrupted or locked.');
       failProgress(err?.message || 'Failed to organize PDF pages.');
-      alert('Failed to organize PDF pages.');
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleMerge = async () => {
+    setErrorMsg(null);
     if (files.length < 2) {
-      alert('Please select at least 2 PDF files to merge.');
+      setErrorMsg('Please select at least 2 PDF files to merge.');
       return;
     }
     setIsProcessing(true);
@@ -186,8 +193,8 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
       completeProgress(`Merged ${files.length} PDF documents into one!`);
     } catch (err: any) {
       console.error('Merge failed:', err);
+      setErrorMsg(err?.message || 'Failed to merge PDFs. Please check file validity.');
       failProgress(err?.message || 'Failed to merge PDFs.');
-      alert('Failed to merge PDFs. Please check file validity.');
     } finally {
       setIsProcessing(false);
     }
@@ -195,6 +202,31 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
 
   const handleSplit = async () => {
     if (files.length === 0) return;
+    setErrorMsg(null);
+
+    const ranges = splitRange
+      .split(',')
+      .map((r) => r.trim())
+      .filter(Boolean)
+      .map((r) => {
+        const parts = r.split('-').map((n) => Number(n.trim()));
+        const start = parts[0];
+        const end = parts.length > 1 ? parts[1] : start;
+        if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < 1) {
+          return null;
+        }
+        return {
+          start: Math.min(start, end),
+          end: Math.max(start, end),
+        };
+      })
+      .filter((r): r is { start: number; end: number } => r !== null);
+
+    if (ranges.length === 0) {
+      setErrorMsg('Please enter valid page numbers or ranges (for example: 1-3, 4-6 or 2).');
+      return;
+    }
+
     setIsProcessing(true);
     startProgress({
       title: 'Splitting PDF Pages',
@@ -203,20 +235,11 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
     });
 
     try {
-      const ranges = splitRange
-        .split(',')
-        .map((r) => r.trim())
-        .filter(Boolean)
-        .map((r) => {
-          const parts = r.split('-').map(Number);
-          return {
-            start: parts[0] || 1,
-            end: parts[1] || parts[0] || 1,
-          };
-        });
-
       updateProgress(45, `Extracting ${ranges.length} page segment${ranges.length > 1 ? 's' : ''}...`, 'Extracting Pages');
       const splitResults = await splitPDF(files[0], ranges);
+      if (splitResults.length === 0) {
+        throw new Error('None of the specified page ranges exist in this PDF document.');
+      }
       recordToolConversion('split-pdf', files[0].size);
 
       updateProgress(85, 'Packaging split files...', 'Packaging Output');
@@ -231,8 +254,8 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
       completeProgress(`Successfully split PDF into ${splitResults.length} file${splitResults.length > 1 ? 's' : ''}!`);
     } catch (err: any) {
       console.error('Split failed:', err);
+      setErrorMsg(err?.message || 'Failed to split PDF. Check your page ranges against the document page count.');
       failProgress(err?.message || 'Failed to split PDF.');
-      alert('Failed to split PDF. Check page ranges.');
     } finally {
       setIsProcessing(false);
     }
@@ -301,6 +324,24 @@ export const PDFMergeSplitTool: React.FC<PDFMergeSplitToolProps> = ({ mode, onBa
           />
         </label>
       </div>
+
+      {/* Error Banner */}
+      {errorMsg && (
+        <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs flex items-center justify-between gap-3 font-semibold">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setErrorMsg(null)}
+            className="p-1 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-500"
+            aria-label="Dismiss error"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Selected File List / Page Grid */}
       {files.length > 0 && (

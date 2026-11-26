@@ -39,7 +39,10 @@ export async function processImage(
   }
 
   const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d')!;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Browser canvas 2D context is unavailable.');
+  }
 
   const rotation = options.rotationAngle || 0;
   if (rotation === 90 || rotation === 270) {
@@ -49,6 +52,16 @@ export async function processImage(
     canvas.width = targetWidth;
     canvas.height = targetHeight;
   }
+
+  const format = options.format || 'jpeg';
+  // Prevent transparent pixels from turning solid black when encoding to JPEG
+  if (format === 'jpeg') {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
   ctx.save();
   if (rotation === 90) {
@@ -65,19 +78,22 @@ export async function processImage(
   ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
   ctx.restore();
 
-  const format = options.format || 'jpeg';
   const mimeType = `image/${format}`;
   const quality = options.quality ?? 0.85;
+  const outWidth = canvas.width;
+  const outHeight = canvas.height;
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
+        canvas.width = 0;
+        canvas.height = 0;
         if (!blob) return reject(new Error('Canvas blob generation failed'));
         const url = URL.createObjectURL(blob);
         resolve({
           blob,
-          width: canvas.width,
-          height: canvas.height,
+          width: outWidth,
+          height: outHeight,
           url,
         });
       },

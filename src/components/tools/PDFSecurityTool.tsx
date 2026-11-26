@@ -21,7 +21,8 @@ import {
   Image as ImageIcon,
   Type,
   Trash2,
-  Layers
+  Layers,
+  X
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -80,8 +81,9 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
   const [showUnlockPassword, setShowUnlockPassword] = useState(false);
   const [unlockError, setUnlockError] = useState<string | null>(null);
 
-  // Success Result State
+  // Success & Error Result State
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const getToolTitle = () => {
     switch (mode) {
@@ -123,6 +125,7 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
   const handleFileSelected = async (selectedFile: File) => {
     setFile(selectedFile);
     setSuccessMsg(null);
+    setErrorMsg(null);
     setUnlockError(null);
 
     try {
@@ -145,6 +148,7 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
 
   const handleImageLogoSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const imgFile = e.target.files?.[0];
+    e.target.value = '';
     if (!imgFile) return;
 
     setWatermarkImageName(imgFile.name);
@@ -348,6 +352,8 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
   const handleApplyWatermark = async () => {
     if (!file) return;
     setIsProcessing(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
     const label = watermarkType === 'image' ? (watermarkImageName || 'Logo Image') : `"${watermarkText}"`;
     startProgress({
       title: 'Applying Watermark to PDF',
@@ -389,8 +395,9 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
       completeProgress('Watermark applied and PDF downloaded!');
     } catch (err: any) {
       console.error('Watermark failed:', err);
+      const msg = 'Failed to apply watermark to PDF: ' + (err?.message || 'Unknown error');
+      setErrorMsg(msg);
       failProgress(err?.message || 'Failed to apply watermark.');
-      alert('Failed to apply watermark to PDF: ' + (err?.message || 'Unknown error'));
     } finally {
       setIsProcessing(false);
     }
@@ -399,25 +406,27 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
   // Handle Lock / Password Protection
   const handleApplyLock = async () => {
     if (!file) return;
+    setErrorMsg(null);
+    setSuccessMsg(null);
     if (!password) {
-      alert('Please enter a password to protect your PDF.');
+      setErrorMsg('Please enter a password to protect your PDF.');
       return;
     }
     if (password !== confirmPassword) {
-      alert('Passwords do not match. Please verify your password.');
+      setErrorMsg('Passwords do not match. Please verify your password.');
       return;
     }
 
     setIsProcessing(true);
     startProgress({
       title: 'Encrypting PDF Document',
-      status: 'Generating 128-bit AES encrypted PDF container...',
+      status: 'Generating 128-bit encrypted PDF container...',
       stage: 'Key Generation & Encryption',
       indeterminate: false
     });
 
     try {
-      updateProgress(40, 'Encrypting page dictionary objects & cross-references...', 'AES Encryption');
+      updateProgress(40, 'Encrypting page content and security permissions...', 'PDF Encryption');
       const lockedBytes = await lockPDF(file, password);
 
       updateProgress(90, 'Packaging locked document...', 'Finalizing Locked PDF');
@@ -426,12 +435,12 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
       recordToolConversion('lock-pdf', file.size);
       downloadBlob(blob, `${cleanName}_protected.pdf`);
 
-      setSuccessMsg(`PDF successfully protected with password!`);
+      setSuccessMsg('PDF successfully protected with password!');
       completeProgress('PDF locked and downloaded successfully!');
     } catch (err: any) {
       console.error('Lock failed:', err);
+      setErrorMsg(err?.message || 'Failed to lock PDF document.');
       failProgress(err?.message || 'Failed to password-protect PDF.');
-      alert('Failed to lock PDF document.');
     } finally {
       setIsProcessing(false);
     }
@@ -441,6 +450,8 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
   const handleApplyUnlock = async () => {
     if (!file) return;
     setIsProcessing(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
     setUnlockError(null);
     startProgress({
       title: 'Unlocking PDF Document',
@@ -459,7 +470,7 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
       recordToolConversion('unlock-pdf', file.size);
       downloadBlob(blob, `${cleanName}_unlocked.pdf`);
 
-      setSuccessMsg(`PDF successfully unlocked and restrictions removed!`);
+      setSuccessMsg('PDF successfully unlocked and restrictions removed!');
       completeProgress('PDF unlocked and downloaded successfully!');
     } catch (err: any) {
       console.error('Unlock failed:', err);
@@ -509,7 +520,11 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
             <input
               type="file"
               accept=".pdf,application/pdf"
-              onChange={(e) => e.target.files?.[0] && handleFileSelected(e.target.files[0])}
+              onChange={(e) => {
+                const picked = e.target.files?.[0];
+                e.target.value = '';
+                if (picked) handleFileSelected(picked);
+              }}
               className="hidden"
             />
           </label>
@@ -520,9 +535,27 @@ export const PDFSecurityTool: React.FC<PDFSecurityToolProps> = ({ mode, onBack, 
           {/* File Card */}
           <FilePreviewCard
             file={file}
-            onRemove={() => { setFile(null); setPreviewDataUrl(null); setSuccessMsg(null); }}
+            onRemove={() => { setFile(null); setPreviewDataUrl(null); setSuccessMsg(null); setErrorMsg(null); setUnlockError(null); }}
             onReplace={(newF) => handleFileSelected(newF)}
           />
+
+          {/* Error Banner */}
+          {errorMsg && (
+            <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs flex items-center justify-between gap-3 font-semibold">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setErrorMsg(null)}
+                className="p-1 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-500"
+                aria-label="Dismiss error"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
           {/* Success Banner */}
           {successMsg && (

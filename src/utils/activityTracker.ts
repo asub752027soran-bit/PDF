@@ -30,6 +30,7 @@ export interface CategoryMetric {
 }
 
 const STATS_STORAGE_KEY = 'pdfeditfy_live_stats';
+const TOOL_OPENS_STORAGE_KEY = 'pdfeditfy_tool_opens';
 const ACTION_LOGS_STORAGE_KEY = 'pdfeditfy_action_logs';
 const MAX_LOG_ENTRIES = 500;
 
@@ -92,6 +93,52 @@ export function getActionLogs(): ActionLogEntry[] {
     console.error('Error reading action logs:', e);
   }
   return [];
+}
+
+export function getToolOpens(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(TOOL_OPENS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error('Error reading tool opens:', e);
+  }
+  return {};
+}
+
+export function recordToolOpen(toolId: string): void {
+  if (!toolId) return;
+  try {
+    const current = getToolOpens();
+    const updated: Record<string, number> = {
+      ...current,
+      [toolId]: (current[toolId] || 0) + 1,
+    };
+    localStorage.setItem(TOOL_OPENS_STORAGE_KEY, JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pdfeditfy_stats_updated', { detail: getLiveStats() }));
+    }
+  } catch (e) {
+    console.error('Error recording tool open:', e);
+  }
+}
+
+export function getToolUsageCounts(): Record<string, number> {
+  const stats = getLiveStats();
+  const opens = getToolOpens();
+  const combined: Record<string, number> = {};
+
+  for (const [id, count] of Object.entries(opens)) {
+    combined[id] = (combined[id] || 0) + (Number(count) || 0);
+  }
+  for (const [id, count] of Object.entries(stats.toolUsage || {})) {
+    combined[id] = (combined[id] || 0) + (Number(count) || 0);
+  }
+  return combined;
 }
 
 export function recordToolConversion(
@@ -166,6 +213,7 @@ export function resetLiveStats(): LiveStats {
   const fresh = { ...DEFAULT_STATS, sessionStart: Date.now(), lastActivity: Date.now() };
   try {
     localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(fresh));
+    localStorage.removeItem(TOOL_OPENS_STORAGE_KEY);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('pdfeditfy_stats_updated', { detail: fresh }));
     }
@@ -331,7 +379,6 @@ export function seedSampleActionLogs(): void {
 export function exportActionLogsToCSV(): void {
   const logs = getActionLogs();
   if (logs.length === 0) {
-    alert('No action logs available to export.');
     return;
   }
 

@@ -128,6 +128,11 @@ export const Footer: React.FC<FooterProps> = ({
                 </button>
               </li>
               <li>
+                <button onClick={() => onSelectTool('image-enhancer')} className="hover:text-indigo-400 transition-colors">
+                  {getToolName('image-enhancer', 'Image Enhancer & Restorer')}
+                </button>
+              </li>
+              <li>
                 <button onClick={() => onSelectTool('ocr-reader')} className="hover:text-indigo-400 transition-colors">
                   {getToolName('ocr-reader', 'OCR Text Extractor')}
                 </button>
@@ -245,9 +250,8 @@ export const Footer: React.FC<FooterProps> = ({
             </button>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px]">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-slate-300 font-medium">Cloud Engine: Online (Latency ~12ms)</span>
+          <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium">
+            <span>100% Client-Side Browser Processing</span>
           </div>
         </div>
 

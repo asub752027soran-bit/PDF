@@ -294,6 +294,12 @@ app.get('/robots.txt', (req, res) => {
 `User-agent: Mediapartners-Google
 Allow: /
 
+User-agent: AdsBot-Google
+Allow: /
+
+User-agent: AdsBot-Google-Mobile
+Allow: /
+
 User-agent: Google-Adwords-DisplayAds-Web
 Allow: /
 
@@ -306,6 +312,10 @@ Allow: /apple-touch-icon.png
 
 User-agent: Googlebot-Image
 Allow: /
+Allow: /favicon.ico
+Allow: /favicon*
+Allow: /icon-*
+Allow: /apple-touch-icon.png
 
 User-agent: *
 Allow: /

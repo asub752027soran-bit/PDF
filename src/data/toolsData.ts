@@ -251,6 +251,18 @@ export const TOOLS: ToolItem[] = [
 
   // --- IMAGE TOOLS ---
   {
+    id: 'image-enhancer',
+    name: 'Blur to Clear & Old Photo Restorer',
+    category: 'Image Tools',
+    description: 'Make blurry photos or blurry text crisp and restore faded, yellowed, or scratched old photos into clear HD images.',
+    iconName: 'Wand2',
+    badge: 'New',
+    supportedFormats: ['JPG', 'JPEG', 'PNG', 'WEBP', 'BMP'],
+    tags: ['blur to clear', 'unblur image', 'deblur', 'old photo restore', 'restore faded photo', 'image enhancer', 'upscale', 'clear image', 'sharpen', 'blurry text'],
+    seoTitle: 'Blur Image to Clear & Old Photo Restorer Free Online',
+    seoDescription: 'Turn blurry images into clear sharp photos and restore old faded or damaged vintage pictures into crisp HD online for free.'
+  },
+  {
     id: 'image-converter',
     name: 'Universal Image Converter',
     category: 'Image Tools',

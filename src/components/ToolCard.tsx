@@ -6,10 +6,11 @@ import { useLanguage } from '../lib/LanguageContext';
 interface ToolCardProps {
   tool: ToolItem;
   customBadge?: string;
+  usageCount?: number;
   onSelect: (toolId: string) => void;
 }
 
-export const ToolCard: React.FC<ToolCardProps> = ({ tool, customBadge, onSelect }) => {
+export const ToolCard: React.FC<ToolCardProps> = ({ tool, customBadge, usageCount = 0, onSelect }) => {
   const { t, getToolName, getToolDescription } = useLanguage();
 
   // Dynamically resolve Lucide icon
@@ -101,9 +102,16 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, customBadge, onSelect 
             </span>
           ))}
         </div>
-        <span className="font-bold text-blue-600 dark:text-blue-400 group-hover:translate-x-0.5 transition-transform">
-          {t('openTool', 'Open →')}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          {usageCount > 0 && (
+            <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
+              {usageCount} {usageCount === 1 ? 'use' : 'uses'}
+            </span>
+          )}
+          <span className="font-bold text-blue-600 dark:text-blue-400 group-hover:translate-x-0.5 transition-transform">
+            {t('openTool', 'Open →')}
+          </span>
+        </div>
       </div>
 
     </div>

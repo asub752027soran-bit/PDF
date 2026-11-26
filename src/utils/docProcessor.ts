@@ -1,17 +1,12 @@
 import mammoth from 'mammoth';
 import jsPDF from 'jspdf';
+import JSZip from 'jszip';
 import {
   Document,
   Packer,
   Paragraph,
   TextRun,
   HeadingLevel,
-  AlignmentType,
-  BorderStyle,
-  Table,
-  TableRow,
-  TableCell,
-  WidthType,
 } from 'docx';
 import { readFileAsArrayBuffer } from './pdfProcessor';
 
@@ -22,18 +17,170 @@ export interface DocxExtractionResult {
 }
 
 /**
- * Extracts HTML and structured text from DOCX files
+ * Fallback readable text extractor for legacy binary .doc OLE2 files
+ */
+function extractReadableTextFromLegacyBinary(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunks: string[] = [];
+  let current = '';
+
+  // Scan UTF-8/ASCII printable runs
+  for (let i = 0; i < bytes.length; i++) {
+    const b = bytes[i];
+    if ((b >= 32 && b <= 126) || b === 10 || b === 13 || b === 9) {
+      current += String.fromCharCode(b);
+    } else {
+      if (current.trim().length >= 5) {
+        chunks.push(current.trim());
+      }
+      current = '';
+    }
+  }
+  if (current.trim().length >= 5) chunks.push(current.trim());
+
+  const filtered = chunks.filter(
+    (c) =>
+      /[a-zA-Z]{2,}/.test(c) &&
+      !c.includes('Microsoft Word') &&
+      !c.includes('Root Entry') &&
+      !c.includes('WordDocument') &&
+      !c.includes('SummaryInformation')
+  );
+
+  return filtered.join('\n').trim();
+}
+
+/**
+ * Extracts slide text from PPTX or ODP presentations using JSZip + XML parser
+ */
+export async function extractPptxSlides(file: File): Promise<string> {
+  const arrayBuffer = await readFileAsArrayBuffer(file);
+  const lower = file.name.toLowerCase();
+
+  if (lower.endsWith('.ppt') && !lower.endsWith('.pptx')) {
+    const fallback = extractReadableTextFromLegacyBinary(arrayBuffer);
+    if (!fallback) {
+      throw new Error('Legacy binary .ppt files contain minimal plain text. Please save as .pptx or edit text manually below.');
+    }
+    return `# Presentation: ${file.name.replace(/\.[^/.]+$/, '')}\n\n${fallback}`;
+  }
+
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  const parser = new DOMParser();
+
+  if (lower.endsWith('.odp')) {
+    const contentFile = zip.file('content.xml');
+    if (!contentFile) throw new Error('Could not find slides inside ODP archive.');
+    const xmlStr = await contentFile.async('string');
+    const xmlDoc = parser.parseFromString(xmlStr, 'application/xml');
+    const pages = Array.from(xmlDoc.getElementsByTagNameNS('*', 'page'));
+    if (pages.length === 0) {
+      const allText = Array.from(xmlDoc.getElementsByTagNameNS('*', 'p'))
+        .map((el) => el.textContent?.trim() || '')
+        .filter(Boolean)
+        .join('\n');
+      return `# Slide 1\n\n${allText || '(No text content on slide)'}`;
+    }
+    return pages
+      .map((page, idx) => {
+        const lines = Array.from(page.getElementsByTagNameNS('*', 'p'))
+          .map((p) => p.textContent?.trim() || '')
+          .filter(Boolean);
+        return `# Slide ${idx + 1}\n\n${lines.join('\n\n') || '(Visual / Image Slide)'}`;
+      })
+      .join('\n\n--- PAGE BREAK ---\n\n');
+  }
+
+  // Standard .pptx: find ppt/slides/slide1.xml, slide2.xml, ...
+  const slideEntries = Object.keys(zip.files)
+    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name))
+    .sort((a, b) => {
+      const numA = parseInt(a.match(/slide(\d+)\.xml/i)?.[1] || '0', 10);
+      const numB = parseInt(b.match(/slide(\d+)\.xml/i)?.[1] || '0', 10);
+      return numA - numB;
+    });
+
+  if (slideEntries.length === 0) {
+    throw new Error('No slides found inside this PowerPoint file. Ensure it is a valid .pptx file.');
+  }
+
+  const slidesOutput: string[] = [];
+
+  for (let i = 0; i < slideEntries.length; i++) {
+    const slidePath = slideEntries[i];
+    const slideNum = slidePath.match(/slide(\d+)\.xml/i)?.[1] || String(i + 1);
+    const xmlStr = await zip.files[slidePath].async('string');
+    const xmlDoc = parser.parseFromString(xmlStr, 'application/xml');
+
+    // Group text runs by paragraph (<a:p>)
+    const paragraphs = Array.from(xmlDoc.getElementsByTagNameNS('*', 'p'));
+    const slideLines: string[] = [];
+
+    for (const p of paragraphs) {
+      const runs = Array.from(p.getElementsByTagNameNS('*', 't'));
+      const lineText = runs.map((t) => t.textContent || '').join('').trim();
+      if (lineText) {
+        slideLines.push(lineText);
+      }
+    }
+
+    // Check optional speaker notes
+    const notePath = `ppt/notesSlides/notesSlide${slideNum}.xml`;
+    let notesText = '';
+    if (zip.files[notePath]) {
+      try {
+        const notesXml = await zip.files[notePath].async('string');
+        const notesDoc = parser.parseFromString(notesXml, 'application/xml');
+        const noteParas = Array.from(notesDoc.getElementsByTagNameNS('*', 'p'))
+          .map((p) =>
+            Array.from(p.getElementsByTagNameNS('*', 't'))
+              .map((t) => t.textContent || '')
+              .join('')
+              .trim()
+          )
+          .filter((t) => t && !/^\d+$/.test(t));
+        if (noteParas.length > 0) {
+          notesText = `\n\n### Speaker Notes\n${noteParas.join('\n')}`;
+        }
+      } catch {
+        // Ignore malformed notes
+      }
+    }
+
+    const titleLine = slideLines[0] ? `# Slide ${slideNum}: ${slideLines[0]}` : `# Slide ${slideNum}`;
+    const bodyLines = slideLines.slice(1).map((l) => `- ${l}`).join('\n');
+    slidesOutput.push(`${titleLine}${bodyLines ? `\n\n${bodyLines}` : '\n\n(Slide image / visual layout)'}${notesText}`);
+  }
+
+  return slidesOutput.join('\n\n--- PAGE BREAK ---\n\n');
+}
+
+/**
+ * Extracts HTML and structured text from DOCX (and legacy DOC fallback) files
  */
 export async function extractDocxHtml(file: File): Promise<DocxExtractionResult> {
   const arrayBuffer = await readFileAsArrayBuffer(file);
-  const htmlResult = await mammoth.convertToHtml({ arrayBuffer });
-  const textResult = await mammoth.extractRawText({ arrayBuffer });
+  try {
+    const htmlResult = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer.slice(0) });
+    const textResult = await mammoth.extractRawText({ arrayBuffer: arrayBuffer.slice(0) });
 
-  return {
-    html: htmlResult.value || '',
-    text: textResult.value || '',
-    messages: htmlResult.messages.map((m) => m.message),
-  };
+    return {
+      html: htmlResult.value || '',
+      text: textResult.value || '',
+      messages: htmlResult.messages.map((m) => m.message),
+    };
+  } catch (err: any) {
+    // Check if legacy binary .doc or plain/rtf text
+    const fallbackText = extractReadableTextFromLegacyBinary(arrayBuffer);
+    if (fallbackText && fallbackText.length > 10) {
+      return {
+        html: `<p>${fallbackText.replace(/\n/g, '</p><p>')}</p>`,
+        text: fallbackText,
+        messages: ['Extracted readable text using legacy DOC compatibility mode.'],
+      };
+    }
+    throw new Error(err?.message || 'Unable to parse Word file. Please use .DOCX format.');
+  }
 }
 
 /**
@@ -57,12 +204,12 @@ export async function convertWordToPDF(
     text = fileOrText;
   } else {
     docTitle = fileOrText.name.replace(/\.[^/.]+$/, '');
-    if (
-      fileOrText.name.toLowerCase().endsWith('.docx') ||
-      fileOrText.name.toLowerCase().endsWith('.doc')
-    ) {
+    const lower = fileOrText.name.toLowerCase();
+    if (lower.endsWith('.docx') || lower.endsWith('.doc')) {
       const extracted = await extractDocxHtml(fileOrText);
       text = extracted.text;
+    } else if (lower.endsWith('.pptx') || lower.endsWith('.ppt') || lower.endsWith('.odp')) {
+      text = await extractPptxSlides(fileOrText);
     } else {
       text = await fileOrText.text();
     }
@@ -424,12 +571,34 @@ export function exportTextToTxtBlob(text: string): Blob {
   return new Blob([text], { type: 'text/plain;charset=utf-8' });
 }
 
+function escapeHtml(raw: string): string {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function exportTextToHtmlBlob(text: string, title = 'Document'): Blob {
+  const safeTitle = escapeHtml(title);
+  const bodyHtml = text
+    .split('\n')
+    .map((l) => {
+      const trimmed = l.trim();
+      if (!trimmed) return '<br/>';
+      if (trimmed.startsWith('### ')) return `<h3>${escapeHtml(trimmed.slice(4))}</h3>`;
+      if (trimmed.startsWith('## ')) return `<h2>${escapeHtml(trimmed.slice(3))}</h2>`;
+      if (trimmed.startsWith('# ')) return `<h1>${escapeHtml(trimmed.slice(2))}</h1>`;
+      return `<p>${escapeHtml(l)}</p>`;
+    })
+    .join('\n');
+
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>${title}</title>
+  <title>${safeTitle}</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -445,10 +614,7 @@ export function exportTextToHtmlBlob(text: string, title = 'Document'): Blob {
   </style>
 </head>
 <body>
-${text
-  .split('\n')
-  .map((l) => (l.trim() ? `<p>${l}</p>` : '<br/>'))
-  .join('\n')}
+${bodyHtml}
 </body>
 </html>`;
   return new Blob([htmlContent], { type: 'text/html;charset=utf-8' });

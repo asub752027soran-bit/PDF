@@ -1,5 +1,13 @@
-import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
+import { PDFDocument, PDFName, rgb, degrees, StandardFonts } from 'pdf-lib';
+import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import jsPDF from 'jspdf';
 import { PDFAnnotation, EditablePdfText } from '../types';
+
+if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    pdfWorker || `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version || '4.10.38'}/build/pdf.worker.min.mjs`;
+}
 
 // Utility to read File as ArrayBuffer safely
 export function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
@@ -383,19 +391,331 @@ export async function imagesToPDF(
   return await pdfDoc.save({ useObjectStreams: true });
 }
 
-// COMPRESS PDF
+export type CompressionLevel = 'extreme' | 'recommended' | 'light';
+
+export interface CompressPDFOptions {
+  level?: CompressionLevel;
+  preserveTextOnly?: boolean;
+  onProgress?: (percent: number, status: string, stage: string) => void;
+}
+
+export interface CompressPDFResult {
+  data: Uint8Array;
+  originalSize: number;
+  compressedSize: number;
+  savedPercent: number;
+  method: 'structural' | 'rasterized' | 'original';
+  pageCount: number;
+}
+
+function canvasToJpegBuffer(canvas: HTMLCanvasElement, quality: number): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error('Failed to encode compressed page image'));
+          return;
+        }
+        blob.arrayBuffer().then(resolve).catch(reject);
+      },
+      'image/jpeg',
+      quality
+    );
+  });
+}
+
+/**
+ * Strips metadata, orphan objects, thumbnails, and incremental updates into a clean object-stream PDF.
+ */
+async function compressPDFStructural(rawBytes: Uint8Array): Promise<{ data: Uint8Array; pageCount: number }> {
+  const srcPdf = await PDFDocument.load(rawBytes.slice(0), {
+    ignoreEncryption: true,
+    updateMetadata: false,
+  });
+
+  if (srcPdf.isEncrypted) {
+    throw new Error('This PDF is password-protected. Please unlock it first using the Unlock PDF tool.');
+  }
+
+  const cleanPdf = await PDFDocument.create();
+  const pageIndices = srcPdf.getPageIndices();
+  if (pageIndices.length > 0) {
+    const copiedPages = await cleanPdf.copyPages(srcPdf, pageIndices);
+    for (const page of copiedPages) {
+      // Remove optional thumbnail/piece info dictionaries to save space
+      try {
+        page.node.delete(PDFName.of('Thumb'));
+        page.node.delete(PDFName.of('PieceInfo'));
+      } catch {
+        // Ignore if not present
+      }
+      cleanPdf.addPage(page);
+    }
+  }
+
+  // Strip heavy XMP metadata and info dictionary bloat
+  try {
+    cleanPdf.catalog.delete(PDFName.of('Metadata'));
+    cleanPdf.catalog.delete(PDFName.of('PieceInfo'));
+  } catch {
+    // Ignore
+  }
+  cleanPdf.setTitle('');
+  cleanPdf.setAuthor('');
+  cleanPdf.setSubject('');
+  cleanPdf.setKeywords([]);
+  cleanPdf.setProducer('PDF Editfy');
+  cleanPdf.setCreator('PDF Editfy');
+
+  const saved = await cleanPdf.save({
+    useObjectStreams: true,
+    addDefaultPage: false,
+    updateFieldAppearances: false,
+  });
+
+  return { data: saved, pageCount: pageIndices.length };
+}
+
+/**
+ * Renders PDF pages at controlled DPI and JPEG quality, preserving exact PDF page dimensions in points.
+ */
+async function compressPDFRasterized(
+  rawBytes: Uint8Array,
+  level: CompressionLevel,
+  onProgress?: (percent: number, status: string, stage: string) => void
+): Promise<{ data: Uint8Array; pageCount: number }> {
+  const preset =
+    level === 'extreme'
+      ? { targetScale: 1.05, maxDim: 1150, jpegQuality: 0.45 }
+      : level === 'light'
+      ? { targetScale: 1.8, maxDim: 2100, jpegQuality: 0.85 }
+      : { targetScale: 1.4, maxDim: 1600, jpegQuality: 0.7 };
+
+  const loadingTask = pdfjsLib.getDocument({ data: rawBytes.slice(0) });
+  let pdf: any = null;
+
+  try {
+    pdf = await loadingTask.promise;
+    const totalPages = pdf.numPages || 0;
+    if (totalPages === 0) {
+      throw new Error('The PDF contains no pages.');
+    }
+
+    const outPdf = await PDFDocument.create();
+    outPdf.setProducer('PDF Editfy');
+    outPdf.setCreator('PDF Editfy');
+
+    for (let i = 1; i <= totalPages; i++) {
+      let page: any = null;
+      let canvas: HTMLCanvasElement | null = null;
+
+      try {
+        const pct = 30 + Math.round(((i - 1) / totalPages) * 60);
+        onProgress?.(pct, `Compressing page ${i} of ${totalPages}...`, 'Optimizing Page Streams');
+
+        page = await pdf.getPage(i);
+        const baseViewport = page.getViewport({ scale: 1.0 });
+
+        // Clamp render scale so oversized PDF pages do not exhaust memory
+        const maxBaseDim = Math.max(baseViewport.width, baseViewport.height, 1);
+        const clampedScale = Math.min(preset.targetScale, preset.maxDim / maxBaseDim);
+        const renderScale = Math.max(0.4, clampedScale);
+        const viewport = page.getViewport({ scale: renderScale });
+
+        canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(viewport.width));
+        canvas.height = Math.max(1, Math.round(viewport.height));
+        const ctx = canvas.getContext('2d', { alpha: false });
+        if (!ctx) {
+          throw new Error('Browser canvas 2D context is unavailable.');
+        }
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        await page.render({
+          canvasContext: ctx,
+          viewport,
+          canvas,
+        } as any).promise;
+
+        const jpgBuffer = await canvasToJpegBuffer(canvas, preset.jpegQuality);
+        const jpgImage = await outPdf.embedJpg(jpgBuffer);
+
+        // Preserve exact original physical PDF page size in points
+        const outPage = outPdf.addPage([baseViewport.width, baseViewport.height]);
+        outPage.drawImage(jpgImage, {
+          x: 0,
+          y: 0,
+          width: baseViewport.width,
+          height: baseViewport.height,
+        });
+      } finally {
+        if (page && typeof page.cleanup === 'function') {
+          try {
+            page.cleanup();
+          } catch {
+            // ignore
+          }
+        }
+        if (canvas) {
+          canvas.width = 0;
+          canvas.height = 0;
+          canvas = null;
+        }
+      }
+    }
+
+    onProgress?.(92, 'Rebuilding compressed PDF object streams...', 'Finalizing PDF');
+    const saved = await outPdf.save({
+      useObjectStreams: true,
+      addDefaultPage: false,
+      updateFieldAppearances: false,
+    });
+
+    return { data: saved, pageCount: totalPages };
+  } catch (err: any) {
+    if (err?.name === 'PasswordException') {
+      throw new Error('This PDF is password-protected. Please unlock it first using the Unlock PDF tool.');
+    }
+    throw err;
+  } finally {
+    if (pdf && typeof pdf.destroy === 'function') {
+      try {
+        await pdf.destroy();
+      } catch {
+        // ignore
+      }
+    }
+    if (loadingTask && typeof loadingTask.destroy === 'function') {
+      try {
+        await loadingTask.destroy();
+      } catch {
+        // ignore
+      }
+    }
+  }
+}
+
+// COMPRESS PDF (Detailed hybrid optimization returning best smallest valid result)
+export async function compressPDFDetailed(
+  file: File,
+  options: CompressPDFOptions = {}
+): Promise<CompressPDFResult> {
+  if (!file) throw new Error('No PDF file provided for compression.');
+
+  const level: CompressionLevel = options.level || 'recommended';
+  const preserveTextOnly = options.preserveTextOnly ?? false;
+  const onProgress = options.onProgress;
+
+  onProgress?.(10, `Reading "${file.name}"...`, 'Loading Document');
+  const arrayBuffer = await readFileAsArrayBuffer(file);
+  const originalBytes = new Uint8Array(arrayBuffer);
+  const originalSize = originalBytes.byteLength;
+
+  if (originalSize === 0) {
+    throw new Error('The selected PDF file is empty.');
+  }
+
+  // Stage 1: Structural & Object Stream Cleanup (always preserves vector text)
+  onProgress?.(20, 'Stripping unused objects, metadata & compressing streams...', 'Structural Optimization');
+  let structuralData: Uint8Array | null = null;
+  let pageCount = 1;
+
+  try {
+    const structRes = await compressPDFStructural(originalBytes);
+    structuralData = structRes.data;
+    pageCount = structRes.pageCount || 1;
+  } catch (structErr: any) {
+    if (structErr?.message?.includes('password-protected')) {
+      throw structErr;
+    }
+    console.warn('Structural PDF pass warning:', structErr);
+  }
+
+  // If user requested lossless text-only preservation, return smallest between structural & original
+  if (preserveTextOnly) {
+    onProgress?.(95, 'Finalizing lossless structural optimization...', 'Finalizing PDF');
+    if (structuralData && structuralData.byteLength < originalSize) {
+      const compressedSize = structuralData.byteLength;
+      return {
+        data: structuralData,
+        originalSize,
+        compressedSize,
+        savedPercent: Math.max(0, Math.round(((originalSize - compressedSize) / originalSize) * 100)),
+        method: 'structural',
+        pageCount,
+      };
+    }
+    return {
+      data: originalBytes,
+      originalSize,
+      compressedSize: originalSize,
+      savedPercent: 0,
+      method: 'original',
+      pageCount,
+    };
+  }
+
+  // Stage 2: Page & Embedded Image Recompression via pdfjs-dist + JPEG optimization
+  let rasterizedData: Uint8Array | null = null;
+  try {
+    const rasterRes = await compressPDFRasterized(originalBytes, level, onProgress);
+    rasterizedData = rasterRes.data;
+    pageCount = rasterRes.pageCount || pageCount;
+  } catch (rasterErr: any) {
+    // Re-throw explicit password protection errors; otherwise fallback to structural if available
+    if (rasterErr?.message?.includes('password-protected')) {
+      throw rasterErr;
+    }
+    console.warn('Rasterized compression fallback notice:', rasterErr);
+    if (!structuralData) {
+      throw new Error(rasterErr?.message || 'Unable to parse or compress this PDF file.');
+    }
+  }
+
+  // Pick the strictly smallest valid PDF output
+  let bestData: Uint8Array = originalBytes;
+  let method: 'structural' | 'rasterized' | 'original' = 'original';
+
+  if (structuralData && structuralData.byteLength < bestData.byteLength) {
+    bestData = structuralData;
+    method = 'structural';
+  }
+
+  if (rasterizedData) {
+    // In 'light' mode, prefer lossless vector structural output unless rasterization gives meaningful (>=10%) extra savings
+    const rasterThreshold = level === 'light' ? bestData.byteLength * 0.9 : bestData.byteLength;
+    if (rasterizedData.byteLength < rasterThreshold) {
+      bestData = rasterizedData;
+      method = 'rasterized';
+    }
+  }
+
+  const compressedSize = bestData.byteLength;
+  const savedPercent = Math.max(0, Math.round(((originalSize - compressedSize) / originalSize) * 100));
+
+  onProgress?.(100, 'Compression complete!', 'Completed');
+
+  return {
+    data: bestData,
+    originalSize,
+    compressedSize,
+    savedPercent,
+    method,
+    pageCount,
+  };
+}
+
+// COMPRESS PDF (Backward-compatible wrapper)
 export async function compressPDF(
   file: File,
   qualityFactor: number = 0.7 // 0.3 extreme, 0.7 recommended, 0.9 light
 ): Promise<Uint8Array> {
-  if (!file) throw new Error('No PDF file provided for compression.');
-  const arrayBuffer = await readFileAsArrayBuffer(file);
-  const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-  
-  // Re-save with object stream compression and clean objects
-  return await pdfDoc.save({
-    useObjectStreams: true,
-  });
+  const level: CompressionLevel =
+    qualityFactor <= 0.45 ? 'extreme' : qualityFactor >= 0.85 ? 'light' : 'recommended';
+  const result = await compressPDFDetailed(file, { level });
+  return result.data;
 }
 
 // Helper to convert hex color to RGB (0-1)
@@ -739,19 +1059,217 @@ export async function applyPDFAnnotations(
   return await pdfDoc.save({ useObjectStreams: true });
 }
 
-// LOCK / PROTECT PDF
+// LOCK / PROTECT PDF (Genuine RC4-128 password encryption via jsPDF)
 export async function lockPDF(file: File, userPassword?: string): Promise<Uint8Array> {
   if (!file) throw new Error('No PDF file provided.');
+  const trimmedPassword = (userPassword || '').trim();
+  if (!trimmedPassword) {
+    throw new Error('Please enter a password to encrypt and lock this PDF.');
+  }
+
   const arrayBuffer = await readFileAsArrayBuffer(file);
-  const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-  pdfDoc.setTitle(file.name);
-  return await pdfDoc.save({ useObjectStreams: true });
+  const rawBytes = new Uint8Array(arrayBuffer);
+  const loadingTask = pdfjsLib.getDocument({ data: rawBytes.slice(0) });
+  let pdf: any = null;
+
+  try {
+    pdf = await loadingTask.promise;
+    const totalPages = pdf.numPages || 0;
+    if (totalPages === 0) {
+      throw new Error('The PDF contains no pages.');
+    }
+
+    let doc: jsPDF | null = null;
+
+    for (let i = 1; i <= totalPages; i++) {
+      let page: any = null;
+      let canvas: HTMLCanvasElement | null = null;
+
+      try {
+        page = await pdf.getPage(i);
+        const baseViewport = page.getViewport({ scale: 1.0 });
+        const maxBaseDim = Math.max(baseViewport.width, baseViewport.height, 1);
+        const renderScale = Math.max(0.75, Math.min(2.0, 2200 / maxBaseDim));
+        const viewport = page.getViewport({ scale: renderScale });
+
+        canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(viewport.width));
+        canvas.height = Math.max(1, Math.round(viewport.height));
+        const ctx = canvas.getContext('2d', { alpha: false });
+        if (!ctx) throw new Error('Browser canvas 2D context is unavailable.');
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+        const imgDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+
+        const orientation = baseViewport.width > baseViewport.height ? 'l' : 'p';
+        const format: [number, number] = [baseViewport.width, baseViewport.height];
+
+        if (!doc) {
+          doc = new jsPDF({
+            unit: 'pt',
+            format,
+            orientation,
+            compress: true,
+            encryption: {
+              userPassword: trimmedPassword,
+              ownerPassword: trimmedPassword,
+              userPermissions: ['print'],
+            },
+          });
+        } else {
+          doc.addPage(format, orientation);
+        }
+
+        doc.addImage(imgDataUrl, 'JPEG', 0, 0, baseViewport.width, baseViewport.height);
+      } finally {
+        if (page && typeof page.cleanup === 'function') {
+          try {
+            page.cleanup();
+          } catch {
+            // ignore
+          }
+        }
+        if (canvas) {
+          canvas.width = 0;
+          canvas.height = 0;
+          canvas = null;
+        }
+      }
+    }
+
+    if (!doc) {
+      throw new Error('Failed to create encrypted PDF document.');
+    }
+
+    return new Uint8Array(doc.output('arraybuffer'));
+  } catch (err: any) {
+    if (err?.name === 'PasswordException') {
+      throw new Error('This PDF is already password-protected. Please unlock it first before setting a new password.');
+    }
+    throw new Error(err?.message || 'Failed to password-protect PDF.');
+  } finally {
+    if (pdf && typeof pdf.destroy === 'function') {
+      try {
+        await pdf.destroy();
+      } catch {
+        // ignore
+      }
+    }
+    if (loadingTask && typeof loadingTask.destroy === 'function') {
+      try {
+        await loadingTask.destroy();
+      } catch {
+        // ignore
+      }
+    }
+  }
 }
 
-// UNLOCK PDF
+// UNLOCK PDF (Genuine password decryption & restriction removal)
 export async function unlockPDF(file: File, password?: string): Promise<Uint8Array> {
   if (!file) throw new Error('No PDF file provided.');
   const arrayBuffer = await readFileAsArrayBuffer(file);
-  const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-  return await pdfDoc.save({ useObjectStreams: true });
+  const rawBytes = new Uint8Array(arrayBuffer);
+
+  // First check if file is not user-password protected (either unencrypted or owner-permission only)
+  try {
+    const checkDoc = await PDFDocument.load(rawBytes.slice(0), { updateMetadata: false });
+    if (!checkDoc.isEncrypted) {
+      return await checkDoc.save({ useObjectStreams: true });
+    }
+  } catch {
+    // Document is encrypted — decrypt properly using pdfjs-dist with supplied password
+  }
+
+  const loadingTask = pdfjsLib.getDocument({
+    data: rawBytes.slice(0),
+    password: password || undefined,
+  });
+
+  let pdf: any = null;
+  try {
+    pdf = await loadingTask.promise;
+    const totalPages = pdf.numPages || 0;
+    if (totalPages === 0) {
+      throw new Error('The PDF contains no pages.');
+    }
+
+    const outPdf = await PDFDocument.create();
+    outPdf.setProducer('PDF Editfy');
+
+    for (let i = 1; i <= totalPages; i++) {
+      let page: any = null;
+      let canvas: HTMLCanvasElement | null = null;
+
+      try {
+        page = await pdf.getPage(i);
+        const baseViewport = page.getViewport({ scale: 1.0 });
+        const maxBaseDim = Math.max(baseViewport.width, baseViewport.height, 1);
+        const renderScale = Math.max(0.75, Math.min(2.0, 2200 / maxBaseDim));
+        const viewport = page.getViewport({ scale: renderScale });
+
+        canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(viewport.width));
+        canvas.height = Math.max(1, Math.round(viewport.height));
+        const ctx = canvas.getContext('2d', { alpha: false });
+        if (!ctx) throw new Error('Browser canvas 2D context is unavailable.');
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+        const jpgBuffer = await canvasToJpegBuffer(canvas, 0.94);
+        const jpgImage = await outPdf.embedJpg(jpgBuffer);
+
+        const outPage = outPdf.addPage([baseViewport.width, baseViewport.height]);
+        outPage.drawImage(jpgImage, {
+          x: 0,
+          y: 0,
+          width: baseViewport.width,
+          height: baseViewport.height,
+        });
+      } finally {
+        if (page && typeof page.cleanup === 'function') {
+          try {
+            page.cleanup();
+          } catch {
+            // ignore
+          }
+        }
+        if (canvas) {
+          canvas.width = 0;
+          canvas.height = 0;
+          canvas = null;
+        }
+      }
+    }
+
+    return await outPdf.save({ useObjectStreams: true });
+  } catch (err: any) {
+    if (err?.name === 'PasswordException') {
+      if (!password) {
+        throw new Error('This PDF requires a password to decrypt. Please enter the document password.');
+      }
+      throw new Error('Incorrect password. Please verify the password and try again.');
+    }
+    throw new Error(err?.message || 'Unable to decrypt this PDF file.');
+  } finally {
+    if (pdf && typeof pdf.destroy === 'function') {
+      try {
+        await pdf.destroy();
+      } catch {
+        // ignore
+      }
+    }
+    if (loadingTask && typeof loadingTask.destroy === 'function') {
+      try {
+        await loadingTask.destroy();
+      } catch {
+        // ignore
+      }
+    }
+  }
 }

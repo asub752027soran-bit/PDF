@@ -746,5 +746,35 @@ export const TOOL_SEO_DETAILS: Record<string, ToolSeoDetail> = {
     relatedToolIds: ['edit-pdf', 'compress-pdf', 'merge-pdf', 'pdf-to-excel'],
     canonicalSlug: 'gst-invoice-generator',
     alternateSlugs: ['gst-invoice', 'tax-invoice-generator', 'invoice-generator']
+  },
+
+  'image-enhancer': {
+    h1: 'Blur Image to Clear & Old Photo Restorer',
+    shortIntro: 'Unblur out-of-focus photos, sharpen blurry text, and restore faded, yellowed, or dusty vintage photos into crisp high-resolution images.',
+    fullDescription: 'PDF Editfy Image Enhancer & Old Photo Restorer runs an adaptive multi-stage image restoration pipeline directly in your browser. Choose Unblur Photo, Clarify Blurry Text, Restore Old Photo, or Full Restore to clean surface scratches and noise, fix vintage fading and sepia color casts, boost local shadow detail, deblur soft edges, and upscale cleanly up to 4x HD with a real-time Before/After split slider.',
+    howToSteps: [
+      { title: 'Upload Blurry or Old Photo', description: 'Select or drop any JPG, PNG, WEBP, or BMP photo or scanned vintage picture.' },
+      { title: 'Pick Restoration Preset', description: 'Select Unblur Photo, Clarify Blurry Text, Restore Old Photo, or Old & Blurry Full Restore.' },
+      { title: 'Preview with Before/After Slider', description: 'Drag the split slider or fine-tune deblur, fade repair, scratch removal, and HD upscale up to 4x.' },
+      { title: 'Download Clear HD Image', description: 'Click Enhance & Download Clear Image to save your restored PNG, JPG, or WEBP locally.' }
+    ],
+    features: [
+      'Blur-to-Clear Edge-Clamped Deconvolution Deblurring',
+      'Blurry Text Clarity Mode for Receipts, Signs & Scans',
+      'Old Photo Fade Repair & Color Cast Neutralization',
+      'Dust Speckle & Scratch Noise Despeckling',
+      'Up to 4x Progressive HD Resolution Upscaling',
+      'Interactive Before & After Split Comparison Slider'
+    ],
+    supportedInput: 'JPG, JPEG, PNG, WEBP, BMP',
+    supportedOutput: 'High-Resolution Clear PNG, JPG, or WEBP',
+    faqs: [
+      { question: 'Can this tool make blurry photos and blurry text clear?', answer: 'Yes! Use the Unblur Photo preset for portraits and camera motion blur, or switch on Clarify Blurry Text to recover crisp lettering on blurred scans, signs, and documents.' },
+      { question: 'How does old photo restoration work?', answer: 'It automatically removes surface dust specks, stretches faded tonal range, neutralizes yellowed or sepia aging casts, recovers shadow detail, and sharpens soft vintage focus.' },
+      { question: 'Are my personal or family photos uploaded to any server?', answer: 'Never. All pixel restoration and upscaling executes 100% locally in your browser memory.' }
+    ],
+    relatedToolIds: ['image-converter', 'image-resizer', 'image-compressor', 'ocr-reader'],
+    canonicalSlug: 'image-enhancer',
+    alternateSlugs: ['unblur-image', 'blur-to-clear', 'restore-old-photo', 'photo-restorer', 'deblur-image']
   }
 };

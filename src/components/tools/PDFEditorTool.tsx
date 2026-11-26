@@ -48,7 +48,8 @@ import {
   Replace,
   PenLine,
   SlidersHorizontal,
-  CheckCircle2
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import {
   applyPDFAnnotations,
@@ -168,6 +169,7 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
   // Processing & Export State
   const [isProcessing, setIsProcessing] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [pdfRendering, setPdfRendering] = useState(false);
   const [pdfRenderSuccess, setPdfRenderSuccess] = useState(false);
 
@@ -263,13 +265,13 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
 
   // File Upload Handler
   const handleFileUpload = async (uploadedFile: File) => {
+    setErrorMsg(null);
     if (!uploadedFile.name.toLowerCase().endsWith('.pdf')) {
-      alert('Please upload a valid PDF document.');
+      setErrorMsg('Please upload a valid PDF document (.pdf).');
       return;
     }
 
     setIsProcessing(true);
-    setFile(uploadedFile);
 
     if (renderTaskRef.current) {
       try {
@@ -291,13 +293,14 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
 
     try {
       const dataUrl = await readFileAsDataURL(uploadedFile);
-      setFileDataUrl(dataUrl);
 
-      // Load Document with PDF.js
+      // Load Document with PDF.js before entering workspace
       const loadingTask = pdfjsLib.getDocument({ url: dataUrl });
       const pdf = await loadingTask.promise;
       pdfDocRef.current = pdf;
 
+      setFile(uploadedFile);
+      setFileDataUrl(dataUrl);
       setNumPages(pdf.numPages);
       setCurrentPage(1);
       setAnnotations([]);
@@ -310,7 +313,9 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       generateThumbnails(pdf);
     } catch (err: any) {
       console.error('Error loading PDF:', err);
-      alert('Could not render this PDF file. Please ensure it is not password-protected.');
+      setFile(null);
+      setFileDataUrl(null);
+      setErrorMsg('Could not render this PDF file. Please ensure it is valid and not password-protected (use Unlock PDF first if locked).');
       setIsProcessing(false);
     }
   };
@@ -1115,8 +1120,8 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
       setExportMessage(null);
     } catch (err: any) {
       console.error('Error saving PDF:', err);
+      setErrorMsg('Failed to generate output PDF: ' + (err?.message || 'Unknown error'));
       failProgress(err?.message || 'Failed to generate output PDF.');
-      alert('Failed to generate output PDF: ' + err.message);
       setIsProcessing(false);
       setExportMessage(null);
     }
@@ -1147,6 +1152,24 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
           </div>
         </div>
 
+        {/* Error Banner */}
+        {errorMsg && (
+          <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs flex items-center justify-between gap-3 font-semibold">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setErrorMsg(null)}
+              className="p-1 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-500"
+              aria-label="Dismiss error"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Upload Hero Card */}
         <div
           onDragOver={(e) => e.preventDefault()}
@@ -1172,7 +1195,11 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
               ref={fileInputRef}
               type="file"
               accept="application/pdf"
-              onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
+              onChange={(e) => {
+                const picked = e.target.files?.[0];
+                e.target.value = '';
+                if (picked) handleFileUpload(picked);
+              }}
               className="hidden"
             />
           </label>
@@ -1473,6 +1500,24 @@ export const PDFEditorTool: React.FC<PDFEditorToolProps> = ({ mode = 'edit', onB
           )}
         </div>
       </header>
+
+      {/* ERROR BANNER IN EDITOR WORKSPACE */}
+      {errorMsg && (
+        <div className="bg-rose-50 border-b border-rose-200 px-4 py-2.5 flex items-center justify-between gap-3 text-xs text-rose-800 font-semibold z-20">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setErrorMsg(null)}
+            className="p-1 rounded hover:bg-rose-100 text-rose-500"
+            aria-label="Dismiss error"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* SEARCH / FIND & REPLACE BAR (Toggled by Search) */}
       {file && showSearchModal && (

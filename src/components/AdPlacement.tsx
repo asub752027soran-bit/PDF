@@ -1,6 +1,6 @@
 import React from 'react';
 import { CustomAdItem, AdSlotType } from '../types';
-import { AdSenseBanner } from './AdSenseBanner';
+import { AdSenseBanner, isValidAdSenseSlot } from './AdSenseBanner';
 import { EzoicBanner } from './EzoicBanner';
 import { CustomAdBanner } from './CustomAdBanner';
 import { AdSpace, AdDimensionPreset } from './AdSpace';
@@ -27,7 +27,6 @@ export interface AdPlacementProps {
   };
   className?: string;
   showLabel?: boolean;
-  // Customizable dimensions & lazy-loading options forwarded to AdSpace
   preset?: AdDimensionPreset;
   width?: string | number;
   height?: string | number;
@@ -64,7 +63,7 @@ export const AdPlacement: React.FC<AdPlacementProps> = ({
   lazy = false,
   waitForPageLoad = false,
   loadDelay = 0,
-  reserveSpace = true,
+  reserveSpace = false,
 }) => {
   if (!adsEnabled) return null;
 
@@ -82,10 +81,45 @@ export const AdPlacement: React.FC<AdPlacementProps> = ({
       ? ezoicPlaceholders?.rectangle
       : undefined);
 
-  const renderBannerContent = () => {
-    // 1. EZOIC ADS SERVICE ONLY
-    if (adServingMode === 'ezoic_only') {
-      return (
+  const matchedCustomAd = pickCustomAd(customAds, slotType, toolId);
+  const hasManualAdSenseSlot = isValidAdSenseSlot(adsenseSlot);
+
+  let bannerNode: React.ReactNode = null;
+
+  if (adServingMode === 'ezoic_only') {
+    bannerNode = (
+      <EzoicBanner
+        slotType={slotType}
+        placeholderId={resolvedEzoicPlaceholderId}
+        siteId={ezoicSiteId}
+        cmpEnabled={ezoicCmpEnabled}
+        className="my-0"
+        showLabel={showLabel}
+      />
+    );
+  } else if (adServingMode === 'custom_only') {
+    if (matchedCustomAd) {
+      bannerNode = (
+        <CustomAdBanner
+          ad={matchedCustomAd}
+          slotType={slotType}
+          className="my-0"
+          showLabel={showLabel}
+        />
+      );
+    }
+  } else if (adServingMode === 'hybrid') {
+    if (matchedCustomAd && (slotType === 'banner' || slotType === 'rectangle')) {
+      bannerNode = (
+        <CustomAdBanner
+          ad={matchedCustomAd}
+          slotType={slotType}
+          className="my-0"
+          showLabel={showLabel}
+        />
+      );
+    } else if (ezoicEnabled) {
+      bannerNode = (
         <EzoicBanner
           slotType={slotType}
           placeholderId={resolvedEzoicPlaceholderId}
@@ -95,76 +129,44 @@ export const AdPlacement: React.FC<AdPlacementProps> = ({
           showLabel={showLabel}
         />
       );
-    }
-
-    // 2. CUSTOM ADS ONLY
-    if (adServingMode === 'custom_only') {
-      const matchedCustomAd = pickCustomAd(customAds, slotType, toolId);
-      if (matchedCustomAd) {
-        return (
-          <CustomAdBanner
-            ad={matchedCustomAd}
-            slotType={slotType}
-            className="my-0"
-            showLabel={showLabel}
-          />
-        );
-      }
-      return null;
-    }
-
-    // 3. HYBRID MODE (Custom Sponsor Ad on secondary in-content slots if available, Ezoic or AdSense on primary)
-    if (adServingMode === 'hybrid') {
-      const matchedCustomAd = pickCustomAd(customAds, slotType, toolId);
-      if (matchedCustomAd && (slotType === 'banner' || slotType === 'rectangle')) {
-        return (
-          <CustomAdBanner
-            ad={matchedCustomAd}
-            slotType={slotType}
-            className="my-0"
-            showLabel={showLabel}
-          />
-        );
-      }
-      if (ezoicEnabled) {
-        return (
-          <EzoicBanner
-            slotType={slotType}
-            placeholderId={resolvedEzoicPlaceholderId}
-            siteId={ezoicSiteId}
-            cmpEnabled={ezoicCmpEnabled}
-            className="my-0"
-            showLabel={showLabel}
-          />
-        );
-      }
-    }
-
-    // 4. FALLBACK MODE WITH EZOIC ENABLED
-    if (adServingMode === 'fallback' && ezoicEnabled) {
-      return (
-        <EzoicBanner
+    } else if (hasManualAdSenseSlot) {
+      bannerNode = (
+        <AdSenseBanner
           slotType={slotType}
-          placeholderId={resolvedEzoicPlaceholderId}
-          siteId={ezoicSiteId}
-          cmpEnabled={ezoicCmpEnabled}
+          client={adsensePublisherId}
+          slot={adsenseSlot}
           className="my-0"
           showLabel={showLabel}
         />
       );
     }
-
-    // 5. GOOGLE ADSENSE PRIMARY
-    return (
+  } else if (adServingMode === 'fallback' && ezoicEnabled) {
+    bannerNode = (
+      <EzoicBanner
+        slotType={slotType}
+        placeholderId={resolvedEzoicPlaceholderId}
+        siteId={ezoicSiteId}
+        cmpEnabled={ezoicCmpEnabled}
+        className="my-0"
+        showLabel={showLabel}
+      />
+    );
+  } else if (hasManualAdSenseSlot) {
+    bannerNode = (
       <AdSenseBanner
-        slotType={slotType as any}
+        slotType={slotType}
         client={adsensePublisherId}
         slot={adsenseSlot}
         className="my-0"
         showLabel={showLabel}
       />
     );
-  };
+  }
+
+  // Do not mount empty placeholder boxes when Google Auto Ads handles placements from <head>
+  if (!bannerNode) {
+    return null;
+  }
 
   return (
     <AdSpace
@@ -181,7 +183,7 @@ export const AdPlacement: React.FC<AdPlacementProps> = ({
       reserveSpace={reserveSpace}
       className={className}
     >
-      {renderBannerContent()}
+      {bannerNode}
     </AdSpace>
   );
 };

@@ -14,7 +14,9 @@ import {
   CheckCircle2,
   Lock,
   Unlock,
-  RefreshCw
+  RefreshCw,
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { processImage, formatBytes, ImageResizeOptions } from '../../utils/imageProcessor';
 import { renderPDFToImages, PDFPageImage } from '../../utils/pdfExtractor';
@@ -47,7 +49,7 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({
   const [maintainAspect, setMaintainAspect] = useState(true);
   const [origDimensions, setOrigDimensions] = useState<{ width: number; height: number } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [statusMsg, setStatusMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { startProgress, updateProgress, setItemsProgress, completeProgress, failProgress } = useProgress();
 
   // Results for PDF to Images conversion
@@ -86,10 +88,36 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({
     return 'Convert images between JPG, PNG, and WEBP formats with instant download.';
   };
 
+  const extractPdfPagesAsImages = async (pdfFile: File, fmt: 'jpeg' | 'png') => {
+    setIsProcessing(true);
+    setErrorMsg(null);
+    startProgress({
+      title: 'Extracting PDF Pages as Images',
+      status: `Rendering pages in "${pdfFile.name}"...`,
+      stage: 'Rasterizing Pages',
+      indeterminate: false
+    });
+
+    try {
+      updateProgress(20, 'Reading PDF page tree...', 'PDF Parsing');
+      const pageImgs = await renderPDFToImages(pdfFile, fmt === 'png' ? 'png' : 'jpeg', 2.0);
+      setPdfPageImages(pageImgs);
+      completeProgress(`Extracted ${pageImgs.length} high-resolution page images!`);
+    } catch (err: any) {
+      console.error('PDF page rendering failed:', err);
+      const msg = err?.message || 'Failed to extract images from PDF.';
+      failProgress(msg);
+      setErrorMsg(msg);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const processIncomingFiles = async (selected: File[]) => {
     setFiles(selected);
     setProcessedResult(null);
     setPdfPageImages([]);
+    setErrorMsg(null);
 
     if (selected.length > 0 && !selected[0].name.toLowerCase().endsWith('.pdf')) {
       // Read original image dimensions
@@ -103,30 +131,14 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({
         }
         URL.revokeObjectURL(objUrl);
       };
+      img.onerror = () => {
+        URL.revokeObjectURL(objUrl);
+      };
       img.src = objUrl;
     }
 
     if (isPdfToImage && selected.length > 0 && selected[0].name.toLowerCase().endsWith('.pdf')) {
-      setIsProcessing(true);
-      startProgress({
-        title: 'Extracting PDF Pages as Images',
-        status: `Rendering pages in "${selected[0].name}"...`,
-        stage: 'Rasterizing Pages',
-        indeterminate: false
-      });
-
-      try {
-        updateProgress(20, 'Reading PDF page tree...', 'PDF Parsing');
-        const pageImgs = await renderPDFToImages(selected[0], targetFormat === 'png' ? 'png' : 'jpeg', 2.0);
-        setPdfPageImages(pageImgs);
-        completeProgress(`Extracted ${pageImgs.length} high-resolution page images!`);
-      } catch (err: any) {
-        console.error('PDF page rendering failed:', err);
-        failProgress(err?.message || 'Failed to extract images from PDF.');
-        alert('Failed to extract images from PDF.');
-      } finally {
-        setIsProcessing(false);
-      }
+      await extractPdfPagesAsImages(selected[0], targetFormat === 'png' ? 'png' : 'jpeg');
     }
   };
 
@@ -139,8 +151,9 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({
   }, [initialFiles, initialFile]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
+    if (e.target.files && e.target.files.length > 0) {
       const selected: File[] = Array.from(e.target.files);
+      e.target.value = '';
       processIncomingFiles(selected);
     }
   };
@@ -175,6 +188,7 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({
   const handleProcessSingle = async () => {
     if (files.length === 0) return;
     setIsProcessing(true);
+    setErrorMsg(null);
 
     if (isImageToPdf) {
       startProgress({
@@ -194,8 +208,9 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({
         completeProgress(`Combined ${files.length} photos into PDF document!`);
       } catch (err: any) {
         console.error('Image to PDF failed:', err);
-        failProgress(err?.message || 'Failed to convert images to PDF.');
-        alert('Failed to convert images to PDF.');
+        const msg = err?.message || 'Failed to convert images to PDF.';
+        failProgress(msg);
+        setErrorMsg(msg);
       } finally {
         setIsProcessing(false);
       }
@@ -242,8 +257,9 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({
         );
       } catch (err: any) {
         console.error('Image processing failed:', err);
-        failProgress(err?.message || 'Failed to process image.');
-        alert('Failed to process image.');
+        const msg = err?.message || 'Failed to process image.';
+        failProgress(msg);
+        setErrorMsg(msg);
       } finally {
         setIsProcessing(false);
       }
@@ -253,6 +269,7 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({
   const handleDownloadAllPdfImagesZip = async () => {
     if (pdfPageImages.length === 0) return;
     setIsProcessing(true);
+    setErrorMsg(null);
     startProgress({
       title: 'Creating ZIP Package',
       status: `Archiving ${pdfPageImages.length} extracted images into ZIP...`,
@@ -274,8 +291,9 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({
       completeProgress(`Downloaded ZIP containing all ${pdfPageImages.length} pages!`);
     } catch (err: any) {
       console.error('Zip creation failed:', err);
-      failProgress(err?.message || 'Failed to generate ZIP file.');
-      alert('Failed to generate ZIP file.');
+      const msg = err?.message || 'Failed to generate ZIP file.';
+      failProgress(msg);
+      setErrorMsg(msg);
     } finally {
       setIsProcessing(false);
     }
@@ -301,6 +319,18 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({
           </p>
         </div>
       </div>
+
+      {errorMsg && (
+        <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs flex items-center justify-between gap-2 font-semibold">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+          <button onClick={() => setErrorMsg(null)} className="p-1 hover:bg-rose-100 dark:hover:bg-rose-900 rounded-lg">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {files.length === 0 ? (
         <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-3xl p-12 text-center bg-white dark:bg-slate-800/80 hover:border-indigo-500 transition-all shadow-sm">
@@ -335,6 +365,7 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({
                 setPdfPageImages([]);
                 setProcessedResult(null);
                 setOrigDimensions(null);
+                setErrorMsg(null);
               }}
               onReplace={(newF) => processIncomingFiles([newF])}
             />
@@ -366,10 +397,24 @@ export const ImageEditorTool: React.FC<ImageEditorToolProps> = ({
           {/* PDF Page Images Grid */}
           {isPdfToImage && pdfPageImages.length > 0 && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                  Extracted Pages ({pdfPageImages.length})
-                </span>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Extracted Pages ({pdfPageImages.length})
+                  </span>
+                  <select
+                    value={targetFormat === 'png' ? 'png' : 'jpeg'}
+                    onChange={(e) => {
+                      const nextFmt = e.target.value as 'jpeg' | 'png';
+                      setTargetFormat(nextFmt);
+                      if (files[0]) extractPdfPagesAsImages(files[0], nextFmt);
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold"
+                  >
+                    <option value="jpeg">JPG Format</option>
+                    <option value="png">PNG Format</option>
+                  </select>
+                </div>
                 <button
                   onClick={handleDownloadAllPdfImagesZip}
                   disabled={isProcessing}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { AdSlotType } from '../types';
 
 export type AdDimensionPreset =
@@ -150,14 +150,13 @@ export const AdSpace: React.FC<AdSpaceProps> = ({
   loadDelay = 0,
   showPlaceholderShimmer = false,
   placeholder,
-  reserveSpace = true,
+  reserveSpace = false,
   showLabel = false,
   labelText = 'Advertisement',
   children,
   onAdRendered,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isReady, setIsReady] = useState<boolean>(true);
 
   // 1. Resolve dimension presets and overrides
   const activePresetKey: AdDimensionPreset =
@@ -181,14 +180,7 @@ export const AdSpace: React.FC<AdSpaceProps> = ({
         : maxWidth
       : presetConfig.maxWidth;
 
-  const resolvedHeight =
-    height !== undefined
-      ? typeof height === 'number'
-        ? `${height}px`
-        : height
-      : presetConfig.defaultHeight;
-
-  const resolvedAspectRatio = aspectRatio || presetConfig.aspectRatio;
+  const resolvedAspectRatio = reserveSpace ? aspectRatio || presetConfig.aspectRatio : aspectRatio;
 
   useEffect(() => {
     onAdRendered?.();
@@ -209,17 +201,14 @@ export const AdSpace: React.FC<AdSpaceProps> = ({
       data-preset={activePresetKey}
       data-loaded="true"
       style={containerStyles}
-      className={`ad-space-container relative mx-auto my-3 transition-opacity duration-300 ${className}`}
+      className={`ad-space-container relative mx-auto transition-opacity duration-300 ${className}`}
     >
-      {/* Optional Top Label */}
       {showLabel && (
-        <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-500 mb-1 flex items-center justify-between px-1">
+        <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-500 mb-1 px-1">
           <span>{labelText}</span>
-          <span className="font-mono text-[9px] opacity-60">{activePresetKey}</span>
         </div>
       )}
 
-      {/* RENDER AD AGENCY CONTENT */}
       <div className="w-full h-full">
         {children}
       </div>

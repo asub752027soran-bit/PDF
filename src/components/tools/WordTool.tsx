@@ -33,11 +33,13 @@ import {
   CheckCircle2,
   Layers,
   SplitSquareVertical,
-  HelpCircle
+  AlertCircle,
+  X
 } from 'lucide-react';
 import {
   convertWordToPDF,
   extractDocxHtml,
+  extractPptxSlides,
   exportTextToDocxBlob,
   exportTextToTxtBlob,
   exportTextToHtmlBlob
@@ -60,6 +62,7 @@ export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBa
   const [historyIdx, setHistoryIdx] = useState<number>(-1);
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const { startProgress, updateProgress, completeProgress, failProgress } = useProgress();
 
@@ -138,10 +141,12 @@ export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBa
   const processFile = async (selected: File) => {
     setFile(selected);
     setIsProcessing(true);
+    setErrorMsg(null);
     setStatusMsg('Reading and parsing document structure...');
 
     try {
-      if (selected.name.toLowerCase().endsWith('.pdf')) {
+      const lower = selected.name.toLowerCase();
+      if (lower.endsWith('.pdf')) {
         const pages = await extractTextFromPDF(selected);
         // Preserve exact sequential page order
         const fullText = pages
@@ -149,17 +154,21 @@ export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBa
           .map((p) => `# Page ${p.pageNumber}\n\n${p.text}`)
           .join('\n\n--- PAGE BREAK ---\n\n');
         updateContentWithHistory(fullText);
-      } else if (selected.name.toLowerCase().endsWith('.docx')) {
+      } else if (lower.endsWith('.docx') || lower.endsWith('.doc')) {
         const { text } = await extractDocxHtml(selected);
         updateContentWithHistory(text || '');
+      } else if (lower.endsWith('.pptx') || lower.endsWith('.ppt') || lower.endsWith('.odp')) {
+        const slideText = await extractPptxSlides(selected);
+        updateContentWithHistory(slideText);
       } else {
         const rawText = await selected.text();
         updateContentWithHistory(rawText || `Document loaded: ${selected.name}`);
       }
       setStatusMsg('Document loaded successfully with exact page order preserved.');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed reading document file:', err);
-      const fallback = `Loaded ${selected.name}. Edit or type content below:`;
+      setErrorMsg(err?.message || `Could not automatically extract all text from "${selected.name}". You can type or edit below.`);
+      const fallback = `# ${selected.name.replace(/\.[^/.]+$/, '')}\n\n`;
       updateContentWithHistory(fallback);
     } finally {
       setIsProcessing(false);
@@ -173,8 +182,10 @@ export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBa
   }, [initialFile]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0]);
+    const selected = e.target.files?.[0];
+    e.target.value = '';
+    if (selected) {
+      processFile(selected);
     }
   };
 
@@ -184,9 +195,10 @@ export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBa
     const start = textareaRef.current.selectionStart;
     const end = textareaRef.current.selectionEnd;
     if (start === end) {
-      alert('Please highlight the text you want to erase with your cursor first.');
+      setErrorMsg('Please highlight the text you want to erase with your cursor first.');
       return;
     }
+    setErrorMsg(null);
     const before = extractedText.substring(0, start);
     const after = extractedText.substring(end);
     updateContentWithHistory(before + after);
@@ -229,12 +241,6 @@ export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBa
       .replace(/^[-*•]\s+/gm, '')
       .replace(/--- PAGE BREAK ---/g, '\n');
     updateContentWithHistory(cleaned);
-  };
-
-  const handleClearAll = () => {
-    if (window.confirm('Are you sure you want to erase all document text?')) {
-      updateContentWithHistory('');
-    }
   };
 
   // Formatting insertion helpers
@@ -310,8 +316,9 @@ export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBa
       completeProgress('Exported .DOCX document successfully!');
     } catch (err: any) {
       console.error('Docx export failed:', err);
-      failProgress(err?.message || 'Failed to export DOCX file.');
-      alert('Failed to export DOCX file.');
+      const msg = err?.message || 'Failed to export DOCX file.';
+      failProgress(msg);
+      setErrorMsg(msg);
     } finally {
       setIsProcessing(false);
     }
@@ -320,6 +327,7 @@ export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBa
   const handleConvertToPDF = async () => {
     if (!extractedText.trim()) return;
     setIsProcessing(true);
+    setErrorMsg(null);
     startProgress({
       title: 'Converting Document to PDF',
       status: 'Calculating page metrics and typography margins...',
@@ -341,8 +349,9 @@ export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBa
       completeProgress('Converted to high-resolution PDF document!');
     } catch (err: any) {
       console.error('PDF conversion failed:', err);
-      failProgress(err?.message || 'Failed to convert document to PDF.');
-      alert('Failed to convert document to PDF.');
+      const msg = err?.message || 'Failed to convert document to PDF.';
+      failProgress(msg);
+      setErrorMsg(msg);
     } finally {
       setIsProcessing(false);
     }
@@ -390,6 +399,18 @@ export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBa
         </div>
       </div>
 
+      {errorMsg && (
+        <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs flex items-center justify-between gap-2 font-semibold">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+          <button onClick={() => setErrorMsg(null)} className="p-1 hover:bg-rose-100 dark:hover:bg-rose-900 rounded-lg">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {!file && !extractedText ? (
         /* Upload Hero Card */
         <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-3xl p-12 text-center bg-white dark:bg-slate-800/80 hover:border-indigo-500 transition-all shadow-sm">
@@ -397,11 +418,13 @@ export const WordTool: React.FC<WordToolProps> = ({ toolId = 'word-to-pdf', onBa
             <Upload className="w-8 h-8" />
           </div>
           <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-            Upload Document to Edit & Convert
+            {isPptToPdf ? 'Upload PowerPoint Presentation' : 'Upload Document to Edit & Convert'}
           </h3>
           <p className="text-xs text-slate-500 mb-6 max-w-md mx-auto leading-relaxed">
             {isPdfToWord
               ? 'Select any PDF file to extract, edit, erase sections, and export as editable Word (.DOCX).'
+              : isPptToPdf
+              ? 'Select any .PPTX, .PPT, or .ODP presentation to extract slides, review content, and export cleanly to PDF.'
               : 'Select DOCX, DOC, PDF, RTF, or TXT file. Edit freely, erase unwanted content, and convert with strict sequential order.'}
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Download, Table, ArrowLeft, Grid, RefreshCw, FileText } from 'lucide-react';
+import { Upload, Download, Table, ArrowLeft, Plus, AlertCircle, X } from 'lucide-react';
 import { readExcelFile, exportSheetToXLSX, exportSheetToCSV, convertExcelToPDF, SheetData } from '../../utils/excelProcessor';
 import { extractTablesFromPDF } from '../../utils/pdfExtractor';
 import { downloadBlob } from '../../utils/batchProcessor';
@@ -16,17 +16,18 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
   const [file, setFile] = useState<File | null>(null);
   const [sheets, setSheets] = useState<SheetData[]>([]);
   const [activeSheetIndex, setActiveSheetIndex] = useState(0);
+  const [visibleRowCount, setVisibleRowCount] = useState(100);
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { startProgress, updateProgress, completeProgress, failProgress } = useProgress();
-
 
   const isPdfToExcel = toolId === 'pdf-to-excel';
   const isExcelToPdf = toolId === 'excel-to-pdf';
   const isEditExcel = toolId === 'edit-excel';
   const isCsvConverter = toolId === 'csv-excel-converter';
 
-  const fileAccept = isPdfToExcel ? '.pdf,application/pdf' : '.xlsx,.xls,.csv,.ods';
+  const fileAccept = isPdfToExcel ? '.pdf,application/pdf' : '.xlsx,.xls,.csv,.tsv,.ods';
 
   const getTitle = () => {
     if (isPdfToExcel) return 'Convert PDF Tables to Excel (.XLSX & CSV)';
@@ -47,6 +48,8 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
   const processFile = async (selected: File) => {
     setFile(selected);
     setIsProcessing(true);
+    setErrorMsg(null);
+    setVisibleRowCount(100);
     setStatusMsg('Parsing spreadsheet data...');
 
     try {
@@ -63,9 +66,11 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
       }
       setActiveSheetIndex(0);
       setStatusMsg('Data parsed successfully');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed reading file:', err);
-      alert('Failed to parse file. Please ensure file format is valid.');
+      setErrorMsg(err?.message || 'Failed to parse file. Please ensure the spreadsheet format is valid.');
+      setFile(null);
+      setSheets([]);
     } finally {
       setIsProcessing(false);
     }
@@ -78,8 +83,10 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
   }, [initialFile]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0]);
+    const selected = e.target.files?.[0];
+    e.target.value = '';
+    if (selected) {
+      processFile(selected);
     }
   };
 
@@ -93,9 +100,22 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
     setSheets(updatedSheets);
   };
 
+  const handleAddRow = () => {
+    if (!sheets[activeSheetIndex]) return;
+    const updatedSheets = [...sheets];
+    const colCount = Math.max(1, updatedSheets[activeSheetIndex].data[0]?.length || 3);
+    updatedSheets[activeSheetIndex] = {
+      ...updatedSheets[activeSheetIndex],
+      data: [...updatedSheets[activeSheetIndex].data, Array(colCount).fill('')],
+    };
+    setSheets(updatedSheets);
+    setVisibleRowCount((prev) => Math.max(prev, updatedSheets[activeSheetIndex].data.length));
+  };
+
   const handleExportXLSX = async () => {
     if (sheets.length === 0) return;
     setIsProcessing(true);
+    setErrorMsg(null);
     startProgress({
       title: 'Compiling Excel (.XLSX) Workbook',
       status: `Formatting ${sheets.length} worksheet${sheets.length > 1 ? 's' : ''}...`,
@@ -114,8 +134,9 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
       completeProgress('Exported .XLSX workbook successfully!');
     } catch (err: any) {
       console.error('XLSX export failed:', err);
-      failProgress(err?.message || 'Failed to export Excel file.');
-      alert('Failed to export Excel file.');
+      const msg = err?.message || 'Failed to export Excel file.';
+      failProgress(msg);
+      setErrorMsg(msg);
     } finally {
       setIsProcessing(false);
     }
@@ -131,34 +152,37 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
   };
 
   const handleExportPDF = async () => {
-    if (!file) return;
+    if (!file && sheets.length === 0) return;
     setIsProcessing(true);
+    setErrorMsg(null);
     startProgress({
       title: 'Converting Spreadsheet to PDF',
-      status: `Generating printable table grid for "${file.name}"...`,
+      status: `Generating printable multi-page table grid...`,
       stage: 'Vector Table Rendering'
     });
 
     try {
-      updateProgress(45, 'Calculating column widths and grid layout...', 'PDF Layout Processing');
-      const pdfBytes = await convertExcelToPDF(file);
+      updateProgress(45, 'Calculating column widths and page pagination...', 'PDF Layout Processing');
+      const pdfBytes = await convertExcelToPDF(sheets.length > 0 ? sheets : file!);
       updateProgress(90, 'Generating printable PDF document...', 'Writing PDF Stream');
 
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const cleanName = file.name.replace(/\.[^/.]+$/, '');
-      recordToolConversion(toolId, file.size);
+      const cleanName = file?.name ? file.name.replace(/\.[^/.]+$/, '') : 'spreadsheet';
+      recordToolConversion(toolId, file?.size || blob.size);
       downloadBlob(blob, `${cleanName}_converted.pdf`);
       completeProgress('Converted spreadsheet to PDF document!');
     } catch (err: any) {
       console.error('Excel to PDF failed:', err);
-      failProgress(err?.message || 'Failed to generate PDF from spreadsheet.');
-      alert('Failed to generate PDF from spreadsheet.');
+      const msg = err?.message || 'Failed to generate PDF from spreadsheet.';
+      failProgress(msg);
+      setErrorMsg(msg);
     } finally {
       setIsProcessing(false);
     }
   };
 
   const currentSheet = sheets[activeSheetIndex];
+  const totalRows = currentSheet?.data?.length || 0;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
@@ -180,6 +204,18 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
           </p>
         </div>
       </div>
+
+      {errorMsg && (
+        <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs flex items-center justify-between gap-2 font-semibold">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+          <button onClick={() => setErrorMsg(null)} className="p-1 hover:bg-rose-100 dark:hover:bg-rose-900 rounded-lg">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {!file ? (
         <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-3xl p-12 text-center bg-white dark:bg-slate-800/80 hover:border-indigo-500 transition-all shadow-sm">
@@ -207,18 +243,26 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
           <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-700">
             <div>
               <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-md">
-                📊 {file.name}
+                {file.name}
               </h4>
               <p className="text-xs text-slate-500">
-                {(file.size / 1024).toFixed(1)} KB {statusMsg && `• ${statusMsg}`}
+                {(file.size / 1024).toFixed(1)} KB {statusMsg && `• ${statusMsg}`} • {totalRows} rows
               </p>
             </div>
-            <button
-              onClick={() => { setFile(null); setSheets([]); }}
-              className="text-xs font-bold text-rose-500 hover:underline"
-            >
-              Change File
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleAddRow}
+                className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Row
+              </button>
+              <button
+                onClick={() => { setFile(null); setSheets([]); setErrorMsg(null); }}
+                className="text-xs font-bold text-rose-500 hover:underline"
+              >
+                Change File
+              </button>
+            </div>
           </div>
 
           {/* Sheet Selector Tabs */}
@@ -227,7 +271,7 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
               {sheets.map((sheet, idx) => (
                 <button
                   key={idx}
-                  onClick={() => setActiveSheetIndex(idx)}
+                  onClick={() => { setActiveSheetIndex(idx); setVisibleRowCount(100); }}
                   className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
                     activeSheetIndex === idx
                       ? 'bg-indigo-600 text-white shadow-sm'
@@ -242,28 +286,42 @@ export const ExcelTool: React.FC<ExcelToolProps> = ({ toolId = 'edit-excel', onB
 
           {/* Data Table Preview Grid */}
           {currentSheet && (
-            <div className="overflow-x-auto max-h-[400px] border border-slate-200 dark:border-slate-700 rounded-2xl">
-              <table className="w-full text-left text-xs border-collapse">
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {currentSheet.data.slice(0, 50).map((row, rIdx) => (
-                    <tr key={rIdx} className={rIdx === 0 ? 'bg-slate-100 dark:bg-slate-900 font-bold' : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/50'}>
-                      <td className="p-2 border-r border-slate-200 dark:border-slate-700 bg-slate-200/50 dark:bg-slate-800 text-slate-400 font-mono text-[10px] w-8 text-center">
-                        {rIdx + 1}
-                      </td>
-                      {row.map((cell, cIdx) => (
-                        <td key={cIdx} className="p-2 border-r border-slate-100 dark:border-slate-800 min-w-[100px]">
-                          <input
-                            type="text"
-                            value={String(cell ?? '')}
-                            onChange={(e) => handleCellEdit(rIdx, cIdx, e.target.value)}
-                            className="w-full bg-transparent outline-none text-slate-800 dark:text-slate-200 focus:bg-indigo-50 dark:focus:bg-indigo-950/50 px-1 rounded"
-                          />
+            <div className="space-y-2">
+              <div className="overflow-x-auto max-h-[420px] border border-slate-200 dark:border-slate-700 rounded-2xl">
+                <table className="w-full text-left text-xs border-collapse">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {currentSheet.data.slice(0, visibleRowCount).map((row, rIdx) => (
+                      <tr key={rIdx} className={rIdx === 0 ? 'bg-slate-100 dark:bg-slate-900 font-bold' : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/50'}>
+                        <td className="p-2 border-r border-slate-200 dark:border-slate-700 bg-slate-200/50 dark:bg-slate-800 text-slate-400 font-mono text-[10px] w-10 text-center tabular-nums">
+                          {rIdx + 1}
                         </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        {row.map((cell, cIdx) => (
+                          <td key={cIdx} className="p-2 border-r border-slate-100 dark:border-slate-800 min-w-[100px]">
+                            <input
+                              type="text"
+                              value={String(cell ?? '')}
+                              onChange={(e) => handleCellEdit(rIdx, cIdx, e.target.value)}
+                              className="w-full bg-transparent outline-none text-slate-800 dark:text-slate-200 focus:bg-indigo-50 dark:focus:bg-indigo-950/50 px-1 rounded"
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {totalRows > visibleRowCount && (
+                <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+                  <span>Showing {visibleRowCount} of {totalRows} rows (all rows will be exported)</span>
+                  <button
+                    onClick={() => setVisibleRowCount((prev) => Math.min(totalRows, prev + 200))}
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold"
+                  >
+                    Show More Rows
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

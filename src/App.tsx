@@ -4,12 +4,13 @@ import { Sidebar } from './components/Sidebar';
 import { Hero } from './components/Hero';
 import { ToolGrid } from './components/ToolGrid';
 import { Footer } from './components/Footer';
-import { AdSenseBanner } from './components/AdSenseBanner';
+import { HomeEditorialSection } from './components/HomeEditorialSection';
 import { AdPlacement } from './components/AdPlacement';
 import { ensureEzoicScriptsLoaded } from './components/EzoicBanner';
 import { CookieBanner } from './components/CookieBanner';
 import { AdminLoginModal } from './components/admin/AdminLoginModal';
 import { ToolPageLayout } from './components/tools/ToolPageLayout';
+import { recordToolOpen } from './utils/activityTracker';
 
 // Lazy Loaded Tool Components
 const PDFEditorTool = lazy(() => import('./components/tools/PDFEditorTool').then(m => ({ default: m.PDFEditorTool })));
@@ -24,6 +25,7 @@ const FaviconGeneratorTool = lazy(() => import('./components/tools/FaviconGenera
 const OCRTool = lazy(() => import('./components/tools/OCRTool').then(m => ({ default: m.OCRTool })));
 const UniversalConvertTool = lazy(() => import('./components/tools/UniversalConvertTool').then(m => ({ default: m.UniversalConvertTool })));
 const GSTInvoiceGeneratorTool = lazy(() => import('./components/tools/GSTInvoiceGeneratorTool').then(m => ({ default: m.GSTInvoiceGeneratorTool })));
+const ImageEnhancerTool = lazy(() => import('./components/tools/ImageEnhancerTool').then(m => ({ default: m.ImageEnhancerTool })));
 
 // Lazy Loaded Pages & Admin Components
 const BlogPage = lazy(() => import('./components/pages/BlogPage').then(m => ({ default: m.BlogPage })));
@@ -76,8 +78,8 @@ const DEFAULT_ADMIN_CONFIG: AdminConfig = {
     banner: '',
     sidebar: '',
   },
-  adServingMode: 'ezoic_only',
-  ezoicEnabled: true,
+  adServingMode: 'adsense_only',
+  ezoicEnabled: false,
   ezoicSiteId: '',
   ezoicCmpEnabled: true,
   ezoicPlaceholders: {
@@ -103,24 +105,43 @@ export default function App() {
   const [activePage, setActivePage] = useState<string | null>(null);
   const [isNotFound, setIsNotFound] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeBlogSlug, setActiveBlogSlug] = useState<string | null>(null);
+  const [disabledToolNotice, setDisabledToolNotice] = useState<string | null>(null);
 
   // Single Admin State & Config
   const [adminConfig, setAdminConfig] = useState<AdminConfig>(() => {
     try {
       const saved = localStorage.getItem('pdfeditfy_admin_config');
+      const migratedToAdSense = localStorage.getItem('pdfeditfy_adsense_mode_v2') === '1';
       if (saved) {
         const parsed = JSON.parse(saved);
-        return {
+        const shouldMigrateDefaultEzoic = !migratedToAdSense && !parsed.ezoicSiteId;
+        if (!migratedToAdSense) {
+          localStorage.setItem('pdfeditfy_adsense_mode_v2', '1');
+        }
+        const resolvedMode = shouldMigrateDefaultEzoic
+          ? 'adsense_only'
+          : (parsed.adServingMode || 'adsense_only');
+        const resolvedEzoicEnabled = shouldMigrateDefaultEzoic
+          ? false
+          : (parsed.ezoicEnabled ?? false);
+
+        const nextConfig: AdminConfig = {
           ...DEFAULT_ADMIN_CONFIG,
           ...parsed,
           adsEnabled: parsed.adsEnabled !== undefined ? parsed.adsEnabled : true,
-          ezoicEnabled: parsed.ezoicEnabled !== undefined ? parsed.ezoicEnabled : true,
-          adServingMode: parsed.ezoicEnabled === undefined ? 'ezoic_only' : (parsed.adServingMode || 'ezoic_only'),
+          ezoicEnabled: resolvedEzoicEnabled,
+          adServingMode: resolvedMode,
         };
+        if (shouldMigrateDefaultEzoic) {
+          localStorage.setItem('pdfeditfy_admin_config', JSON.stringify(nextConfig));
+        }
+        return nextConfig;
       }
-      return { ...DEFAULT_ADMIN_CONFIG, adsEnabled: true, ezoicEnabled: true };
+      localStorage.setItem('pdfeditfy_adsense_mode_v2', '1');
+      return { ...DEFAULT_ADMIN_CONFIG, adsEnabled: true, ezoicEnabled: false };
     } catch {
-      return { ...DEFAULT_ADMIN_CONFIG, adsEnabled: true, ezoicEnabled: true };
+      return { ...DEFAULT_ADMIN_CONFIG, adsEnabled: true, ezoicEnabled: false };
     }
   });
 
@@ -130,9 +151,14 @@ export default function App() {
 
   const [showAdminLogin, setShowAdminLogin] = useState<boolean>(false);
 
-  // Preload Ezoic standalone scripts when Ezoic Ads Service is enabled
+  // Only preload Ezoic standalone scripts when Ezoic mode is explicitly active
   useEffect(() => {
-    if (adminConfig.adsEnabled && (adminConfig.ezoicEnabled || adminConfig.adServingMode === 'ezoic_only')) {
+    const usesEzoic =
+      adminConfig.adsEnabled &&
+      (adminConfig.adServingMode === 'ezoic_only' ||
+        (adminConfig.adServingMode === 'hybrid' && adminConfig.ezoicEnabled) ||
+        (adminConfig.adServingMode === 'fallback' && adminConfig.ezoicEnabled));
+    if (usesEzoic) {
       ensureEzoicScriptsLoaded(adminConfig.ezoicCmpEnabled ?? true);
     }
   }, [adminConfig.adsEnabled, adminConfig.ezoicEnabled, adminConfig.adServingMode, adminConfig.ezoicCmpEnabled]);
@@ -433,7 +459,16 @@ export default function App() {
         }
       }
 
-      // 3. Static Pages
+      // 3. Static Pages & Blog Articles
+      if (rawPath.startsWith('blog/')) {
+        const slug = rawPath.replace('blog/', '');
+        setActiveBlogSlug(slug || null);
+        setActivePage('blog');
+        setActiveToolId(null);
+        setIsNotFound(false);
+        return;
+      }
+
       const validPages = ['about', 'privacy', 'terms', 'disclaimer', 'contact', 'faq', 'blog', 'admin'];
       let matchedPage: string | null = null;
 
@@ -449,6 +484,7 @@ export default function App() {
         if (matchedPage === 'admin' && !sessionStorage.getItem('pdfeditfy_admin_authed')) {
           setShowAdminLogin(true);
         } else {
+          setActiveBlogSlug(null);
           setActivePage(matchedPage);
           setActiveToolId(null);
           setIsNotFound(false);
@@ -472,12 +508,17 @@ export default function App() {
   // Launch tool handler with URL pushState
   const handleSelectTool = (toolId: string) => {
     if (adminConfig.disabledTools.includes(toolId)) {
-      alert('This tool is currently under maintenance by the administrator. Please try another tool.');
+      const target = TOOLS.find((t) => t.id === toolId);
+      setDisabledToolNotice(`${target?.name || 'This tool'} is currently under maintenance. Please try another tool.`);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
+    setDisabledToolNotice(null);
     setActiveToolId(toolId);
     setActivePage(null);
+    setActiveBlogSlug(null);
     setIsNotFound(false);
+    recordToolOpen(toolId);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     if (window.location.pathname !== `/tool/${toolId}`) {
@@ -502,6 +543,7 @@ export default function App() {
       handleOpenAdminConsole();
       return;
     }
+    setActiveBlogSlug(null);
     setActivePage(pageName);
     setActiveToolId(null);
     setIsNotFound(false);
@@ -512,9 +554,22 @@ export default function App() {
     }
   };
 
+  const handleOpenBlogPost = (slug: string) => {
+    setActiveBlogSlug(slug);
+    setActivePage('blog');
+    setActiveToolId(null);
+    setIsNotFound(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    if (window.location.pathname !== `/blog/${slug}`) {
+      window.history.pushState({}, '', `/blog/${slug}`);
+    }
+  };
+
   const handleGoHome = () => {
     setActiveToolId(null);
     setActivePage(null);
+    setActiveBlogSlug(null);
     setIsNotFound(false);
     setSearchQuery('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -578,6 +633,20 @@ export default function App() {
         </div>
       )}
 
+      {disabledToolNotice && (
+        <div className="bg-amber-50 dark:bg-amber-950/70 border-b border-amber-200 dark:border-amber-800 px-4 py-2.5 text-center text-amber-800 dark:text-amber-200 text-xs font-semibold flex items-center justify-center gap-3 shrink-0">
+          <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+          <span>{disabledToolNotice}</span>
+          <button
+            type="button"
+            onClick={() => setDisabledToolNotice(null)}
+            className="underline font-bold hover:text-amber-950 dark:hover:text-white cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Main Content Layout */}
       <div className="flex-1 flex overflow-hidden">
         
@@ -613,6 +682,12 @@ export default function App() {
                 searchQuery={searchQuery}
                 disabledTools={adminConfig.disabledTools}
                 customBadges={adminConfig.customBadges}
+              />
+
+              <HomeEditorialSection
+                onSelectTool={handleSelectTool}
+                onOpenPage={handleOpenPage}
+                onOpenBlogPost={handleOpenBlogPost}
               />
 
               {adminConfig.adsEnabled && (
@@ -682,6 +757,10 @@ export default function App() {
                   <ImageEditorTool toolId={activeToolId} onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />
                 )}
 
+                {activeToolId === 'image-enhancer' && (
+                  <ImageEnhancerTool onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />
+                )}
+
                 {activeToolId === 'image-to-url' && (
                   <ImageToUrlTool onBack={handleGoHome} initialFiles={droppedFiles?.files} initialFile={droppedFiles?.files[0]} />
                 )}
@@ -700,7 +779,13 @@ export default function App() {
           {/* COMPLIANCE & INFORMATIONAL PAGES */}
           {activePage && (
             <Suspense fallback={<ToolLoadingFallback />}>
-              {activePage === 'blog' && <BlogPage onBack={handleGoHome} onSelectTool={handleSelectTool} />}
+              {activePage === 'blog' && (
+                <BlogPage
+                  onBack={handleGoHome}
+                  onSelectTool={handleSelectTool}
+                  initialSlug={activeBlogSlug}
+                />
+              )}
               {activePage === 'faq' && <FAQPage onBack={handleGoHome} />}
               {activePage === 'contact' && <ContactPage onBack={handleGoHome} />}
               {(activePage === 'privacy' || activePage === 'terms' || activePage === 'disclaimer' || activePage === 'about') && (

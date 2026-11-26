@@ -1,26 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import {
   Upload,
-  Download,
   Layers,
   ArrowLeft,
-  Trash2,
-  CheckCircle2,
-  FileText,
   Archive,
-  MoveUp,
-  MoveDown,
-  ArrowUpDown,
-  Shuffle,
-  Sparkles
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { createZipArchive, downloadBlob } from '../../utils/batchProcessor';
 import { recordToolConversion } from '../../utils/activityTracker';
 import {
   convertWordToPDF,
   extractDocxHtml,
+  extractPptxSlides,
   exportTextToDocxBlob
 } from '../../utils/docProcessor';
+import { readExcelFile, exportSheetToCSV, convertExcelToPDF } from '../../utils/excelProcessor';
 import { extractTextFromPDF, renderPDFToImages } from '../../utils/pdfExtractor';
 import { imagesToPDF } from '../../utils/pdfProcessor';
 import { processImage } from '../../utils/imageProcessor';
@@ -38,8 +33,8 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
   const [targetFormat, setTargetFormat] = useState<string>('pdf');
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { startProgress, updateProgress, setItemsProgress, completeProgress, failProgress } = useProgress();
-
 
   useEffect(() => {
     if (initialFiles && initialFiles.length > 0) {
@@ -52,7 +47,9 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       setFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+      setErrorMsg(null);
     }
+    e.target.value = '';
   };
 
   const removeFile = (idx: number) => {
@@ -84,6 +81,7 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
     if (files.length === 0) return;
     setIsProcessing(true);
     setProgress(5);
+    setErrorMsg(null);
 
     startProgress({
       title: `Batch Converting to ${targetFormat.toUpperCase()}`,
@@ -108,66 +106,99 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
           `Processing ${i + 1}/${files.length}`
         );
 
-        let convertedData: Uint8Array | Blob | string;
+        const prefix = files.length > 1 ? `${String(i + 1).padStart(2, '0')}_` : '';
 
         if (targetFormat === 'pdf') {
-          if (extension === 'docx' || extension === 'doc') {
-            convertedData = await convertWordToPDF(file);
-          } else if (['jpg', 'jpeg', 'png', 'webp', 'bmp', 'svg'].includes(extension)) {
-            convertedData = await imagesToPDF([file]);
+          let data: Uint8Array;
+          if (extension === 'docx' || extension === 'doc' || extension === 'pptx' || extension === 'ppt' || extension === 'odp') {
+            data = await convertWordToPDF(file);
+          } else if (['xlsx', 'xls', 'csv', 'tsv', 'ods'].includes(extension)) {
+            data = await convertExcelToPDF(file);
+          } else if (['jpg', 'jpeg', 'png', 'webp', 'bmp', 'svg', 'gif'].includes(extension)) {
+            data = await imagesToPDF([file]);
           } else if (extension === 'pdf') {
-            convertedData = new Uint8Array(await file.arrayBuffer());
+            data = new Uint8Array(await file.arrayBuffer());
           } else {
             const text = await file.text();
-            convertedData = await convertWordToPDF(new File([text], `${cleanName}.txt`));
+            data = await convertWordToPDF(text, { title: cleanName });
           }
+          convertedFiles.push({ name: `${prefix}${cleanName}.pdf`, data });
         } else if (targetFormat === 'docx') {
+          let data: Uint8Array | Blob;
           if (extension === 'docx') {
-            convertedData = new Uint8Array(await file.arrayBuffer());
+            data = new Uint8Array(await file.arrayBuffer());
           } else if (extension === 'pdf') {
             const pages = await extractTextFromPDF(file);
             const fullText = pages.map((p) => `# Page ${p.pageNumber}\n\n${p.text}`).join('\n\n');
-            convertedData = await exportTextToDocxBlob(fullText, { title: cleanName });
+            data = await exportTextToDocxBlob(fullText, { title: cleanName });
+          } else if (['pptx', 'ppt', 'odp'].includes(extension)) {
+            const slidesText = await extractPptxSlides(file);
+            data = await exportTextToDocxBlob(slidesText, { title: cleanName });
+          } else if (['xlsx', 'xls', 'csv'].includes(extension)) {
+            const sheets = await readExcelFile(file);
+            const csvText = sheets.map((s) => `# ${s.sheetName}\n\n${exportSheetToCSV(s)}`).join('\n\n');
+            data = await exportTextToDocxBlob(csvText, { title: cleanName });
           } else {
             const rawText = await file.text();
-            convertedData = await exportTextToDocxBlob(rawText, { title: cleanName });
+            data = await exportTextToDocxBlob(rawText, { title: cleanName });
           }
+          convertedFiles.push({ name: `${prefix}${cleanName}.docx`, data });
         } else if (targetFormat === 'txt') {
+          let textOut = '';
           if (extension === 'docx' || extension === 'doc') {
             const extracted = await extractDocxHtml(file);
-            convertedData = extracted.text;
+            textOut = extracted.text;
+          } else if (['pptx', 'ppt', 'odp'].includes(extension)) {
+            textOut = await extractPptxSlides(file);
+          } else if (['xlsx', 'xls', 'csv'].includes(extension)) {
+            const sheets = await readExcelFile(file);
+            textOut = sheets.map((s) => `--- ${s.sheetName} ---\n${exportSheetToCSV(s)}`).join('\n\n');
           } else if (extension === 'pdf') {
             const pages = await extractTextFromPDF(file);
-            convertedData = pages.map((p) => `--- PAGE ${p.pageNumber} ---\n${p.text}`).join('\n\n');
+            textOut = pages.map((p) => `--- PAGE ${p.pageNumber} ---\n${p.text}`).join('\n\n');
           } else {
-            convertedData = await file.text();
+            textOut = await file.text();
           }
-        } else if (targetFormat === 'png' || targetFormat === 'jpg' || targetFormat === 'jpeg') {
-          const imgFmt = targetFormat === 'png' ? 'png' : 'jpeg';
+          convertedFiles.push({ name: `${prefix}${cleanName}.txt`, data: textOut });
+        } else if (targetFormat === 'png' || targetFormat === 'jpg' || targetFormat === 'webp') {
+          const imgFmt = targetFormat === 'jpg' ? 'jpeg' : (targetFormat as 'png' | 'webp');
           if (extension === 'pdf') {
-            const pageImgs = await renderPDFToImages(file, imgFmt, 2.0);
-            convertedData = pageImgs[0]?.blob || new Blob();
+            const renderFmt = targetFormat === 'png' ? 'png' : 'jpeg';
+            const pageImgs = await renderPDFToImages(file, renderFmt, 2.0);
+            for (const pg of pageImgs) {
+              let outBlob = pg.blob;
+              if (targetFormat === 'webp') {
+                const pgFile = new File([pg.blob], `${cleanName}_page_${pg.pageNumber}.png`, { type: 'image/png' });
+                const conv = await processImage(pgFile, { format: 'webp', quality: 0.9 });
+                outBlob = conv.blob;
+              }
+              convertedFiles.push({
+                name: `${prefix}${cleanName}_page_${pg.pageNumber}.${targetFormat}`,
+                data: outBlob,
+              });
+            }
+          } else if (['jpg', 'jpeg', 'png', 'webp', 'bmp', 'svg', 'gif', 'ico'].includes(extension) || file.type.startsWith('image/')) {
+            const res = await processImage(file, { format: imgFmt, quality: 0.9 });
+            convertedFiles.push({
+              name: `${prefix}${cleanName}.${targetFormat}`,
+              data: res.blob,
+            });
           } else {
-            const res = await processImage(file, { format: imgFmt });
-            convertedData = res.blob;
+            throw new Error(`Cannot convert "${file.name}" to an image format. Upload PDF or image files for image conversion.`);
           }
         } else {
-          convertedData = new Uint8Array(await file.arrayBuffer());
+          convertedFiles.push({
+            name: `${prefix}${cleanName}.${targetFormat}`,
+            data: new Uint8Array(await file.arrayBuffer()),
+          });
         }
-
-        // Maintain exact order in zip archive with padded sequential numbering prefix if multiple files
-        const prefix = files.length > 1 ? `${String(i + 1).padStart(2, '0')}_` : '';
-        convertedFiles.push({
-          name: `${prefix}${cleanName}.${targetFormat}`,
-          data: convertedData,
-        });
 
         const currentPct = Math.round(((i + 1) / files.length) * 90);
         setProgress(currentPct);
         setItemsProgress(
           i + 1,
           files.length,
-          `Converted ${i + 1} of ${files.length} documents`,
+          `Converted ${i + 1} of ${files.length} files`,
           `Packaging files`
         );
       }
@@ -181,8 +212,9 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
       completeProgress(`Successfully converted ${files.length} document${files.length > 1 ? 's' : ''}!`);
     } catch (err: any) {
       console.error('Batch conversion failed:', err);
-      failProgress(err?.message || 'Batch conversion error. Please check your files.');
-      alert('Batch conversion error. Please verify input files.');
+      const msg = err?.message || 'Batch conversion error. Please check your input files.';
+      failProgress(msg);
+      setErrorMsg(msg);
     } finally {
       setIsProcessing(false);
     }
@@ -204,10 +236,22 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
             <Layers className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> Batch Universal Converter & Sequencer
           </h1>
           <p className="text-xs text-slate-500">
-            Upload multiple documents, arrange sequence order, and convert to professional PDF, Word, or Text.
+            Upload multiple documents or images, arrange sequence order, and convert cleanly in bulk.
           </p>
         </div>
       </div>
+
+      {errorMsg && (
+        <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs flex items-center justify-between gap-2 font-semibold">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+          <button onClick={() => setErrorMsg(null)} className="p-1 hover:bg-rose-100 dark:hover:bg-rose-900 rounded-lg">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-3xl p-10 text-center bg-white dark:bg-slate-800/80 hover:border-indigo-500 transition-all shadow-sm">
         <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto mb-3">
@@ -217,7 +261,7 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
           Select Multiple Batch Files
         </h3>
         <p className="text-xs text-slate-500 mb-5 max-w-sm mx-auto">
-          Drop PDF, Word (.docx), TXT, or Image files. Converted output strictly preserves order.
+          Drop PDF, Word (.docx), Excel (.xlsx/.csv), PowerPoint (.pptx), TXT, or Image files.
         </p>
         <label className="inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-500/20 cursor-pointer transition-all">
           <Upload className="w-4 h-4" /> Add Files to Batch
@@ -236,7 +280,7 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
             files={files}
             onRemoveFile={removeFile}
             onMoveFile={moveFile}
-            onClearAll={() => setFiles([])}
+            onClearAll={() => { setFiles([]); setErrorMsg(null); }}
             onSortAlphabetical={sortAlphabetical}
             onReverseOrder={reverseOrder}
             title="Batch Files Queue & Visual Preview"
@@ -253,9 +297,12 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
               onChange={(e) => setTargetFormat(e.target.value)}
               className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold"
             >
-              <option value="pdf">PDF Document (.pdf) — Professional Header, Footer & Exact Sequence</option>
-              <option value="docx">Word Document (.docx) — Standard Formatted Typography</option>
-              <option value="txt">Plain Text (.txt) — Clean Extraction</option>
+              <option value="pdf">PDF Document (.pdf) — Professional Layout & Sequence</option>
+              <option value="docx">Word Document (.docx) — Editable Typography</option>
+              <option value="txt">Plain Text (.txt) — Clean Text Extraction</option>
+              <option value="png">PNG Images (.png) — High-Res Lossless Pages/Images</option>
+              <option value="jpg">JPG Images (.jpg) — Lightweight Photos/Pages</option>
+              <option value="webp">WEBP Images (.webp) — Web-Optimized Images</option>
             </select>
           </div>
 
@@ -267,11 +314,11 @@ export const UniversalConvertTool: React.FC<UniversalConvertToolProps> = ({ onBa
             {isProcessing ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Converting Batch Files in Exact Order ({progress}%)...
+                Converting Batch Files ({progress}%)...
               </>
             ) : (
               <>
-                <Archive className="w-4 h-4" /> Convert {files.length} Files & Download ZIP
+                <Archive className="w-4 h-4" /> Convert {files.length} File{files.length > 1 ? 's' : ''} & Download ZIP
               </>
             )}
           </button>

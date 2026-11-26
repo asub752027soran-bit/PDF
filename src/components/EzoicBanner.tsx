@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, ExternalLink, ShieldCheck, Sparkles, Tag, Zap } from 'lucide-react';
 import { AdSlotType } from '../types';
 
 declare global {
@@ -95,7 +94,6 @@ const DEFAULT_PLACEHOLDER_BY_SLOT: Record<AdSlotType, string> = {
 export const EzoicBanner: React.FC<EzoicBannerProps> = ({
   slotType = 'leaderboard',
   placeholderId,
-  siteId,
   cmpEnabled = true,
   className = '',
   showLabel = true,
@@ -157,75 +155,30 @@ export const EzoicBanner: React.FC<EzoicBannerProps> = ({
     };
   }, [numericId, cmpEnabled]);
 
-  let containerStyle = 'w-full max-w-5xl min-h-[90px]';
+  let containerStyle = 'w-full max-w-5xl';
   if (slotType === 'rectangle') {
-    containerStyle = 'w-full max-w-[336px] min-h-[280px] mx-auto';
+    containerStyle = 'w-full max-w-[336px] mx-auto';
   } else if (slotType === 'sidebar') {
-    containerStyle = 'w-full max-w-[340px] min-h-[250px] mx-auto';
+    containerStyle = 'w-full max-w-[340px] mx-auto';
   } else if (slotType === 'banner') {
-    containerStyle = 'w-full max-w-4xl min-h-[80px] mx-auto';
+    containerStyle = 'w-full max-w-4xl mx-auto';
   }
 
   return (
-    <div className={`my-3 mx-auto text-center w-full overflow-hidden ${className}`}>
-      {showLabel && (
-        <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-500 mb-1.5 flex items-center justify-between px-2 max-w-5xl mx-auto">
-          <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-extrabold">
-            <Tag className="w-3 h-3" />
-            <span>Ezoic Certified Ad Service</span>
-          </span>
-          <span className="font-mono text-[9px] opacity-75">
-            Placeholder #{rawId}{siteId ? ` • Site ${siteId}` : ''}
-          </span>
+    <div className={`mx-auto text-center w-full overflow-hidden ${hasFilledAd ? 'my-3' : 'my-0'} ${className}`}>
+      {showLabel && hasFilledAd && (
+        <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-500 mb-1 px-2 max-w-5xl mx-auto text-left">
+          <span>Advertisement</span>
         </div>
       )}
 
-      <div className={`relative rounded-2xl overflow-hidden ${containerStyle}`}>
-        {/* Official Ezoic Standalone Placeholder */}
+      <div className={`relative overflow-hidden ${containerStyle}`}>
         <div
           ref={placeholderRef}
           id={`ezoic-pub-ad-placeholder-${rawId}`}
           data-ezoic-placeholder={rawId}
           className="w-full text-center relative z-10"
         />
-
-        {/* Fallback Partner Card while Ezoic placeholder is awaiting live domain fill */}
-        {!hasFilledAd && (
-          <a
-            href="https://www.ezoic.com/"
-            target="_blank"
-            rel="sponsored noopener noreferrer"
-            className="w-full h-full p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 border border-emerald-500/40 hover:border-emerald-400/70 text-left shadow-md hover:shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all group cursor-pointer"
-          >
-            <div className="space-y-1.5 flex-1 pr-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1">
-                  <Sparkles className="w-2.5 h-2.5" />
-                  <span>Ezoic AI Ad Network</span>
-                </span>
-                <span className="font-bold text-xs sm:text-sm text-white group-hover:text-emerald-200 transition-colors flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Automated Header Bidding &amp; Revenue Optimization</span>
-                </span>
-              </div>
-              <p className="text-[11px] sm:text-xs text-slate-300 leading-relaxed line-clamp-2 sm:line-clamp-1">
-                Ezoic standalone placement #{rawId} active ({slotType.replace('_', ' ')}). Live ads serve automatically once domain verification completes.
-              </p>
-              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                <span>ezoic-pub-ad-placeholder-{rawId}{siteId ? ` • Site ID: ${siteId}` : ''}</span>
-              </div>
-            </div>
-
-            <div className="shrink-0 self-start sm:self-center">
-              <span className="py-2 px-4 rounded-xl text-xs font-black bg-emerald-500 group-hover:bg-emerald-400 text-slate-950 shadow-md flex items-center gap-1.5 transition-transform group-hover:scale-105">
-                <span>Ezoic Console</span>
-                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                <ExternalLink className="w-3 h-3 opacity-80" />
-              </span>
-            </div>
-          </a>
-        )}
       </div>
     </div>
   );

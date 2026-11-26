@@ -32,8 +32,9 @@
     <meta name="twitter:image" content="https://pdfeditfy.com/icon-512x512.png" />
     <meta name="twitter:image:alt" content="PDF Editfy – Free Online PDF Tools" />
 
-    <!-- Favicons for Google Search, Desktop & Mobile Browsers (Google requires multiples of 48px: 48x48, 96x96, 144x144, 192x192) -->
+    <!-- Favicons for Google Search, Desktop & Mobile Browsers (48px multiples + SVG) -->
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
     <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
     <link rel="icon" type="image/png" sizes="144x144" href="/favicon-144x144.png" />
@@ -89,37 +90,7 @@
     }
     </script>
 
-    <!-- Ezoic Privacy & Gatekeeper Consent CMP (loads on production domains; skipped on preview/localhost to avoid unregistered-origin consent errors) -->
-    <script data-cfasync="false">
-      (function () {
-        var h = window.location.hostname || '';
-        var isPreviewOrLocal =
-          !h ||
-          h === 'localhost' ||
-          h === '127.0.0.1' ||
-          h.endsWith('.local') ||
-          h.endsWith('.run.app') ||
-          h.endsWith('.web.app');
-        if (!isPreviewOrLocal) {
-          ['https://cmp.gatekeeperconsent.com/min.js', 'https://the.gatekeeperconsent.com/cmp.min.js'].forEach(function (src) {
-            var s = document.createElement('script');
-            s.setAttribute('data-cfasync', 'false');
-            s.src = src;
-            document.head.appendChild(s);
-          });
-        }
-      })();
-    </script>
-
-    <!-- Ezoic Standalone Ad Engine & Analytics -->
-    <script async src="//www.ezojs.com/ezoic/sa.min.js"></script>
-    <script>
-      window.ezstandalone = window.ezstandalone || {};
-      ezstandalone.cmd = ezstandalone.cmd || [];
-    </script>
-    <script async src="//ezoicanalytics.com/analytics.js"></script>
-
-    <!-- Google AdSense Verification & Ad Engine -->
+    <!-- Google AdSense Verification & Auto Ads Engine -->
     <meta name="google-adsense-account" content="ca-pub-9806760868514523" />
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9806760868514523" crossorigin="anonymous"></script>
 

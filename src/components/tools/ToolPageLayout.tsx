@@ -18,7 +18,6 @@ import { TOOL_SEO_DETAILS } from '../../data/toolSeoData';
 import { TOOLS } from '../../data/toolsData';
 import { ToolItem, CustomAdItem } from '../../types';
 import { AdPlacement } from '../AdPlacement';
-import { AdSenseBanner } from '../AdSenseBanner';
 
 interface ToolPageLayoutProps {
   toolId: string;
@@ -104,7 +103,7 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
   ];
   const faqs = seoDetail?.faqs || [
     { question: `Is ${tool.name} free to use?`, answer: 'Yes! PDF Editfy provides free, unrestricted access to all document and PDF tools with no sign-up or credit card required.' },
-    { question: 'Are my files kept private and safe?', answer: 'Yes. All file processing runs securely in your browser memory or temporary encrypted memory buffers that are purged automatically within 15 minutes.' }
+    { question: 'Are my files kept private and safe?', answer: 'Yes. All file processing runs directly inside your local web browser memory so your documents never remain stored on external servers.' }
   ];
   const relatedTools = (seoDetail?.relatedToolIds || ['edit-pdf', 'compress-pdf', 'merge-pdf', 'pdf-to-word'])
     .map((id) => TOOLS.find((t) => t.id === id))
@@ -212,8 +211,19 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
             {children}
           </section>
 
-          {/* HOW IT WORKS: Step-by-Step Instructions */}
+          {/* EDITORIAL OVERVIEW & HOW IT WORKS */}
           <section aria-label="How to use instructions" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 space-y-6 shadow-xs">
+            {seoDetail?.fullDescription && (
+              <div className="space-y-2 border-b border-slate-100 dark:border-slate-800 pb-5">
+                <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                  About {tool.name}
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {seoDetail.fullDescription}
+                </p>
+              </div>
+            )}
+
             <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-4">
               <Sparkles className="w-5 h-5 text-blue-600" />
               <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
@@ -284,8 +294,8 @@ export const ToolPageLayout: React.FC<ToolPageLayoutProps> = ({
                 <div className="flex items-start gap-2.5">
                   <Zap className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                   <div>
-                    <strong className="text-slate-800 dark:text-slate-100 block">Automatic 15-Minute Purge</strong>
-                    All temporary memory buffers are automatically deleted within 15 minutes of completion.
+                    <strong className="text-slate-800 dark:text-slate-100 block">Local In-Browser Execution</strong>
+                    Processing runs inside your browser sandbox and closes immediately when you leave the page.
                   </div>
                 </div>
               </div>
